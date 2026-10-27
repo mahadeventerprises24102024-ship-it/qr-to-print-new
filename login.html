@@ -1,0 +1,299 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customer Login | QR-To-Print</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f8f5;
+      color: #172b23;
+    }
+
+    header {
+      background: white;
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid #ddd;
+    }
+
+    header a {
+      color: #18805b;
+      text-decoration: none;
+    }
+
+    .container {
+      max-width: 440px;
+      margin: 50px auto;
+      padding: 28px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px #00000012;
+    }
+
+    h2 { text-align: center; }
+
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    button {
+      width: 100%;
+      padding: 13px;
+      margin-top: 20px;
+      border: 0;
+      border-radius: 8px;
+      background: #18805b;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:disabled { opacity: .6; }
+
+    .switch {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .switch a {
+      color: #18805b;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #message {
+      text-align: center;
+      margin-top: 15px;
+      min-height: 20px;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h2>QR-To-Print</h2>
+  <a href="/">Back to Home</a>
+</header>
+
+<div class="container">
+
+  <section id="loginSection">
+    <h2>Customer Login</h2>
+
+    <form id="loginForm">
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email"
+             autocomplete="email" required>
+
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" type="password"
+             autocomplete="current-password" required>
+
+      <button type="submit">Login</button>
+    </form>
+
+    <div class="switch">
+      New customer?
+      <a id="showRegister">Create Account</a>
+    </div>
+  </section>
+
+  <section id="registerSection" class="hidden">
+    <h2>Create Account</h2>
+
+    <form id="registerForm">
+      <label for="regName">Full Name</label>
+      <input id="regName" type="text"
+             minlength="2" maxlength="100"
+             autocomplete="name" required>
+
+      <label for="regEmail">Email</label>
+      <input id="regEmail" type="email"
+             autocomplete="email" required>
+
+      <label for="regPassword">Password</label>
+      <input id="regPassword" type="password"
+             minlength="12" maxlength="72"
+             autocomplete="new-password" required>
+
+      <p>Use at least 12 characters.</p>
+
+      <button type="submit">Create Account</button>
+    </form>
+
+    <div class="switch">
+      Already registered?
+      <a id="showLogin">Login</a>
+    </div>
+  </section>
+
+  <section id="profileSection" class="hidden">
+    <h2>My Account</h2>
+    <p id="welcome"></p>
+    <p id="userEmail"></p>
+    <button id="logoutButton" type="button">
+      Logout
+    </button>
+  </section>
+
+  <p id="message" role="status" aria-live="polite"></p>
+</div>
+
+<script>
+  const loginSection =
+    document.getElementById("loginSection");
+  const registerSection =
+    document.getElementById("registerSection");
+  const profileSection =
+    document.getElementById("profileSection");
+  const message =
+    document.getElementById("message");
+
+  function showSection(section) {
+    loginSection.classList.add("hidden");
+    registerSection.classList.add("hidden");
+    profileSection.classList.add("hidden");
+
+    section.classList.remove("hidden");
+    message.textContent = "";
+  }
+
+  function showProfile(user) {
+    showSection(profileSection);
+
+    document.getElementById("welcome").textContent =
+      "Welcome, " + user.name;
+
+    document.getElementById("userEmail").textContent =
+      user.email;
+  }
+
+  async function apiRequest(url, options = {}) {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Request failed");
+    }
+
+    return data;
+  }
+
+  document.getElementById("showRegister")
+    .addEventListener("click", () => {
+      showSection(registerSection);
+    });
+
+  document.getElementById("showLogin")
+    .addEventListener("click", () => {
+      showSection(loginSection);
+    });
+
+  document.getElementById("registerForm")
+    .addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const form = event.currentTarget;
+      const button = form.querySelector("button");
+      button.disabled = true;
+
+      try {
+        const data = await apiRequest("/api/register", {
+          method: "POST",
+          body: JSON.stringify({
+            name: document.getElementById("regName").value,
+            email: document.getElementById("regEmail").value,
+            password: document.getElementById("regPassword").value
+          })
+        });
+
+        form.reset();
+        showSection(loginSection);
+        message.textContent = data.message;
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+  document.getElementById("loginForm")
+    .addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const form = event.currentTarget;
+      const button = form.querySelector("button");
+      button.disabled = true;
+
+      try {
+        const data = await apiRequest("/api/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("loginEmail").value,
+            password: document.getElementById("loginPassword").value
+          })
+        });
+
+        form.reset();
+        showProfile(data.user);
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+  document.getElementById("logoutButton")
+    .addEventListener("click", async () => {
+      try {
+        await apiRequest("/api/logout", {
+          method: "POST"
+        });
+
+        showSection(loginSection);
+        message.textContent = "Logged out successfully";
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+
+  async function checkSession() {
+    try {
+      const data = await apiRequest("/api/me");
+      showProfile(data.user);
+    } catch (error) {
+      showSection(loginSection);
+    }
+  }
+
+  checkSession();
+</script>
+
+</body>
+</html>
