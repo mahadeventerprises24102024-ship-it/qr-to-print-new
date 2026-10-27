@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="QR-To-Print shop owner login and registration.">
+  <title>Shop Login | QR-To-Print</title>
+  <style>
+    :root{--ink:#1a302b;--muted:#71847e;--green:#0a7a66;--green-dark:#075c4e;--line:#dce7e3;--page:#f3f8f5}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--page);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+    .header{background:#fff;border-bottom:1px solid var(--line);padding:20px max(20px,calc((100vw - 1040px)/2));display:flex;justify-content:space-between;align-items:center;gap:20px}
+    .brand{display:flex;align-items:center;gap:10px;color:#162a23;text-decoration:none;font-size:18px;font-weight:850;letter-spacing:-.6px}.mark{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:#dfff75;color:#163a2e;font-size:12px;font-weight:900}
+    .back{font-size:13px;text-decoration:none;color:var(--green);font-weight:700}.page{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:64px;max-width:1040px;margin:0 auto;padding:75px 20px}
+    .intro .tag{font-size:11px;font-weight:850;letter-spacing:2px;color:var(--green);text-transform:uppercase}.intro h1{font-size:clamp(36px,4.5vw,57px);line-height:1.1;letter-spacing:-1.9px;margin:18px 0}.intro h1 span{color:var(--green)}
+    .intro p{line-height:1.7;color:#687e74;font-size:16px;max-width:420px}.features{display:grid;gap:13px;margin-top:30px;font-size:13px;font-weight:650}.features div{display:flex;gap:11px;align-items:center}.check{background:#ddf2e6;color:var(--green);border-radius:7px;width:25px;height:25px;display:grid;place-items:center}
+    .card{background:#fff;border-radius:22px;padding:30px;box-shadow:0 24px 60px #183c3212;border:1px solid var(--line)}
+    .card h2{font-size:24px;letter-spacing:-.65px;margin:0 0 7px}.caption{font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 23px}
+    .tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;border-radius:10px;padding:5px;background:#f1f6f3;margin-bottom:25px}
+    .tabs button{background:transparent;border:0;padding:11px;border-radius:8px;font-weight:760;color:#798b83;cursor:pointer}.tabs button.active{background:white;box-shadow:0 2px 8px #12382b11;color:var(--green)}
+    label{display:block;font-size:12px;font-weight:750;margin:14px 0 7px}input{font:inherit;font-size:14px;width:100%;border:1px solid #d5e2db;border-radius:10px;padding:13px 14px;outline-color:var(--green);background:#fff}
+    input:focus-visible{border-color:#47ab8d}form button[type=submit]{background:var(--green);color:#fff;width:100%;border:0;border-radius:10px;padding:14px;font:750 14px inherit;cursor:pointer;margin-top:22px;font-size:14px;font-weight:760}
+    form button[type=submit]:hover{background:var(--green-dark)}form button:disabled{opacity:.6;cursor:wait}
+    .helper{color:var(--muted);font-size:11px;margin:9px 0}.alert{font-size:12px;border-radius:10px;padding:12px 14px;margin:18px 0 0;background:#eef7f0;color:#205d42;line-height:1.5}
+    .alert.error{background:#fff0ec;color:#a33425}[hidden]{display:none!important}
+    .bottom{font-size:11px;color:#91a097;margin:21px 0 0;line-height:1.6}
+    @media(max-width:800px){.page{grid-template-columns:1fr;gap:26px;padding:42px 20px}.intro h1{font-size:35px}.intro p{font-size:14px}.features{grid-template-columns:1fr 1fr;margin-top:20px}.card{max-width:540px;width:100%;margin:auto}}
+    @media(max-width:470px){.features{grid-template-columns:1fr}.card{padding:22px}.header{padding:15px 19px}}
+  </style>
+</head>
+<body>
+  <header class="header"><a href="/" class="brand"><span class="mark">QR</span>QR-To-Print</a><a class="back" href="/login.html">Customer Login ↗</a></header>
+  <main class="page">
+    <section class="intro">
+      <span class="tag">For print shop owners</span>
+      <h1>Your shop.<br><span>Your workspace.</span></h1>
+      <p>दुकान के लिए अलग अकाउंट बनाएँ और अपना QR-To-Print Shop Dashboard खोलें। प्रिंटर, वॉलेट और लाइव ऑर्डर की सुविधाएँ आगे जोड़ेंगे।</p>
+      <div class="features"><div><span class="check">✓</span>Secure shop-owner session</div><div><span class="check">✓</span>Separate customer accounts</div><div><span class="check">✓</span>Modern shop dashboard preview</div></div>
+    </section>
+    <section class="card" aria-label="Shop login and registration">
+      <div class="tabs" role="group" aria-label="Account actions"><button id="loginTab" type="button" class="active" aria-pressed="true">Shop Login</button><button id="registerTab" type="button" aria-pressed="false">Create Shop</button></div>
+      <section id="loginPanel"><h2>Welcome back</h2><p class="caption">Sign in with your shop-owner account.</p>
+        <form id="loginForm">
+          <label for="loginEmail">Email address</label><input id="loginEmail" type="email" autocomplete="email" maxlength="254" required placeholder="owner@example.com">
+          <label for="loginPassword">Password</label><input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Your password">
+          <button type="submit">Open Shop Dashboard →</button>
+        </form>
+      </section>
+      <section id="registerPanel" hidden><h2>Create your shop</h2><p class="caption">Start a separate shop-owner account for testing.</p>
+        <form id="registerForm">
+          <label for="shopName">Shop name</label><input id="shopName" type="text" minlength="2" maxlength="120" autocomplete="organization" required placeholder="My Print Shop">
+          <label for="ownerName">Owner name</label><input id="ownerName" type="text" minlength="2" maxlength="100" autocomplete="name" required placeholder="Your full name">
+          <label for="registerEmail">Email address</label><input id="registerEmail" type="email" maxlength="254" autocomplete="email" required placeholder="owner@example.com">
+          <label for="registerPassword">New password</label><input id="registerPassword" type="password" minlength="12" autocomplete="new-password" required placeholder="At least 12 characters">
+          <label for="confirmPassword">Confirm password</label><input id="confirmPassword" type="password" minlength="12" autocomplete="new-password" required placeholder="Repeat password">
+          <p class="helper">Use a unique password with at least 12 characters. Avoid using a real shop account during testing.</p>
+          <button type="submit">Create Shop Account →</button>
+        </form>
+      </section>
+      <p id="message" class="alert" role="status" aria-live="polite" hidden></p>
+      <p class="bottom">Prototype only: email verification, password reset, permanent database/backup, billing and real printing still need to be completed before accepting real shops.</p>
+    </section>
+  </main>
+  <script>
+    const loginTab = document.getElementById("loginTab");
+    const registerTab = document.getElementById("registerTab");
+    const loginPanel = document.getElementById("loginPanel");
+    const registerPanel = document.getElementById("registerPanel");
+    const message = document.getElementById("message");
+
+    function notice(text, isError = false) {
+      message.textContent = text;
+      message.classList.toggle("error", isError);
+      message.hidden = false;
+    }
+
+    function showPanel(register) {
+      registerPanel.hidden = !register;
+      loginPanel.hidden = register;
+      loginTab.classList.toggle("active", !register);
+      registerTab.classList.toggle("active", register);
+      loginTab.setAttribute("aria-pressed", String(!register));
+      registerTab.setAttribute("aria-pressed", String(register));
+      message.hidden = true;
+    }
+    loginTab.addEventListener("click", () => showPanel(false));
+    registerTab.addEventListener("click", () => showPanel(true));
+
+    async function sendJSON(path, body) {
+      const response = await fetch(path, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Request failed");
+      return data;
+    }
+
+    document.getElementById("registerForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const password = document.getElementById("registerPassword").value;
+      const confirmation = document.getElementById("confirmPassword").value;
+      if (password !== confirmation) {
+        return notice("Passwords do not match.", true);
+      }
+      const submit = form.querySelector("button[type=submit]");
+      submit.disabled = true;
+      try {
+        const data = await sendJSON("/api/shop/register", {
+          shopName: document.getElementById("shopName").value.trim(),
+          ownerName: document.getElementById("ownerName").value.trim(),
+          email: document.getElementById("registerEmail").value.trim(),
+          password
+        });
+        const savedEmail = document.getElementById("registerEmail").value.trim();
+        form.reset();
+        showPanel(false);
+        document.getElementById("loginEmail").value = savedEmail;
+        notice(data.message || "Shop created. Please log in.");
+      } catch (error) {
+        notice(error.message, true);
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submit = form.querySelector("button[type=submit]");
+      submit.disabled = true;
+      try {
+        await sendJSON("/api/shop/login", {
+          email: document.getElementById("loginEmail").value.trim(),
+          password: document.getElementById("loginPassword").value
+        });
+        form.reset();
+        window.location.assign("/shop-dashboard.html");
+      } catch (error) {
+        notice(error.message, true);
+        submit.disabled = false;
+      }
+    });
+
+    // Already authenticated shop owners go straight to their dashboard.
+    fetch("/api/shop/me", { credentials: "same-origin" })
+      .then(response => {
+        if (response.ok) window.location.replace("/shop-dashboard.html");
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>
