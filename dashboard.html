@@ -1,0 +1,354 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customer Dashboard | QR-To-Print</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #f4f8f5;
+      color: #183028;
+      font-family: Arial, sans-serif;
+    }
+
+    header {
+      background: #187e5b;
+      color: white;
+      padding: 18px 6%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+
+    header h2 {
+      margin: 0;
+    }
+
+    button, .btn {
+      background: #187e5b;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 15px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+    }
+
+    button:disabled {
+      background: #8a9d94;
+      cursor: not-allowed;
+    }
+
+    .logout {
+      background: #124c39;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 35px auto;
+      padding: 0 18px;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-top: 25px;
+    }
+
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 14px;
+      box-shadow: 0 5px 20px #0000000d;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 1px solid #ccd7d0;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .card button,
+    .card .btn {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .muted {
+      color: #63766d;
+      line-height: 1.5;
+    }
+
+    #qrImage {
+      display: block;
+      width: 200px;
+      max-width: 100%;
+      margin: 20px auto;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    #message {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    .notice {
+      padding: 12px;
+      background: #eef6ef;
+      border-radius: 8px;
+      color: #425d4d;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h2>QR-To-Print</h2>
+  <button
+    id="logoutBtn"
+    class="logout"
+    type="button">
+    Logout
+  </button>
+</header>
+
+<main id="dashboard" class="hidden">
+
+  <h1>Customer Dashboard</h1>
+  <p id="welcome">Welcome!</p>
+
+  <div class="grid">
+
+    <!-- QR Generator -->
+    <section class="card">
+      <h3>Generate QR Code</h3>
+
+      <p class="muted">
+        Enter a website link or text.
+      </p>
+
+      <label for="qrText">Link or Text</label>
+
+      <input
+        id="qrText"
+        type="text"
+        maxlength="1500"
+        placeholder="https://example.com">
+
+      <button
+        id="generateBtn"
+        type="button">
+        Generate QR
+      </button>
+
+      <img
+        id="qrImage"
+        class="hidden"
+        alt="Generated QR code">
+
+      <a
+        id="downloadBtn"
+        class="btn hidden"
+        target="_blank"
+        rel="noopener noreferrer">
+        Open QR to Save
+      </a>
+
+      <p class="muted">
+        Note: QR codes use an external image service.
+        Do not enter private information.
+      </p>
+    </section>
+
+    <!-- Print Upload -->
+    <section class="card">
+      <h3>Upload for Printing</h3>
+
+      <p class="muted">
+        PDF, JPG and PNG support is planned.
+      </p>
+
+      <label for="printFile">Select File</label>
+
+      <input
+        id="printFile"
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg"
+        disabled>
+
+      <label for="copies">Number of Copies</label>
+
+      <select id="copies" disabled>
+        <option value="1">1 Copy</option>
+        <option value="2">2 Copies</option>
+        <option value="5">5 Copies</option>
+        <option value="10">10 Copies</option>
+      </select>
+
+      <button type="button" disabled>
+        Submit Print Order
+      </button>
+
+      <p class="notice">
+        Coming Soon: Print Upload
+      </p>
+    </section>
+
+    <!-- Orders -->
+    <section class="card">
+      <h3>My Print Orders</h3>
+
+      <p class="muted">
+        Your printing history will appear here.
+      </p>
+
+      <div id="orders" class="notice">
+        Order tracking is coming soon.
+      </div>
+
+    </section>
+
+  </div>
+
+  <p id="message" role="status" aria-live="polite"></p>
+
+</main>
+
+<script>
+  const dashboard =
+    document.getElementById("dashboard");
+
+  const message =
+    document.getElementById("message");
+
+  const qrImage =
+    document.getElementById("qrImage");
+
+  const downloadBtn =
+    document.getElementById("downloadBtn");
+
+  async function request(url, options = {}) {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      ...options
+    });
+
+    const data = await response.json().catch(
+      () => ({})
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Request failed"
+      );
+    }
+
+    return data;
+  }
+
+  // Check customer login
+  async function loadDashboard() {
+    try {
+      const data = await request("/api/me");
+
+      document.getElementById(
+        "welcome"
+      ).textContent =
+        "Welcome, " + data.user.name;
+
+      dashboard.classList.remove("hidden");
+
+    } catch (error) {
+      window.location.replace("/login.html");
+    }
+  }
+
+  // Logout
+  document.getElementById(
+    "logoutBtn"
+  ).addEventListener("click", async () => {
+    try {
+      await request("/api/logout", {
+        method: "POST"
+      });
+
+      window.location.replace("/login.html");
+
+    } catch (error) {
+      message.textContent = error.message;
+    }
+  });
+
+  // QR Generator
+  document.getElementById(
+    "generateBtn"
+  ).addEventListener("click", () => {
+    const text = document.getElementById(
+      "qrText"
+    ).value.trim();
+
+    if (!text) {
+      message.textContent =
+        "Please enter a link or text.";
+      return;
+    }
+
+    const qrUrl =
+      "https://api.qrserver.com/v1/create-qr-code/" +
+      "?size=300x300&data=" +
+      encodeURIComponent(text);
+
+    qrImage.classList.add("hidden");
+    downloadBtn.classList.add("hidden");
+
+    qrImage.onload = () => {
+      qrImage.classList.remove("hidden");
+      downloadBtn.classList.remove("hidden");
+      message.textContent =
+        "QR Code generated successfully!";
+    };
+
+    qrImage.onerror = () => {
+      message.textContent =
+        "QR Code could not load. Try again.";
+    };
+
+    qrImage.src = qrUrl;
+    downloadBtn.href = qrUrl;
+
+    message.textContent = "Generating QR Code...";
+  });
+
+  loadDashboard();
+</script>
+
+</body>
+</html>
