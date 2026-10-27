@@ -7,6 +7,7 @@ const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
 const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
+const multer = require("multer");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -247,8 +248,133 @@ app.post("/api/logout", (req, res) => {
   });
 });
 
-// Existing website
-app.use(express.static(path.join(__dirname)));
+
+// TEST-ONLY PRINT ORDERS: Uploaded bytes are never saved.
+// No payment, no printer integration and no production document storage.
+const orderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many test orders. Try again later." }
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 2 * 1024 * 1024,
+    files: 1,
+    fields: 1,
+    parts: 2
+  }
+});
+
+function requireCustomer(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: "Please log in first" });
+  }
+  next();
+}
+
+function requireSameOrigin(req, res, next) {
+  // Multipart POSTs need an explicit origin check for CSRF protection.
+  const expected = req.protocol + "://" + req.get("host");
+  if (req.get("origin") !== expected) {
+    return res.status(403).json({ error: "Invalid request origin" });
+  }
+  next();
+}
+
+function recognizedFileType(file) {
+  if (!file || !Buffer.isBuffer(file.buffer)) return null;
+  const b = file.buffer;
+  const isPdf = b.length >= 5 && b.subarray(0, 5).toString("ascii") === "%PDF-";
+  const isPng = b.length >= 8 &&
+    b.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  const isJpeg = b.length >= 3 &&
+    b[0] === 255 && b[1] === 216 && b[2] === 255;
+  if (isPdf) return "pdf";
+  if (isPng) return "png";
+  if (isJpeg) return "jpeg";
+  return null;
+}
+
+app.get("/api/orders", requireCustomer, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, file_type, file_size_bytes, copies, status, created_at
+       FROM demo_print_orders
+       WHERE customer_id = $1
+       ORDER BY created_at DESC, id DESC LIMIT 30`,
+      [req.session.userId]
+    );
+    res.json({ orders: result.rows, testOnly: true });
+  } catch (error) {
+    console.error("Order list failed:", error);
+    res.status(500).json({ error: "Unable to load test orders" });
+  }
+});
+
+app.post("/api/orders", requireCustomer, requireSameOrigin,
+  orderLimiter, (req, res) => {
+    upload.single("file")(req, res, async (uploadError) => {
+      if (uploadError) {
+        const limited = uploadError instanceof multer.MulterError;
+        return res.status(limited ? 413 : 400).json({
+          error: limited
+            ? "File too large or invalid upload. Maximum 2 MB."
+            : "Could not process upload"
+        });
+      }
+
+      const copies = Number(req.body && req.body.copies);
+      const fileType = recognizedFileType(req.file);
+      if (!fileType || !Number.isInteger(copies) ||
+          copies < 1 || copies > 10) {
+        return res.status(400).json({
+          error: "Choose a PDF, PNG or JPG test file (max 2 MB) and 1-10 copies"
+        });
+      }
+
+      try {
+        // Only type, byte size and requested copies are saved.
+        // The file's original name and contents are intentionally discarded.
+        const result = await pool.query(
+          `INSERT INTO demo_print_orders
+             (customer_id, file_type, file_size_bytes, copies)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, file_type, copies, status, created_at`,
+          [req.session.userId, fileType, req.file.size, copies]
+        );
+        return res.status(201).json({
+          message: "Test order recorded; the file was NOT stored or printed.",
+          order: result.rows[0],
+          testOnly: true
+        });
+      } catch (error) {
+        console.error("Test order failed:", error);
+        return res.status(500).json({ error: "Unable to save test order" });
+      }
+    });
+  }
+);
+
+// Serve only public assets. Never expose server.js, package.json or secrets.
+for (const filename of ["index.html", "login.html", "style.css", "app.js"]) {
+  app.get("/" + filename, (req, res) => {
+    res.sendFile(path.join(__dirname, filename));
+  });
+}
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+app.get("/dashboard.html", (req, res) => {
+  if (!req.session || !req.session.userId) {
+    return res.redirect("/login.html");
+  }
+  res.sendFile(path.join(__dirname, "dashboard.html"));
+});
+
 
 async function start() {
   await pool.query(`
@@ -257,6 +383,19 @@ async function start() {
       name VARCHAR(100) NOT NULL,
       email VARCHAR(254) NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS demo_print_orders (
+      id BIGSERIAL PRIMARY KEY,
+      customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      file_type VARCHAR(10) NOT NULL,
+      file_size_bytes INTEGER NOT NULL CHECK (file_size_bytes > 0),
+      copies SMALLINT NOT NULL CHECK (copies BETWEEN 1 AND 10),
+      status VARCHAR(20) NOT NULL DEFAULT 'demo_only',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
