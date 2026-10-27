@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Create, download and print QR codes with QR-To-Print.">
+  <title>QR-To-Print | QR Code & Print Tools</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#" aria-label="QR-To-Print home"><span class="brand-mark">QR</span><span>QR-To-Print</span></a>
+    <nav><a href="#tools">Tools</a><a href="#how-it-works">How it works</a><a class="nav-cta" href="#tools">Get started</a></nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">SIMPLE • FAST • USEFUL</span>
+        <h1>Your files.<br><span>Ready to print.</span></h1>
+        <p>Create a QR code from a link or text, save it, and print it. This is the first version of the new QR-To-Print website.</p>
+        <a class="button primary" href="#tools">Explore tools <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="hero-card" aria-label="QR code illustration">
+        <div class="qr-art" aria-hidden="true"><div class="finder top-left"></div><div class="finder top-right"></div><div class="finder bottom-left"></div><div class="qr-dots"></div></div>
+        <div class="hero-card-label"><span class="status-dot"></span> Make your next scan count</div>
+      </div>
+    </section>
+    <section class="tools section" id="tools">
+      <div class="section-heading"><span class="eyebrow">START HERE</span><h2>Useful tools, all in one place</h2><p>Choose a tool to get started. More shop and printing features can be added next.</p></div>
+      <div class="tool-grid">
+        <article class="tool-card"><div class="tool-icon">▦</div><h3>QR Code Generator</h3><p>Turn a website link or short text into a QR code you can save.</p><a href="#generator">Create a QR code <span>→</span></a></article>
+        <article class="tool-card"><div class="tool-icon">▤</div><h3>Print-ready files</h3><p>Prepare your next print job. File upload and shop printing are planned for a later step.</p><span class="coming-soon">Coming next</span></article>
+        <article class="tool-card"><div class="tool-icon">⌂</div><h3>Shop dashboard</h3><p>A separate, secure shop dashboard will be built after the public tools.</p><span class="coming-soon">Coming next</span></article>
+      </div>
+    </section>
+    <section class="generator section" id="generator">
+      <div class="generator-copy"><span class="eyebrow">TRY IT NOW</span><h2>Make a QR code</h2><p>Enter a website address or text. Your input is used in your browser to request a QR image.</p></div>
+      <form class="generator-form" id="qr-form">
+        <label for="qr-input">Website or text</label>
+        <input id="qr-input" name="text" type="text" maxlength="1500" placeholder="https://example.com" required>
+        <div class="form-actions"><button class="button primary" type="submit">Generate QR</button><button class="button secondary" id="clear-btn" type="button">Clear</button></div>
+        <div class="qr-result" id="qr-result" hidden><img id="qr-image" alt="Generated QR code"><a id="download-link" class="button secondary" download="qr-to-print.png">Download PNG</a><p class="small-note">QR image service requires an internet connection. Avoid entering sensitive information.</p></div>
+        <p class="form-message" id="form-message" role="status"></p>
+      </form>
+    </section>
+    <section class="how section" id="how-it-works"><div class="section-heading"><span class="eyebrow">THREE SIMPLE STEPS</span><h2>From idea to QR in moments</h2></div><div class="steps"><div><b>01</b><h3>Enter your content</h3><p>Add a link or a short message.</p></div><div><b>02</b><h3>Generate</h3><p>Preview the QR code before saving.</p></div><div><b>03</b><h3>Save and print</h3><p>Download your image and print it when ready.</p></div></div></section>
+  </main>
+  <footer><a class="brand" href="#"><span class="brand-mark">QR</span><span>QR-To-Print</span></a><p>New project • Built step by step</p></footer>
+  <script src="app.js"></script>
+</body>
+</html>
