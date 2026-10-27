@@ -31,12 +31,12 @@
       <button type="button" data-section="profile"><span class="ni">◉</span>Shop profile</button>
       <button type="button" data-section="settings"><span class="ni">⚙</span>Settings</button>
     </nav>
-    <div class="sidebar-bottom"><div class="store-name">Your print shop</div><div class="subtle">Preview workspace • No shop connected</div><span class="side-bottom-chip">● Design preview</span></div>
+    <div class="sidebar-bottom"><div class="store-name" id="shop-name">Loading shop...</div><div class="subtle" id="shop-owner">Shop account</div><span class="side-bottom-chip">● Design preview</span></div>
   </aside>
   <main class="main">
     <div class="topbar">
       <div><div class="eyebrow" id="breadcrumb">Shop panel / Overview</div><h1 class="heading" id="page-title">Good to see you.</h1></div>
-      <div class="top-actions"><span class="preview-tag">DEMO PREVIEW</span><a class="btn dark" href="/login.html" title="Customer login page">Customer page ↗</a></div>
+      <div class="top-actions"><span class="preview-tag">DEMO PREVIEW</span><a class="btn light" href="/login.html" title="Customer login page">Customer page ↗</a><button class="btn dark" id="shop-logout" type="button">Logout</button></div>
     </div>
     <section class="panel active" id="panel-dashboard">
       <div class="notice"><div class="notice-icon">✳</div><div><strong>You're viewing the new Shop Dashboard design</strong><p>Printer connection, wallet payments and real print jobs are not active yet. Numbers below are placeholders.</p></div><button type="button" class="btn" id="notice-info">What's next?</button></div>
@@ -97,7 +97,38 @@
     try{await navigator.clipboard.writeText(customerUrl);showToast("Customer page link copied.");}
     catch{showToast("Copy unavailable. Open the customer page to copy its URL.");}
   });
-  document.getElementById("notice-info").addEventListener("click",()=>showToast("Next: shop-owner login, print agent, orders and durable document storage."));
+  document.getElementById("notice-info").addEventListener("click",()=>showToast("Next: shop QR, print agent, orders and durable document storage."));
+
+  // Profile is verified server-side and only the logged-in shop is returned.
+  fetch("/api/shop/me", {credentials:"same-origin"})
+    .then(async response => {
+      if (!response.ok) {
+        window.location.replace("/shop-login.html");
+        return null;
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (!data) return;
+      document.getElementById("shop-name").textContent = data.shop.name;
+      document.getElementById("shop-owner").textContent = "Owner: " + data.owner.name;
+    })
+    .catch(() => showToast("Could not load shop profile. Please refresh."));
+
+  document.getElementById("shop-logout").addEventListener("click", async () => {
+    const button = document.getElementById("shop-logout");
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/shop/logout", {
+        method:"POST", credentials:"same-origin"
+      });
+      if (!response.ok) throw new Error("Logout failed");
+      window.location.replace("/shop-login.html");
+    } catch(error) {
+      button.disabled = false;
+      showToast("Logout failed. Please try again.");
+    }
+  });
 })();
 </script>
 </body>
