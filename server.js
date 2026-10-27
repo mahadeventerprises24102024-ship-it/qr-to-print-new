@@ -7,6 +7,7 @@ const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
 const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
+const { installShopAuth, ensureShopTables } = require("./shop-auth");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -32,6 +33,18 @@ app.use(helmet({
 }));
 
 app.use(express.json({ limit: "20kb" }));
+
+// Reject cross-site state-changing API requests, including customer APIs.
+// Browsers send an Origin header with same-origin JSON POST requests.
+app.use("/api", (req, res, next) => {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    const expected = req.protocol + "://" + req.get("host");
+    if (req.get("origin") !== expected) {
+      return res.status(403).json({ error: "Invalid request origin" });
+    }
+  }
+  next();
+});
 
 app.use(session({
   store: new PgSession({
@@ -247,8 +260,34 @@ app.post("/api/logout", (req, res) => {
   });
 });
 
-// Existing website
-app.use(express.static(path.join(__dirname)));
+// Shop endpoints and owners use their own session identity.
+installShopAuth(app, pool);
+
+// Explicit public assets: never expose backend JavaScript or package.json.
+app.get(["/", "/index.html"], (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+for (const asset of ["style.css", "app.js", "login.html", "shop-login.html"]) {
+  app.get("/" + asset, (req, res) => {
+    res.sendFile(path.join(__dirname, asset));
+  });
+}
+
+// Serve each dashboard only to its corresponding authenticated role.
+app.get("/dashboard.html", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!req.session || !req.session.userId) {
+    return res.redirect("/login.html");
+  }
+  return res.sendFile(path.join(__dirname, "dashboard.html"));
+});
+app.get("/shop-dashboard.html", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!req.session || !req.session.shopOwnerId) {
+    return res.redirect("/shop-login.html");
+  }
+  return res.sendFile(path.join(__dirname, "shop-dashboard.html"));
+});
 
 async function start() {
   await pool.query(`
@@ -260,6 +299,8 @@ async function start() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  await ensureShopTables(pool);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);
