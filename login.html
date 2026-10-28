@@ -176,7 +176,20 @@
     message.textContent = "";
   }
 
+  // Only the known local shop print page is accepted as a return URL.
+  // This prevents attackers from using login to redirect to other sites.
+  function safePrintReturnPath() {
+    const target = new URLSearchParams(location.search).get("next");
+    return /^\/print\.html\?shop=[a-f0-9]{32}$/.test(target || "")
+      ? target : null;
+  }
+
   function showProfile(user) {
+    const returnPath = safePrintReturnPath();
+    if (returnPath) {
+      window.location.replace(returnPath);
+      return;
+    }
     showSection(profileSection);
 
     document.getElementById("welcome").textContent =
