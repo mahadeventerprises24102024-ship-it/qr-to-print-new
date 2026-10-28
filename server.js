@@ -267,7 +267,7 @@ installShopAuth(app, pool);
 app.get(["/", "/index.html"], (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
-for (const asset of ["style.css", "app.js", "login.html", "shop-login.html"]) {
+for (const asset of ["style.css", "app.js", "login.html", "shop-login.html", "print.html"]) {
   app.get("/" + asset, (req, res) => {
     res.sendFile(path.join(__dirname, asset));
   });

@@ -52,7 +52,7 @@
         <div class="stat"><div class="small">Today's sales</div><div class="num">—</div><div class="more">Payment integration pending</div></div>
       </div>
       <div class="dashboard-grid">
-        <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This preview QR opens the existing customer login page, not an active shop print queue.</p><div class="qr-actions"><a class="btn teal" href="/login.html">Open customer page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><img class="qr-art" id="customer-qr" alt="QR code linking to the customer login page" src="" width="145" height="145"></section>
+        <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This QR is unique to your shop. Customers can scan it to see your shop's print page. File uploads and printing are not enabled yet.</p><div class="qr-actions"><a class="btn teal" id="customer-print-link" href="#" aria-disabled="true">Open shop print page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><img class="qr-art" id="customer-qr" alt="QR code linking to this shop&#39;s customer print page" src="" width="145" height="145"></section>
         <section class="card"><h2>Quick actions</h2><p class="description">Build your printing workspace step by step.</p><div class="quick-list">
           <button class="quick-row" data-go="printers"><span class="quick-symbol">▣</span><span class="quick-txt"><strong>Set up a printer</strong><span>Device connection coming later</span></span><span class="arrow">›</span></button>
           <button class="quick-row" data-go="orders"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>View print orders</strong><span>Order management is in development</span></span><span class="arrow">›</span></button>
@@ -65,7 +65,7 @@
     <section class="panel" id="panel-printers"><div class="card content-panel"><div class="eyebrow">DEVICES</div><div class="content-icon">▣</div><h2>Printer management</h2><p>Future printing agent software will securely connect a shop computer and configured printers to this dashboard. No printer is connected yet.</p><div class="info-list"><div class="info-item"><strong>Agent status</strong><span>Offline / not configured</span></div><div class="info-item"><strong>Default printer</strong><span>Choose after device integration</span></div></div></div></section>
     <section class="panel" id="panel-wallet"><div class="card content-panel"><div class="eyebrow">BILLING</div><div class="content-icon">₹</div><h2>Wallet & plans</h2><p>A future section for subscription details, invoices and payment history. No payments or wallet balances are processed in this demo.</p><div class="info-list"><div class="info-item"><strong>Current plan</strong><span>Not activated</span></div><div class="info-item"><strong>Wallet balance</strong><span>Unavailable — billing not connected</span></div></div></div></section>
     <section class="panel" id="panel-reports"><div class="card content-panel"><div class="eyebrow">ANALYTICS</div><div class="content-icon">◫</div><h2>Reports</h2><p>Daily printing totals, file types, completed pages and revenue reports will appear here after order and payment integrations are built.</p><div class="info-list"><div class="info-item"><strong>Print report</strong><span>Awaiting real data</span></div><div class="info-item"><strong>Sales report</strong><span>Awaiting payment data</span></div></div></div></section>
-    <section class="panel" id="panel-profile"><div class="card content-panel"><div class="eyebrow">IDENTITY</div><div class="content-icon">◉</div><h2>Shop profile</h2><p>Shop name, contact details, hours and physical address will be editable here once shop-owner accounts are implemented. This demo isn't linked to customer login roles.</p></div></section>
+    <section class="panel" id="panel-profile"><div class="card content-panel"><div class="eyebrow">IDENTITY</div><div class="content-icon">◉</div><h2>Shop profile</h2><p>Shop name, contact details, hours and physical address will be editable here once shop-owner accounts are implemented. Your shop-owner account is separate from customer login. Shop profile editing will be added later.</p></div></section>
     <section class="panel" id="panel-settings"><div class="card content-panel"><div class="eyebrow">PREFERENCES</div><div class="content-icon">⚙</div><h2>Settings</h2><p>Future controls include printer defaults, paper formats, pricing, notifications and team permissions. This page does not save changes yet.</p><div class="info-list"><div class="info-item"><strong>Printing preferences</strong><span>Not configured</span></div><div class="info-item"><strong>Shop security</strong><span>Separate shop-role authentication required</span></div></div></div></section>
     <p class="footer-tip">QR-To-Print © 2026 · Shop Dashboard design prototype · Do not use this page for live printing or payments.</p>
   </main>
@@ -90,11 +90,17 @@
   document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>openSection(b.dataset.go)));
   window.addEventListener("hashchange",()=>openSection(location.hash.slice(1)));
   openSection(location.hash.slice(1)||"dashboard");
-  const customerUrl=new URL("login.html",location.href).href;
-  document.getElementById("customer-qr").src="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data="+encodeURIComponent(customerUrl);
+  let customerUrl = "";
+  const customerLink = document.getElementById("customer-print-link");
+  customerLink.addEventListener("click", (event) => {
+    if (!customerUrl) {
+      event.preventDefault();
+      showToast("Your shop QR is still loading.");
+    }
+  });
   document.getElementById("customer-qr").addEventListener("error",e=>{e.currentTarget.alt="QR preview unavailable. Use Open customer page.";e.currentTarget.style.display="none";});
   document.getElementById("copy-link").addEventListener("click",async()=>{
-    try{await navigator.clipboard.writeText(customerUrl);showToast("Customer page link copied.");}
+    try{if(!customerUrl) return showToast("Your shop QR is still loading.");await navigator.clipboard.writeText(customerUrl);showToast("Shop-specific print link copied.");}
     catch{showToast("Copy unavailable. Open the customer page to copy its URL.");}
   });
   document.getElementById("notice-info").addEventListener("click",()=>showToast("Next: shop QR, print agent, orders and durable document storage."));
@@ -112,6 +118,17 @@
       if (!data) return;
       document.getElementById("shop-name").textContent = data.shop.name;
       document.getElementById("shop-owner").textContent = "Owner: " + data.owner.name;
+      const publicCode = data.shop.publicCode;
+      if (!/^[a-f0-9]{32}$/.test(publicCode || "")) {
+        showToast("Your shop QR code is unavailable. Please refresh.");
+        return;
+      }
+      customerUrl = new URL("/print.html?shop=" + publicCode, location.origin).href;
+      customerLink.href = customerUrl;
+      customerLink.removeAttribute("aria-disabled");
+      document.getElementById("customer-qr").src =
+        "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" +
+        encodeURIComponent(customerUrl);
     })
     .catch(() => showToast("Could not load shop profile. Please refresh."));
 

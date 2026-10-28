@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="QR-To-Print customer page for a specific print shop.">
+  <title>Customer Print Page | QR-To-Print</title>
+  <style>
+    :root{--ink:#162925;--muted:#6e8178;--green:#087d68;--light:#f3f8f4;--line:#dfe9e1;--lime:#dafa77}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:var(--light);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px max(20px,calc((100vw - 1090px)/2));background:#fff;border-bottom:1px solid var(--line)}
+    .brand{font-size:19px;font-weight:850;color:var(--ink);letter-spacing:-.7px;text-decoration:none;display:flex;align-items:center;gap:10px}
+    .brand span{background:var(--lime);width:37px;height:37px;border-radius:10px;display:grid;place-items:center;font-size:12px}
+    .demo-tag{font-size:11px;font-weight:800;background:#fff2cf;border:1px solid #f2deaa;padding:8px 11px;border-radius:100px;color:#85632a}
+    .wrapper{max-width:1090px;margin:0 auto;padding:65px 20px 90px;display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:70px}
+    .eyebrow{color:var(--green);font-size:11px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase}
+    h1{font-size:clamp(35px,5vw,65px);line-height:1.12;letter-spacing:-2.5px;margin:19px 0 22px}
+    h1 span{color:var(--green)}
+    .intro>p{color:var(--muted);line-height:1.75;font-size:15px;max-width:440px}
+    .shop{background:#e1f4ea;border:1px solid #cae9d9;border-radius:13px;padding:17px;margin-top:26px;max-width:440px}
+    .shop small{display:block;color:#648a76;font-size:11px;font-weight:750;letter-spacing:.4px;margin-bottom:8px}
+    .shop strong{font-size:20px;letter-spacing:-.45px;overflow-wrap:anywhere}
+    .shop .status{display:block;font-size:12px;color:#577767;margin-top:8px}
+    .card{border-radius:24px;border:1px solid var(--line);background:white;box-shadow:0 20px 55px #214f3220;padding:30px}
+    .card h2{font-size:24px;letter-spacing:-.6px;margin:0 0 8px}
+    .subtitle{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 24px}
+    label{font-size:12px;font-weight:750;display:block;margin:17px 0 8px}
+    input,select{width:100%;padding:14px;border:1px solid #d9e5dd;border-radius:9px;background:#f8faf8;color:#5e7767;font:inherit;font-size:13px}
+    input:disabled,select:disabled{cursor:not-allowed;opacity:.76}
+    .upload{border:2px dashed #c5d9cb;border-radius:13px;background:#f9fcf9;padding:25px 12px;text-align:center;font-size:13px;color:#809388}
+    .upload-icon{display:block;font-size:28px;margin-bottom:10px}
+    .btn{background:var(--green);color:#fff;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;text-align:center;font-weight:750;font-size:13px;padding:13px 18px;border-radius:10px;margin-top:19px;border:0;width:100%}
+    button.btn:disabled{background:#9bab9f;cursor:not-allowed}
+    .info{border:1px solid #ebdba9;background:#fff9eb;border-radius:11px;padding:14px 15px;font-size:12px;color:#826b38;line-height:1.65;margin-top:20px}
+    .steps{display:grid;gap:15px;margin-top:25px}
+    .step{display:flex;align-items:center;gap:12px;color:#657e70;font-size:13px}
+    .step b{display:grid;place-items:center;width:31px;height:31px;flex-shrink:0;border-radius:9px;background:#e1ecdf;color:#19664f}
+    .footer{margin-top:45px;font-size:12px;color:#83958a}
+    @media(max-width:800px){.wrapper{grid-template-columns:1fr;gap:30px;padding:40px 20px 70px}.card{max-width:600px}.intro h1{letter-spacing:-1.4px}.shop{max-width:none}}
+    @media(max-width:450px){.card{padding:22px}.header{padding:15px 18px}}
+  </style>
+</head>
+<body>
+  <header class="header"><a href="/" class="brand"><span>QR</span> QR-To-Print</a><span class="demo-tag">TEST PREVIEW</span></header>
+  <main class="wrapper">
+    <section class="intro">
+      <span class="eyebrow">Customer printing</span>
+      <h1>Scan. Upload.<br><span>Print.</span></h1>
+      <p>एक दुकान के लिए अलग QR लिंक। इस पेज पर दुकान का नाम दिखाई देगा। फाइल अपलोड, पेमेंट और प्रिंटिंग की सुविधा अभी तैयार की जा रही है।</p>
+      <div class="shop" aria-live="polite">
+        <small>YOU ARE VISITING</small>
+        <strong id="shop-name">Checking shop...</strong>
+        <span class="status" id="shop-status">Verifying QR link</span>
+      </div>
+      <div class="steps">
+        <div class="step"><b>01</b> Scan the QR at your print shop</div>
+        <div class="step"><b>02</b> Check the shop name</div>
+        <div class="step"><b>03</b> Printing will be enabled after setup</div>
+      </div>
+      <p class="footer">QR-To-Print • Demo customer print page</p>
+    </section>
+    <section class="card">
+      <h2>Print your document</h2>
+      <p class="subtitle">PDF या फोटो प्रिंट करने की सुविधा का शुरुआती डिज़ाइन। अभी दस्तावेज़ भेजना बंद है।</p>
+      <label for="file">Choose a file</label>
+      <div class="upload"><span class="upload-icon">▤</span>PDF, JPG and PNG<br>File upload coming soon</div>
+      <input type="file" id="file" accept=".pdf,.jpg,.jpeg,.png" disabled>
+      <label for="copies">Copies</label>
+      <select id="copies" disabled><option>1 Copy</option><option>2 Copies</option><option>5 Copies</option><option>10 Copies</option></select>
+      <button class="btn" type="button" disabled>Submit Print Request — Coming soon</button>
+      <div class="info">⚠ This is a test preview. It does not collect your file, charge you, or send anything to a printer. Please do not use it for real orders.</div>
+      <a class="btn" id="customer-login" href="/login.html" style="background:#e4f3ec;color:#12694f">Existing customer login ↗</a>
+    </section>
+  </main>
+  <script>
+    (async function(){
+      const title=document.getElementById("shop-name");
+      const status=document.getElementById("shop-status");
+      const code=new URLSearchParams(location.search).get("shop");
+      if (!code || !/^[a-f0-9]{32}$/.test(code)) {
+        title.textContent="Invalid QR code";
+        status.textContent="Please scan the QR code shown in your shop dashboard.";
+        return;
+      }
+      try {
+        const response=await fetch("/api/public/shops/"+encodeURIComponent(code), {
+          credentials:"omit",
+          headers:{"Accept":"application/json"}
+        });
+        if(!response.ok) throw new Error(response.status===404?"Shop not found":"Unable to verify shop");
+        const data=await response.json();
+        title.textContent=data.shop.name;
+        status.textContent="Shop verified • Printing not yet enabled";
+      } catch (error) {
+        title.textContent="Shop unavailable";
+        status.textContent=error.message;
+      }
+    })();
+  </script>
+</body>
+</html>
