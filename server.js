@@ -9,6 +9,8 @@ const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
 const { installShopAuth, ensureShopTables } = require("./shop-auth");
 const { installDemoOrderApis, ensureDemoOrderTables } = require("./demo-print-orders");
+const { installPrivatePrintRoutes, ensurePrivatePrintTables } =
+  require("./private-print-storage");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -264,6 +266,7 @@ app.post("/api/logout", (req, res) => {
 // Shop endpoints and owners use their own session identity.
 installShopAuth(app, pool);
 installDemoOrderApis(app, pool);
+installPrivatePrintRoutes(app, pool);
 
 // Explicit public assets: never expose backend JavaScript or package.json.
 app.get(["/", "/index.html"], (req, res) => {
@@ -304,6 +307,7 @@ async function start() {
 
   await ensureShopTables(pool);
   await ensureDemoOrderTables(pool);
+  await ensurePrivatePrintTables(pool);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);
