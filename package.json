@@ -18,6 +18,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "multer": "^2.5.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "@aws-sdk/client-s3": "^3.1140.0"
   }
 }
