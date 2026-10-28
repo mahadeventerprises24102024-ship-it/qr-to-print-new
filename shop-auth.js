@@ -2,6 +2,7 @@
 
 const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
+const { randomBytes } = require("node:crypto");
 
 const shopLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -56,7 +57,8 @@ function saveShopSession(req, res, account) {
         message: "Shop login successful",
         shop: {
           id: account.shop_id,
-          name: account.shop_name
+          name: account.shop_name,
+          publicCode: account.public_code
         },
         owner: {
           id: account.owner_id,
@@ -76,6 +78,17 @@ async function ensureShopTables(pool) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Existing shops are assigned a permanent public QR identifier.
+  // gen_random_uuid() is built into PostgreSQL 18 on Render.
+  await pool.query("ALTER TABLE shops ADD COLUMN IF NOT EXISTS public_code VARCHAR(32)");
+  await pool.query(`
+    UPDATE shops
+    SET public_code = replace(gen_random_uuid()::text, '-', '')
+    WHERE public_code IS NULL
+  `);
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS shops_public_code_key ON shops(public_code)");
+  await pool.query("ALTER TABLE shops ALTER COLUMN public_code SET NOT NULL");
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS shop_owners (
       id BIGSERIAL PRIMARY KEY,
@@ -96,6 +109,30 @@ function requireShopOwner(req, res, next) {
 }
 
 function installShopAuth(app, pool) {
+  // Public lookup reveals only shop name and non-secret QR code.
+  // Never expose shop-owner email, password hash or internal shop ID.
+  app.get("/api/public/shops/:code", async (req, res) => {
+    const code = req.params.code;
+    if (!/^[a-f0-9]{32}$/.test(code || "")) {
+      return res.status(400).json({ error: "Invalid shop code" });
+    }
+    try {
+      const result = await pool.query(
+        "SELECT name, public_code FROM shops WHERE public_code = $1",
+        [code]
+      );
+      if (!result.rows.length) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      return res.json({
+        shop: { name: result.rows[0].name, publicCode: result.rows[0].public_code }
+      });
+    } catch (error) {
+      console.error("Public shop lookup failed:", error);
+      return res.status(503).json({ error: "Shop unavailable" });
+    }
+  });
+
   app.post("/api/shop/register", sameOriginOnly, shopLimiter, async (req, res) => {
     const { shopName, ownerName, email, password } = req.body || {};
 
@@ -115,8 +152,8 @@ function installShopAuth(app, pool) {
       client = await pool.connect();
       await client.query("BEGIN");
       const shop = await client.query(
-        "INSERT INTO shops(name) VALUES ($1) RETURNING id",
-        [shopName.trim()]
+        "INSERT INTO shops(name, public_code) VALUES ($1, $2) RETURNING id",
+        [shopName.trim(), randomBytes(16).toString("hex")]
       );
       await client.query(
         `INSERT INTO shop_owners(shop_id, name, email, password_hash)
@@ -153,7 +190,7 @@ function installShopAuth(app, pool) {
     try {
       const result = await pool.query(
         `SELECT o.id AS owner_id, o.name AS owner_name, o.email,
-                o.password_hash, s.id AS shop_id, s.name AS shop_name
+                o.password_hash, s.id AS shop_id, s.name AS shop_name, s.public_code
          FROM shop_owners AS o
          JOIN shops AS s ON s.id = o.shop_id
          WHERE o.email = $1`,
@@ -175,7 +212,7 @@ function installShopAuth(app, pool) {
     try {
       const result = await pool.query(
         `SELECT o.id AS owner_id, o.name AS owner_name, o.email,
-                s.id AS shop_id, s.name AS shop_name
+                s.id AS shop_id, s.name AS shop_name, s.public_code
          FROM shop_owners AS o
          JOIN shops AS s ON s.id = o.shop_id
          WHERE o.id = $1`,
@@ -186,7 +223,8 @@ function installShopAuth(app, pool) {
         return res.status(401).json({ error: "Shop account no longer exists" });
       }
       return res.json({
-        shop: { id: account.shop_id, name: account.shop_name },
+        shop: { id: account.shop_id, name: account.shop_name,
+          publicCode: account.public_code },
         owner: {
           id: account.owner_id,
           name: account.owner_name,
