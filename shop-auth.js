@@ -3,6 +3,7 @@
 const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
 const { randomBytes } = require("node:crypto");
+const QRCode = require("qrcode");
 
 const shopLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -109,6 +110,57 @@ function requireShopOwner(req, res, next) {
 }
 
 function installShopAuth(app, pool) {
+
+  // Render the shop's own QR image locally instead of using a third-party image API.
+  // Only a signed-in shop owner can request their QR PNG.
+  app.get("/api/shop/qr.png", requireShopOwner, async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT s.public_code
+         FROM shop_owners o
+         JOIN shops s ON s.id = o.shop_id
+         WHERE o.id = $1`,
+        [req.session.shopOwnerId]
+      );
+      if (!result.rows.length) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+
+      const code = result.rows[0].public_code;
+      if (!/^[a-f0-9]{32}$/.test(code || "")) {
+        return res.status(503).json({ error: "Shop QR code unavailable" });
+      }
+
+      // Explicitly configured origin prevents Host-header based QR redirects.
+      // Default remains the current live Render domain.
+      const publicOrigin = process.env.PUBLIC_BASE_URL ||
+        "https://qr-to-print-new.onrender.com";
+      const parsedOrigin = new URL(publicOrigin);
+      if (parsedOrigin.protocol !== "https:" ||
+          parsedOrigin.username || parsedOrigin.password ||
+          parsedOrigin.search || parsedOrigin.hash) {
+        throw new Error("PUBLIC_BASE_URL must be an HTTPS site origin");
+      }
+      const customerUrl = new URL(
+        "/print.html?shop=" + code, parsedOrigin
+      ).toString();
+
+      const png = await QRCode.toBuffer(customerUrl, {
+        type: "png",
+        width: 320,
+        margin: 2,
+        errorCorrectionLevel: "M",
+        color: { dark: "#101923ff", light: "#ffffffff" }
+      });
+
+      res.set("Cache-Control", "private, no-store");
+      res.type("png").send(png);
+    } catch (error) {
+      console.error("Shop QR generation failed:", error);
+      res.status(503).json({ error: "Unable to generate shop QR" });
+    }
+  });
+
   // Public lookup reveals only shop name and non-secret QR code.
   // Never expose shop-owner email, password hash or internal shop ID.
   app.get("/api/public/shops/:code", async (req, res) => {
