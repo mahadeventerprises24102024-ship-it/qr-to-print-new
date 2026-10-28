@@ -75,8 +75,31 @@
         <button class="btn" type="submit" id="demo-submit" disabled>Send TEST request details →</button>
       </form>
       <p id="demo-result" class="response" role="status" aria-live="polite" hidden></p>
-      <div class="info">⚠ यह केवल टेस्ट सिस्टम है। कोई दस्तावेज़ अपलोड या प्रिंट नहीं होगा, कोई भुगतान नहीं होगा। असली प्रिंट ऑर्डर के लिए अभी इसका उपयोग न करें।</div>
+      <div class="info">⚠ ऊपर वाला फॉर्म केवल फाइल की जानकारी भेजता है; फाइल स्वयं नहीं भेजता। यह डेमो है, असली प्रिंट ऑर्डर नहीं।</div>
       <a class="btn" id="customer-login" href="/login.html" style="background:#e4f3ec;color:#12694f">Existing customer login ↗</a>
+      <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
+      <h2>Private file upload • TEST ONLY</h2>
+      <p class="subtitle">यह सुविधा सिर्फ स्टोरेज सेटअप और Customer Login के बाद चालू होगी। केवल गैर-निजी टेस्ट PDF/JPG/PNG इस्तेमाल करें। असली दस्तावेज़ अभी न भेजें।</p>
+      <p id="private-upload-status" class="response" role="status" aria-live="polite">Checking private storage...</p>
+      <a id="private-login-link" class="btn" href="/login.html" hidden style="background:#e4f3ec;color:#12694f">Customer Login to Test Upload ↗</a>
+      <form id="private-upload-form" hidden>
+        <label for="private-file">Non-sensitive test file (max 2 MB)</label>
+        <input id="private-file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg" required>
+        <label for="private-copies">Copies</label>
+        <select id="private-copies" name="copies">
+          <option value="1">1 Copy</option>
+          <option value="2">2 Copies</option>
+          <option value="5">5 Copies</option>
+          <option value="10">10 Copies</option>
+        </select>
+        <label for="private-mode">Print mode (preview only)</label>
+        <select id="private-mode" name="printMode">
+          <option value="bw">Black &amp; White</option>
+          <option value="color">Color</option>
+        </select>
+        <button id="private-upload-button" class="btn" type="submit">Upload TEST file privately →</button>
+      </form>
+      <div class="info">Only a shop owner can download this test file. Nothing goes to a printer and there is no payment. Download access ends after 24 hours, and the storage bucket must have an expiry policy.</div>
     </section>
   </main>
   <script>
@@ -88,6 +111,76 @@
       const submit=document.getElementById("demo-submit");
       const result=document.getElementById("demo-result");
       let verifiedCode=null;
+      const privateForm=document.getElementById("private-upload-form");
+      const privateMessage=document.getElementById("private-upload-status");
+      const privateLogin=document.getElementById("private-login-link");
+      const privateButton=document.getElementById("private-upload-button");
+
+      function privateNotice(text, isError=false) {
+        privateMessage.textContent=text;
+        privateMessage.classList.toggle("error",isError);
+      }
+
+      async function preparePrivateUpload(shopCode) {
+        privateLogin.href="/login.html?next="+
+          encodeURIComponent("/print.html?shop="+shopCode);
+        try {
+          const configResponse=await fetch("/api/test-upload/config",{
+            credentials:"same-origin",cache:"no-store"
+          });
+          if(!configResponse.ok) throw new Error("Unable to check storage settings");
+          const config=await configResponse.json();
+          if(!config.enabled) {
+            privateNotice("Private TEST upload is not configured yet. The original demo form above still works.");
+            return;
+          }
+          const me=await fetch("/api/me", {credentials:"same-origin",cache:"no-store"});
+          if(!me.ok) {
+            privateNotice("Please log in as a Customer to send a private test file.");
+            privateLogin.hidden=false;
+            return;
+          }
+          privateNotice("Private TEST storage is ready. Upload only disposable sample files (up to 2 MB).");
+          privateForm.hidden=false;
+        } catch(error) {
+          privateNotice(error.message,true);
+        }
+      }
+
+      privateForm.addEventListener("submit",async(event)=>{
+        event.preventDefault();
+        if(!verifiedCode || privateButton.disabled) return;
+        const file=document.getElementById("private-file").files[0];
+        if(!file || !file.size || file.size>2097152) {
+          privateNotice("Select a small PDF, PNG or JPG test file (up to 2 MB).",true);
+          return;
+        }
+        const data=new FormData(privateForm);
+        privateButton.disabled=true;
+        privateNotice("Sending private test file...");
+        try {
+          const response=await fetch(
+            "/api/public/shops/"+verifiedCode+"/test-file-orders",{
+              method:"POST",credentials:"same-origin",body:data
+            }
+          );
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok) {
+            if(response.status===401) {
+              privateLogin.hidden=false;
+              privateForm.hidden=true;
+            }
+            throw new Error(result.error || "Private test upload failed");
+          }
+          privateNotice("TEST #"+result.order.id+" stored privately. The shop owner can download it in Print orders. Nothing was printed or charged.");
+          privateForm.reset();
+        }catch(error){
+          privateNotice(error.message,true);
+        }finally{
+          privateButton.disabled=false;
+        }
+      });
+
       function showResult(text, error=false) {
         result.textContent=text;
         result.classList.toggle("error",error);
@@ -144,6 +237,9 @@
         status.textContent="Shop verified • Test requests enabled (no file upload)";
         verifiedCode=code;
         submit.disabled=false;
+        document.getElementById("customer-login").href =
+          "/login.html?next="+encodeURIComponent("/print.html?shop="+code);
+        await preparePrivateUpload(code);
       } catch (error) {
         title.textContent="Shop unavailable";
         status.textContent=error.message;

@@ -74,6 +74,15 @@
         <button class="btn light" type="button" id="refresh-demo-orders">Refresh orders</button>
       </div>
       <div id="demo-order-list" class="demo-order-list" role="status" aria-live="polite">Loading...</div>
+      <div style="border-top:1px solid var(--line);margin:30px 0 22px"></div>
+      <div class="eyebrow">PRIVATE TEST FILES • NOT PRINTED</div>
+      <h2 style="margin-top:10px">Private test uploads</h2>
+      <p>Customer-login test files stored in a private bucket. Only this shop owner can download them. Do not open untrusted files on a production computer. Download access ends after 24 hours.</p>
+      <div class="section-head" style="margin-top:22px;gap:12px;flex-wrap:wrap">
+        <span class="pill" id="private-order-summary">Loading private test uploads...</span>
+        <button class="btn light" id="refresh-private-orders" type="button">Refresh private files</button>
+      </div>
+      <div id="private-order-list" class="demo-order-list" role="status" aria-live="polite">Loading...</div>
     </div></section>
     <section class="panel" id="panel-printers"><div class="card content-panel"><div class="eyebrow">DEVICES</div><div class="content-icon">▣</div><h2>Printer management</h2><p>Future printing agent software will securely connect a shop computer and configured printers to this dashboard. No printer is connected yet.</p><div class="info-list"><div class="info-item"><strong>Agent status</strong><span>Offline / not configured</span></div><div class="info-item"><strong>Default printer</strong><span>Choose after device integration</span></div></div></div></section>
     <section class="panel" id="panel-wallet"><div class="card content-panel"><div class="eyebrow">BILLING</div><div class="content-icon">₹</div><h2>Wallet & plans</h2><p>A future section for subscription details, invoices and payment history. No payments or wallet balances are processed in this demo.</p><div class="info-list"><div class="info-item"><strong>Current plan</strong><span>Not activated</span></div><div class="info-item"><strong>Wallet balance</strong><span>Unavailable — billing not connected</span></div></div></div></section>
@@ -98,7 +107,7 @@
     title.textContent=key==="dashboard"?"Good to see you.":names[key];
     crumb.textContent="Shop panel / "+names[key];
     location.hash=key;
-    if(key==="orders") loadDemoOrders();
+    if(key==="orders") { loadDemoOrders(); loadPrivateOrders(); }
   }
   document.querySelectorAll("[data-section]").forEach(b=>b.addEventListener("click",()=>openSection(b.dataset.section)));
   document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>openSection(b.dataset.go)));
@@ -177,6 +186,84 @@
   document.getElementById("refresh-demo-orders")
     .addEventListener("click", loadDemoOrders);
   loadDemoOrders();
+
+  async function loadPrivateOrders() {
+    const list = document.getElementById("private-order-list");
+    const summary = document.getElementById("private-order-summary");
+    list.textContent = "Loading private files...";
+    try {
+      const response = await fetch("/api/shop/test-file-orders", {
+        credentials: "same-origin", cache: "no-store"
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Unable to fetch private test files");
+      list.replaceChildren();
+      const orders = Array.isArray(data.orders) ? data.orders : [];
+      summary.textContent = orders.length + " private test upload(s)";
+      if (!orders.length) {
+        list.textContent = "No private test files yet. Private storage must be configured before customers can upload.";
+        return;
+      }
+
+      orders.forEach(order => {
+        const id = String(order.id);
+        if (!/^[1-9][0-9]{0,14}$/.test(id)) return;
+        const item = document.createElement("div");
+        item.className = "demo-order";
+        const info = document.createElement("div");
+        const heading = document.createElement("strong");
+        heading.textContent = "TEST FILE #" + id + " • " +
+          String(order.fileType).toUpperCase() + " • " +
+          order.copies + " copies • " +
+          (order.printMode === "color" ? "Color" : "B&W");
+        const desc = document.createElement("span");
+        const date = new Date(order.createdAt);
+        desc.textContent = "Private, not printed • " +
+          Math.round(Number(order.fileSizeBytes)/1024) + " KB • " +
+          (Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-IN"));
+        desc.style.display = "block";
+        info.append(heading, desc);
+
+        const controls = document.createElement("div");
+        controls.style.display = "flex";
+        controls.style.gap = "8px";
+        const download = document.createElement("a");
+        download.className = "btn light";
+        download.href = "/api/shop/test-file-orders/" + id + "/download";
+        download.textContent = "Download TEST";
+        const remove = document.createElement("button");
+        remove.className = "btn ghost";
+        remove.type = "button";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          if (!window.confirm("Permanently delete this private test file and its record?")) return;
+          remove.disabled = true;
+          try {
+            const response = await fetch(
+              "/api/shop/test-file-orders/" + id, {
+                method: "DELETE", credentials: "same-origin"
+              }
+            );
+            if (!response.ok) throw new Error("Could not delete this test file");
+            await loadPrivateOrders();
+          } catch (error) {
+            showToast(error.message);
+            remove.disabled = false;
+          }
+        });
+        controls.append(download, remove);
+        item.append(info, controls);
+        list.appendChild(item);
+      });
+    } catch(error) {
+      summary.textContent = "Unable to load private files";
+      list.textContent = error.message;
+    }
+  }
+
+  document.getElementById("refresh-private-orders")
+    .addEventListener("click", loadPrivateOrders);
+  loadPrivateOrders();
 
   // Profile is verified server-side and only the logged-in shop is returned.
   fetch("/api/shop/me", {credentials:"same-origin"})

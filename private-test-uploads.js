@@ -1,0 +1,382 @@
+"use strict";
+
+// Opt-in test upload flow. Never enable for actual customer documents without
+// malware scanning, storage lifecycle policies, monitoring and durable DB.
+const { randomUUID, createHash } = require("node:crypto");
+const multer = require("multer");
+const rateLimit = require("express-rate-limit");
+const {
+  S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand
+} = require("@aws-sdk/client-s3");
+
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const allowedTypes = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpeg: "image/jpeg"
+};
+
+function storageSettings(env = process.env) {
+  const endpoint = env.FILE_STORAGE_ENDPOINT || "";
+  const bucket = env.FILE_STORAGE_BUCKET || "";
+  const accessKeyId = env.FILE_STORAGE_ACCESS_KEY_ID || "";
+  const secretAccessKey = env.FILE_STORAGE_SECRET_ACCESS_KEY || "";
+  let endpointValid = false;
+  try {
+    const url = new URL(endpoint);
+    endpointValid = (
+      url.protocol === "https:" &&
+      /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(url.hostname) &&
+      url.pathname === "/" && !url.search && !url.hash &&
+      !url.username && !url.password
+    );
+  } catch { /* A missing or malformed endpoint disables uploads. */ }
+  const validBucket = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket);
+  const enabled = env.ENABLE_TEST_UPLOADS === "true" &&
+    endpointValid && validBucket && !!accessKeyId && !!secretAccessKey;
+  return { enabled, endpoint, bucket, accessKeyId, secretAccessKey };
+}
+
+function detectSafeFile(file) {
+  if (!file || !Buffer.isBuffer(file.buffer)) return null;
+  const data = file.buffer;
+  if (data.length < 8 || data.length > MAX_FILE_BYTES) return null;
+  const mime = String(file.mimetype || "");
+  const fileName = String(file.originalname || "");
+  const extension = fileName.split(".").pop().toLowerCase();
+  let detected = null;
+  if (data.subarray(0, 5).toString("ascii") === "%PDF-" &&
+      data.subarray(Math.max(0, data.length - 1024)).includes(Buffer.from("%%EOF"))) {
+    detected = "pdf";
+  } else if (data.subarray(0, 8).equals(
+      Buffer.from([137,80,78,71,13,10,26,10])) &&
+      data.subarray(12, 16).toString("ascii") === "IHDR") {
+    detected = "png";
+  } else if (data[0] === 255 && data[1] === 216 && data[2] === 255 &&
+      data[data.length - 2] === 255 && data[data.length - 1] === 217) {
+    detected = "jpeg";
+  }
+  if (!detected) return null;
+  if (mime !== allowedTypes[detected]) return null;
+  if (!({
+    pdf: ["pdf"],
+    png: ["png"],
+    jpeg: ["jpg", "jpeg"]
+  })[detected].includes(extension)) return null;
+  return detected;
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_FILE_BYTES,
+    files: 1,
+    fields: 2,
+    parts: 3,
+    fieldSize: 50
+  }
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many test uploads. Try again later." }
+});
+
+async function ensureTestUploadTables(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS test_file_orders (
+      id BIGSERIAL PRIMARY KEY,
+      shop_id BIGINT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+      customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      storage_key TEXT NOT NULL UNIQUE,
+      file_type VARCHAR(8) NOT NULL
+        CHECK (file_type IN ('pdf','png','jpeg')),
+      file_size_bytes INTEGER NOT NULL
+        CHECK (file_size_bytes BETWEEN 8 AND 2097152),
+      file_sha256 VARCHAR(64) NOT NULL,
+      copies SMALLINT NOT NULL CHECK (copies BETWEEN 1 AND 10),
+      print_mode VARCHAR(8) NOT NULL CHECK (print_mode IN ('bw','color')),
+      status VARCHAR(16) NOT NULL DEFAULT 'test_only'
+        CHECK (status = 'test_only'),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS test_file_orders_shop_recent
+    ON test_file_orders(shop_id, created_at DESC, id DESC)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS test_file_orders_customer_recent
+    ON test_file_orders(customer_id, created_at DESC, id DESC)
+  `);
+}
+
+function installTestFileUploads(app, pool, env = process.env) {
+  const cfg = storageSettings(env);
+  const storage = cfg.enabled ? new S3Client({
+    endpoint: cfg.endpoint,
+    region: "auto",
+    forcePathStyle: true,
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    credentials: {
+      accessKeyId: cfg.accessKeyId,
+      secretAccessKey: cfg.secretAccessKey
+    }
+  }) : null;
+
+  function requireShopOwner(req, res, next) {
+    if (!req.session || !req.session.shopOwnerId) {
+      return res.status(401).json({ error: "Shop login required" });
+    }
+    next();
+  }
+
+  function requireCustomer(req, res, next) {
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({ error: "Customer login required" });
+    }
+    next();
+  }
+
+  app.get("/api/test-upload/config", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({
+      enabled: !!storage,
+      customerLoginRequired: true,
+      maxFileBytes: MAX_FILE_BYTES,
+      testOnly: true
+    });
+  });
+
+  app.post("/api/public/shops/:code/test-file-orders",
+    requireCustomer, uploadLimiter, (req, res) => {
+      if (!storage) {
+        return res.status(503).json({
+          error: "Private test storage is not configured yet"
+        });
+      }
+
+      upload.single("file")(req, res, async (uploadError) => {
+        if (uploadError) {
+          return res.status(
+            uploadError.code === "LIMIT_FILE_SIZE" ? 413 : 400
+          ).json({ error: "Invalid upload. Maximum 2 MB, one file." });
+        }
+
+        const code = req.params.code;
+        const fileType = detectSafeFile(req.file);
+        const copies = Number(req.body && req.body.copies);
+        const printMode = req.body && req.body.printMode;
+
+        if (!/^[a-f0-9]{32}$/.test(code || "") ||
+            !fileType || !Number.isInteger(copies) ||
+            copies < 1 || copies > 10 ||
+            !["bw", "color"].includes(printMode)) {
+          return res.status(400).json({
+            error: "Choose a valid PDF/JPG/PNG sample (max 2 MB), copies and print mode"
+          });
+        }
+
+        let storedKey = null;
+        try {
+          const shop = await pool.query(
+            "SELECT id FROM shops WHERE public_code = $1",
+            [code]
+          );
+          if (!shop.rows.length) {
+            return res.status(404).json({ error: "Shop not found" });
+          }
+          const shopId = shop.rows[0].id;
+
+          // Small bounded test quota. The rate limiter additionally controls
+          // repeat submissions; this quota is not a transactional billing limit.
+          const count = await pool.query(
+            "SELECT COUNT(*)::int AS total FROM test_file_orders WHERE shop_id = $1",
+            [shopId]
+          );
+          if (count.rows[0].total >= 10) {
+            return res.status(429).json({
+              error: "This shop has reached its test storage limit (10 files)"
+            });
+          }
+
+          storedKey = "test-uploads/" + shopId + "/" + randomUUID() +
+            "." + (fileType === "jpeg" ? "jpg" : fileType);
+          const checksum = createHash("sha256").update(req.file.buffer).digest("hex");
+
+          await storage.send(new PutObjectCommand({
+            Bucket: cfg.bucket,
+            Key: storedKey,
+            Body: req.file.buffer,
+            ContentType: allowedTypes[fileType],
+            CacheControl: "private, no-store"
+          }));
+
+          const result = await pool.query(
+            `INSERT INTO test_file_orders
+              (shop_id, customer_id, storage_key, file_type,
+               file_size_bytes, file_sha256, copies, print_mode)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+             RETURNING id, status, created_at AS "createdAt"`,
+            [shopId, req.session.userId, storedKey, fileType,
+              req.file.size, checksum, copies, printMode]
+          );
+
+          return res.status(201).json({
+            testOnly: true,
+            message: "Private TEST file stored. Nothing has been printed or charged.",
+            order: result.rows[0]
+          });
+        } catch (error) {
+          console.error("Private test upload failed:", error);
+          if (storedKey) {
+            try {
+              await storage.send(new DeleteObjectCommand({
+                Bucket: cfg.bucket, Key: storedKey
+              }));
+            } catch (cleanupError) {
+              console.error("Test upload cleanup failed:", cleanupError);
+            }
+          }
+          return res.status(503).json({ error: "Test upload was not completed" });
+        }
+      });
+    }
+  );
+
+  app.get("/api/customer/test-file-orders", requireCustomer, async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT o.id, s.name AS "shopName", o.file_type AS "fileType",
+                o.file_size_bytes AS "fileSizeBytes",
+                o.copies, o.print_mode AS "printMode", o.status,
+                o.created_at AS "createdAt"
+         FROM test_file_orders o
+         JOIN shops s ON s.id = o.shop_id
+         WHERE o.customer_id = $1
+         ORDER BY o.created_at DESC, o.id DESC LIMIT 20`,
+        [req.session.userId]
+      );
+      res.set("Cache-Control", "no-store");
+      res.json({ testOnly: true, orders: result.rows });
+    } catch (error) {
+      console.error("Customer test orders error:", error);
+      res.status(503).json({ error: "Unable to load test orders" });
+    }
+  });
+
+  app.get("/api/shop/test-file-orders", requireShopOwner, async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT o.id, o.file_type AS "fileType",
+                o.file_size_bytes AS "fileSizeBytes", o.copies,
+                o.print_mode AS "printMode", o.status,
+                o.created_at AS "createdAt"
+         FROM test_file_orders o
+         JOIN shop_owners owner ON owner.shop_id = o.shop_id
+         WHERE owner.id = $1
+         ORDER BY o.created_at DESC, o.id DESC LIMIT 20`,
+        [req.session.shopOwnerId]
+      );
+      res.set("Cache-Control", "no-store");
+      res.json({ testOnly: true, orders: result.rows });
+    } catch (error) {
+      console.error("Shop test file orders error:", error);
+      res.status(503).json({ error: "Unable to load test file orders" });
+    }
+  });
+
+  app.get("/api/shop/test-file-orders/:id/download",
+    requireShopOwner, async (req, res) => {
+      if (!storage) {
+        return res.status(503).json({ error: "Private storage is not configured" });
+      }
+      if (!/^[1-9][0-9]{0,14}$/.test(req.params.id || "")) {
+        return res.status(400).json({ error: "Invalid order id" });
+      }
+      try {
+        const result = await pool.query(
+          `SELECT o.id, o.storage_key, o.file_type, o.file_size_bytes,
+                  o.file_sha256, o.created_at
+           FROM test_file_orders o
+           JOIN shop_owners owner ON owner.shop_id = o.shop_id
+           WHERE owner.id = $1 AND o.id = $2
+             AND o.created_at > NOW() - INTERVAL '24 hours'`,
+          [req.session.shopOwnerId, req.params.id]
+        );
+        if (!result.rows.length) {
+          return res.status(404).json({
+            error: "Order not found, not yours, or test file expired"
+          });
+        }
+
+        const record = result.rows[0];
+        const object = await storage.send(new GetObjectCommand({
+          Bucket: cfg.bucket, Key: record.storage_key
+        }));
+        if (Number(object.ContentLength) > MAX_FILE_BYTES) {
+          if (object.Body && typeof object.Body.destroy === "function") object.Body.destroy();
+          return res.status(503).json({ error: "Unexpected stored file size" });
+        }
+        const bytes = Buffer.from(await object.Body.transformToByteArray());
+        if (bytes.length !== record.file_size_bytes ||
+            createHash("sha256").update(bytes).digest("hex") !== record.file_sha256) {
+          return res.status(503).json({ error: "Test file integrity check failed" });
+        }
+
+        const ext = record.file_type === "jpeg" ? "jpg" : record.file_type;
+        res.set({
+          "Cache-Control": "private, no-store",
+          "Content-Security-Policy": "sandbox",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Disposition": 'attachment; filename="test-order-' + record.id + "." + ext + '"'
+        });
+        return res.type("application/octet-stream").send(bytes);
+      } catch (error) {
+        console.error("Test file download failed:", error);
+        return res.status(503).json({ error: "Unable to download test file" });
+      }
+    }
+  );
+
+  app.delete("/api/shop/test-file-orders/:id", requireShopOwner,
+    async (req, res) => {
+      if (!storage) return res.status(503).json({ error: "Storage not configured" });
+      if (!/^[1-9][0-9]{0,14}$/.test(req.params.id || "")) {
+        return res.status(400).json({ error: "Invalid order id" });
+      }
+      try {
+        const result = await pool.query(
+          `SELECT o.storage_key
+           FROM test_file_orders o
+           JOIN shop_owners owner ON owner.shop_id = o.shop_id
+           WHERE owner.id = $1 AND o.id = $2`,
+          [req.session.shopOwnerId, req.params.id]
+        );
+        if (!result.rows.length) return res.status(404).json({ error: "Not found" });
+        await storage.send(new DeleteObjectCommand({
+          Bucket: cfg.bucket, Key: result.rows[0].storage_key
+        }));
+        await pool.query(
+          `DELETE FROM test_file_orders
+           WHERE id = $1 AND shop_id IN
+             (SELECT shop_id FROM shop_owners WHERE id = $2)`,
+          [req.params.id, req.session.shopOwnerId]
+        );
+        res.set("Cache-Control", "no-store");
+        return res.json({ deleted: true, testOnly: true });
+      } catch (error) {
+        console.error("Test file deletion failed:", error);
+        return res.status(503).json({ error: "Unable to delete test file" });
+      }
+    }
+  );
+}
+
+module.exports = {
+  installTestFileUploads, ensureTestUploadTables,
+  storageSettings, detectSafeFile, MAX_FILE_BYTES
+};
