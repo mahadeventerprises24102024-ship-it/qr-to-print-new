@@ -33,6 +33,9 @@
     .btn{background:var(--green);color:#fff;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;text-align:center;font-weight:750;font-size:13px;padding:13px 18px;border-radius:10px;margin-top:19px;border:0;width:100%}
     button.btn:disabled{background:#9bab9f;cursor:not-allowed}
     .info{border:1px solid #ebdba9;background:#fff9eb;border-radius:11px;padding:14px 15px;font-size:12px;color:#826b38;line-height:1.65;margin-top:20px}
+    .response{margin-top:14px;padding:14px;border-radius:10px;background:#e5f5eb;color:#206046;font-size:12px;line-height:1.65}
+    .response.error{background:#fff0ee;color:#9b392d}
+    .response[hidden]{display:none}
     .steps{display:grid;gap:15px;margin-top:25px}
     .step{display:flex;align-items:center;gap:12px;color:#657e70;font-size:13px}
     .step b{display:grid;place-items:center;width:31px;height:31px;flex-shrink:0;border-radius:9px;background:#e1ecdf;color:#19664f}
@@ -47,7 +50,7 @@
     <section class="intro">
       <span class="eyebrow">Customer printing</span>
       <h1>Scan. Upload.<br><span>Print.</span></h1>
-      <p>एक दुकान के लिए अलग QR लिंक। इस पेज पर दुकान का नाम दिखाई देगा। फाइल अपलोड, पेमेंट और प्रिंटिंग की सुविधा अभी तैयार की जा रही है।</p>
+      <p>एक दुकान के लिए अलग QR लिंक। इस पेज पर दुकान का नाम दिखाई देगा। अभी केवल टेस्ट ऑर्डर की जानकारी भेज सकते हैं। आपकी असली फाइल अपलोड या प्रिंट नहीं होगी।</p>
       <div class="shop" aria-live="polite">
         <small>YOU ARE VISITING</small>
         <strong id="shop-name">Checking shop...</strong>
@@ -56,20 +59,23 @@
       <div class="steps">
         <div class="step"><b>01</b> Scan the QR at your print shop</div>
         <div class="step"><b>02</b> Check the shop name</div>
-        <div class="step"><b>03</b> Printing will be enabled after setup</div>
+        <div class="step"><b>03</b> Send test request details (no file uploaded)</div>
       </div>
       <p class="footer">QR-To-Print • Demo customer print page</p>
     </section>
     <section class="card">
       <h2>Print your document</h2>
-      <p class="subtitle">PDF या फोटो प्रिंट करने की सुविधा का शुरुआती डिज़ाइन। अभी दस्तावेज़ भेजना बंद है।</p>
-      <label for="file">Choose a file</label>
-      <div class="upload"><span class="upload-icon">▤</span>PDF, JPG and PNG<br>File upload coming soon</div>
-      <input type="file" id="file" accept=".pdf,.jpg,.jpeg,.png" disabled>
-      <label for="copies">Copies</label>
-      <select id="copies" disabled><option>1 Copy</option><option>2 Copies</option><option>5 Copies</option><option>10 Copies</option></select>
-      <button class="btn" type="button" disabled>Submit Print Request — Coming soon</button>
-      <div class="info">⚠ This is a test preview. It does not collect your file, charge you, or send anything to a printer. Please do not use it for real orders.</div>
+      <p class="subtitle">एक टेस्ट फाइल चुनें। केवल उसका प्रकार, आकार और कॉपी की संख्या दुकान के Dashboard में जाएगी। फाइल की सामग्री और नाम नहीं भेजे जाएँगे।</p>
+      <form id="demo-form">
+        <label for="file">Choose a sample file (stays on your device)</label>
+        <div class="upload"><span class="upload-icon">▤</span>PDF, JPG and PNG<br>Up to 10 MB • Demo metadata only</div>
+        <input type="file" id="file" accept=".pdf,.jpg,.jpeg,.png" required>
+        <label for="copies">Copies</label>
+        <select id="copies" required><option value="1">1 Copy</option><option value="2">2 Copies</option><option value="5">5 Copies</option><option value="10">10 Copies</option></select>
+        <button class="btn" type="submit" id="demo-submit" disabled>Send TEST request details →</button>
+      </form>
+      <p id="demo-result" class="response" role="status" aria-live="polite" hidden></p>
+      <div class="info">⚠ यह केवल टेस्ट सिस्टम है। कोई दस्तावेज़ अपलोड या प्रिंट नहीं होगा, कोई भुगतान नहीं होगा। असली प्रिंट ऑर्डर के लिए अभी इसका उपयोग न करें।</div>
       <a class="btn" id="customer-login" href="/login.html" style="background:#e4f3ec;color:#12694f">Existing customer login ↗</a>
     </section>
   </main>
@@ -78,6 +84,50 @@
       const title=document.getElementById("shop-name");
       const status=document.getElementById("shop-status");
       const code=new URLSearchParams(location.search).get("shop");
+      const form=document.getElementById("demo-form");
+      const submit=document.getElementById("demo-submit");
+      const result=document.getElementById("demo-result");
+      let verifiedCode=null;
+      function showResult(text, error=false) {
+        result.textContent=text;
+        result.classList.toggle("error",error);
+        result.hidden=false;
+      }
+
+      form.addEventListener("submit", async event => {
+        event.preventDefault();
+        if(!verifiedCode) return showResult("Verify your shop QR first.",true);
+        const file=document.getElementById("file").files[0];
+        if(!file) return showResult("Please choose a sample file.",true);
+        const ext=(file.name.split(".").pop() || "").toLowerCase();
+        const fileType=ext==="jpg"||ext==="jpeg"?"jpeg":ext;
+        if(!["pdf","jpeg","png"].includes(fileType) ||
+           !Number.isInteger(file.size) || file.size<1 ||
+           file.size>10485760) {
+          return showResult("Choose a PDF, JPG or PNG sample file up to 10 MB.",true);
+        }
+        submit.disabled=true;
+        result.hidden=true;
+        try {
+          const response=await fetch("/api/public/shops/"+verifiedCode+"/demo-orders",{
+            method:"POST",credentials:"same-origin",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+              fileType,
+              fileSizeBytes:file.size,
+              copies:Number(document.getElementById("copies").value)
+            })
+          });
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok) throw new Error(data.error || "Test request failed");
+          showResult("Test request #"+data.order.id+" recorded for this shop. Your actual file was NOT uploaded or printed. Check the shop dashboard's Print orders section.");
+          form.reset();
+        } catch(error) {
+          showResult(error.message,true);
+        } finally {
+          submit.disabled=false;
+        }
+      });
       if (!code || !/^[a-f0-9]{32}$/.test(code)) {
         title.textContent="Invalid QR code";
         status.textContent="Please scan the QR code shown in your shop dashboard.";
@@ -91,7 +141,9 @@
         if(!response.ok) throw new Error(response.status===404?"Shop not found":"Unable to verify shop");
         const data=await response.json();
         title.textContent=data.shop.name;
-        status.textContent="Shop verified • Printing not yet enabled";
+        status.textContent="Shop verified • Test requests enabled (no file upload)";
+        verifiedCode=code;
+        submit.disabled=false;
       } catch (error) {
         title.textContent="Shop unavailable";
         status.textContent=error.message;
