@@ -10,6 +10,7 @@ const helmet = require("helmet");
 const { installShopAuth, ensureShopTables } = require("./shop-auth");
 const { installDemoOrderApis, ensureDemoOrderTables } = require("./demo-print-orders");
 const { installTestFileUploads, ensureTestUploadTables } = require("./private-test-uploads");
+const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -39,6 +40,12 @@ app.use(express.json({ limit: "20kb" }));
 // Reject cross-site state-changing API requests, including customer APIs.
 // Browsers send an Origin header with same-origin JSON POST requests.
 app.use("/api", (req, res, next) => {
+  // The local Windows test agent authenticates with a secret bearer token,
+  // not browser cookies. Allow only that exact endpoint without Origin.
+  if (req.method === "POST" && req.path === "/agent/heartbeat" &&
+      !req.get("origin")) {
+    return next();
+  }
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
     const expected = req.protocol + "://" + req.get("host");
     if (req.get("origin") !== expected) {
@@ -266,6 +273,7 @@ app.post("/api/logout", (req, res) => {
 installShopAuth(app, pool);
 installDemoOrderApis(app, pool);
 installTestFileUploads(app, pool);
+installAgentApis(app, pool);
 
 // Explicit public assets: never expose backend JavaScript or package.json.
 app.get(["/", "/index.html"], (req, res) => {
@@ -307,6 +315,7 @@ async function start() {
   await ensureShopTables(pool);
   await ensureDemoOrderTables(pool);
   await ensureTestUploadTables(pool);
+  await ensureAgentTables(pool);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);
