@@ -44,7 +44,7 @@
     <section class="panel active" id="panel-dashboard">
       <div class="notice"><div class="notice-icon">✳</div><div><strong>You're viewing the new Shop Dashboard design</strong><p>You can now receive test request details (type, size and copies). No document content, payment or real printing is enabled.</p></div><button type="button" class="btn" id="notice-info">What's next?</button></div>
       <div class="status-strip">
-        <div class="status-part"><div class="field-label">Print agent</div><div class="field-value"><span class="dot"></span>Not connected</div><div class="field-detail">Desktop printing app integration pending</div></div>
+        <div class="status-part"><div class="field-label">Print agent • Preview</div><div class="field-value" id="agent-overview-state">Checking connection...</div><div class="field-detail">Heartbeat only • Printing stays OFF</div></div>
         <div class="status-part"><div class="field-label">Default printer</div><div class="field-value">Not configured</div><div class="field-detail">Connect and select a printer later</div></div>
         <div class="status-part"><div class="field-label">Current plan</div><div class="field-value"><span class="dot yellow"></span>Not activated</div><div class="field-detail">Wallet and plans coming later</div></div>
       </div>
@@ -84,7 +84,36 @@
       </div>
       <div id="private-order-list" class="demo-order-list" role="status" aria-live="polite">Loading...</div>
     </div></section>
-    <section class="panel" id="panel-printers"><div class="card content-panel"><div class="eyebrow">DEVICES</div><div class="content-icon">▣</div><h2>Printer management</h2><p>Future printing agent software will securely connect a shop computer and configured printers to this dashboard. No printer is connected yet.</p><div class="info-list"><div class="info-item"><strong>Agent status</strong><span>Offline / not configured</span></div><div class="info-item"><strong>Default printer</strong><span>Choose after device integration</span></div></div></div></section>
+    <section class="panel" id="panel-printers"><div class="card content-panel">
+      <div class="eyebrow">DEVICES • TEST CONNECTION ONLY</div>
+      <div class="content-icon">▣</div>
+      <h2>Connect your Windows printer PC</h2>
+      <p>This first version confirms your Windows computer is online and counts installed printer devices. It cannot download any customer documents, start a print job, or charge customers.</p>
+      <div class="info-list">
+        <div class="info-item"><strong>Windows agent</strong><span id="agent-state" role="status">Checking...</span></div>
+        <div class="info-item"><strong>Printers found on PC</strong><span id="agent-printers">—</span></div>
+        <div class="info-item"><strong>Last heartbeat</strong><span id="agent-last-seen">—</span></div>
+        <div class="info-item"><strong>Print jobs</strong><span>Disabled in connection preview</span></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin:22px 0">
+        <button class="btn teal" type="button" id="pair-agent">Generate printer PC pairing key</button>
+        <button class="btn light" type="button" id="refresh-agent">Refresh status</button>
+        <button class="btn ghost" type="button" id="revoke-agent">Revoke connection</button>
+      </div>
+      <section id="agent-key-box" hidden style="padding:14px;background:#f0f7f4;border-radius:12px;margin-bottom:20px">
+        <label for="agent-pairing-key" style="font-size:12px;display:block;margin-bottom:6px;font-weight:700">Your one-time display pairing key — do not share it in chat</label>
+        <input type="password" id="agent-pairing-key" readonly autocomplete="off" style="width:100%;padding:12px;border:1px solid #d3dfd9;border-radius:8px">
+        <button type="button" class="btn light" id="copy-agent-key" style="margin-top:10px">Copy pairing key</button>
+        <p class="description">The key will be hidden after copying or 90 seconds. Regenerating it disconnects an earlier pairing.</p>
+      </section>
+      <div class="info-list">
+        <div class="info-item"><strong>1.</strong><span>On your Windows shop PC, install Node.js 20+.</span></div>
+        <div class="info-item"><strong>2.</strong><span>Download this project's GitHub ZIP, extract it, then open PowerShell in that folder.</span></div>
+        <div class="info-item"><strong>3.</strong><span>Run: <code>node windows-print-agent.js</code></span></div>
+        <div class="info-item"><strong>4.</strong><span>Paste the pairing key when prompted (hidden input), then refresh this status.</span></div>
+      </div>
+      <p class="description" style="margin-top:18px">Agent is for Windows only. It requires an internet connection and stays in memory while the terminal remains open. Do not put the secret in GitHub, browser screenshots or PowerShell commands.</p>
+    </div></section>
     <section class="panel" id="panel-wallet"><div class="card content-panel"><div class="eyebrow">BILLING</div><div class="content-icon">₹</div><h2>Wallet & plans</h2><p>A future section for subscription details, invoices and payment history. No payments or wallet balances are processed in this demo.</p><div class="info-list"><div class="info-item"><strong>Current plan</strong><span>Not activated</span></div><div class="info-item"><strong>Wallet balance</strong><span>Unavailable — billing not connected</span></div></div></div></section>
     <section class="panel" id="panel-reports"><div class="card content-panel"><div class="eyebrow">ANALYTICS</div><div class="content-icon">◫</div><h2>Reports</h2><p>Daily printing totals, file types, completed pages and revenue reports will appear here after order and payment integrations are built.</p><div class="info-list"><div class="info-item"><strong>Print report</strong><span>Awaiting real data</span></div><div class="info-item"><strong>Sales report</strong><span>Awaiting payment data</span></div></div></div></section>
     <section class="panel" id="panel-profile"><div class="card content-panel"><div class="eyebrow">IDENTITY</div><div class="content-icon">◉</div><h2>Shop profile</h2><p>Shop name, contact details, hours and physical address will be editable here once shop-owner accounts are implemented. Your shop-owner account is separate from customer login. Shop profile editing will be added later.</p></div></section>
@@ -108,6 +137,7 @@
     crumb.textContent="Shop panel / "+names[key];
     location.hash=key;
     if(key==="orders") { loadDemoOrders(); loadPrivateOrders(); }
+    if(key==="printers") loadAgentStatus();
   }
   document.querySelectorAll("[data-section]").forEach(b=>b.addEventListener("click",()=>openSection(b.dataset.section)));
   document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>openSection(b.dataset.go)));
@@ -264,6 +294,86 @@
   document.getElementById("refresh-private-orders")
     .addEventListener("click", loadPrivateOrders);
   loadPrivateOrders();
+
+  let agentKeyTimer;
+  function clearAgentKey() {
+    const field = document.getElementById("agent-pairing-key");
+    field.value = "";
+    document.getElementById("agent-key-box").hidden = true;
+    clearTimeout(agentKeyTimer);
+  }
+
+  async function loadAgentStatus() {
+    try {
+      const response = await fetch("/api/shop/agent/status", {
+        credentials: "same-origin", cache: "no-store"
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Agent status unavailable");
+      const display = data.online ? "Online (test heartbeat)" :
+        (data.paired ? "Paired, offline" : "Not paired");
+      document.getElementById("agent-state").textContent = display;
+      document.getElementById("agent-overview-state").textContent = display;
+      document.getElementById("agent-printers").textContent =
+        data.online ? String(data.printerCount) + " installed" : "—";
+      const seen = data.lastSeenAt ? new Date(data.lastSeenAt) : null;
+      document.getElementById("agent-last-seen").textContent =
+        seen && !Number.isNaN(seen.getTime()) ? seen.toLocaleString("en-IN") : "Never";
+    } catch(error) {
+      document.getElementById("agent-state").textContent = "Status unavailable";
+      document.getElementById("agent-overview-state").textContent = "Status unavailable";
+      showToast(error.message);
+    }
+  }
+
+  document.getElementById("refresh-agent")
+    .addEventListener("click", loadAgentStatus);
+
+  document.getElementById("pair-agent").addEventListener("click", async () => {
+    if (!window.confirm("Generate a new private pairing key? This invalidates any previous agent key.")) return;
+    const button = document.getElementById("pair-agent");
+    button.disabled = true;
+    clearAgentKey();
+    try {
+      const response = await fetch("/api/shop/agent/pair", {
+        method: "POST", credentials: "same-origin"
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not generate key");
+      document.getElementById("agent-pairing-key").value = data.token;
+      document.getElementById("agent-key-box").hidden = false;
+      agentKeyTimer = setTimeout(clearAgentKey, 90000);
+      showToast("Pairing key ready. Copy it and paste only into the Windows Agent.");
+      await loadAgentStatus();
+    } catch(error) { showToast(error.message); }
+    finally { button.disabled = false; }
+  });
+
+  document.getElementById("copy-agent-key").addEventListener("click", async () => {
+    const token = document.getElementById("agent-pairing-key").value;
+    if (!token) return showToast("Generate a key first.");
+    try {
+      await navigator.clipboard.writeText(token);
+      clearAgentKey();
+      showToast("Key copied. Paste it into your Windows Agent only.");
+    } catch(error) {
+      showToast("Clipboard unavailable. Select and copy the key manually.");
+    }
+  });
+
+  document.getElementById("revoke-agent").addEventListener("click", async () => {
+    if (!window.confirm("Disconnect this shop's Windows agent and revoke its key?")) return;
+    try {
+      const response = await fetch("/api/shop/agent/revoke", {
+        method:"POST", credentials:"same-origin"
+      });
+      if (!response.ok) throw new Error("Could not revoke agent key");
+      clearAgentKey();
+      await loadAgentStatus();
+      showToast("Printer agent key revoked.");
+    } catch(error) { showToast(error.message); }
+  });
+  loadAgentStatus();
 
   // Profile is verified server-side and only the logged-in shop is returned.
   fetch("/api/shop/me", {credentials:"same-origin"})
