@@ -52,7 +52,7 @@
         <div class="stat"><div class="small">Today's sales</div><div class="num">—</div><div class="more">Payment integration pending</div></div>
       </div>
       <div class="dashboard-grid">
-        <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This QR is unique to your shop. Customers can scan it to see your shop's print page. File uploads and printing are not enabled yet.</p><div class="qr-actions"><a class="btn teal" id="customer-print-link" href="#" aria-disabled="true">Open shop print page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><img class="qr-art" id="customer-qr" alt="QR code linking to this shop&#39;s customer print page" src="" width="145" height="145"></section>
+        <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This QR is unique to your shop. Customers can scan it to see your shop's print page. File uploads and printing are not enabled yet.</p><div class="qr-actions"><a class="btn teal" id="customer-print-link" href="#" aria-disabled="true">Open shop print page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><div><img class="qr-art" id="customer-qr" alt="QR code linking to your shop's customer print page" src="/api/shop/qr.png" width="145" height="145"><p id="qr-status" class="description" hidden>QR image could not load. Use Open shop print page or Copy link.</p></div></section>
         <section class="card"><h2>Quick actions</h2><p class="description">Build your printing workspace step by step.</p><div class="quick-list">
           <button class="quick-row" data-go="printers"><span class="quick-symbol">▣</span><span class="quick-txt"><strong>Set up a printer</strong><span>Device connection coming later</span></span><span class="arrow">›</span></button>
           <button class="quick-row" data-go="orders"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>View print orders</strong><span>Order management is in development</span></span><span class="arrow">›</span></button>
@@ -98,7 +98,16 @@
       showToast("Your shop QR is still loading.");
     }
   });
-  document.getElementById("customer-qr").addEventListener("error",e=>{e.currentTarget.alt="QR preview unavailable. Use Open customer page.";e.currentTarget.style.display="none";});
+  const qrImage = document.getElementById("customer-qr");
+  const qrStatus = document.getElementById("qr-status");
+  qrImage.addEventListener("error", () => {
+    qrImage.style.display = "none";
+    qrStatus.hidden = false;
+  });
+  qrImage.addEventListener("load", () => {
+    qrImage.style.display = "";
+    qrStatus.hidden = true;
+  });
   document.getElementById("copy-link").addEventListener("click",async()=>{
     try{if(!customerUrl) return showToast("Your shop QR is still loading.");await navigator.clipboard.writeText(customerUrl);showToast("Shop-specific print link copied.");}
     catch{showToast("Copy unavailable. Open the customer page to copy its URL.");}
@@ -126,9 +135,8 @@
       customerUrl = new URL("/print.html?shop=" + publicCode, location.origin).href;
       customerLink.href = customerUrl;
       customerLink.removeAttribute("aria-disabled");
-      document.getElementById("customer-qr").src =
-        "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" +
-        encodeURIComponent(customerUrl);
+      // QR image is now provided by our own authenticated Render API.
+      // The link button still points directly to this shop's public print page.
     })
     .catch(() => showToast("Could not load shop profile. Please refresh."));
 
