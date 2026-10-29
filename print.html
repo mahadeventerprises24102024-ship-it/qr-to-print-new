@@ -64,6 +64,11 @@
       <p class="footer">QR-To-Print • Demo customer print page</p>
     </section>
     <section class="card">
+      <div class="shop" style="margin:0 0 22px;max-width:none">
+        <small>PRINT RATE CARD • MAHADEV ENTERPRISES</small>
+        <strong id="print-rate-card" style="font-size:15px">Loading print rates...</strong>
+        <span class="status">B&amp;W per page • Aadhaar B&amp;W per card/copy • Colour per page. No real ID uploads in test mode.</span>
+      </div>
       <h2>Upload PDF / Photo • TEST ONLY</h2>
       <p class="subtitle">बिना Customer Login के एक छोटी टेस्ट PDF/JPG/PNG अपलोड करें (अधिकतम 2 MB)। यह सुविधा सिर्फ दुकान द्वारा Guest Test Upload सक्षम होने पर उपलब्ध होगी। निजी या असली ग्राहक दस्तावेज़ अभी न भेजें।</p>
       <p id="private-upload-status" class="response" role="status" aria-live="polite">Checking private storage...</p>
@@ -77,11 +82,15 @@
           <option value="5">5 Copies</option>
           <option value="10">10 Copies</option>
         </select>
+        <label for="private-pages-estimate">Pages per copy for price estimate (not uploaded)</label>
+        <input type="number" id="private-pages-estimate" min="1" max="200" step="1" value="1">
+        <p class="subtitle" style="margin:8px 0 2px">For PDFs, count all pages. The shop owner checks actual pages before creating a final bill.</p>
         <label for="private-mode">Print mode (preview only)</label>
         <select id="private-mode" name="printMode">
           <option value="bw">Black &amp; White</option>
           <option value="color">Color</option>
         </select>
+        <p id="private-estimate" class="response" role="status" aria-live="polite">Checking prices...</p>
         <button id="private-upload-button" class="btn" type="submit">Upload TEST file privately →</button>
       </form>
       <div class="info">The shop owner can access this test file without knowing your identity. No login or payment is required; the shop owner must manually review before printing. Download access ends after 24 hours, and the private bucket has a 1-day expiry policy. Do not upload personal or sensitive documents in test mode.</div>
@@ -112,6 +121,53 @@
       const privateForm=document.getElementById("private-upload-form");
       const privateMessage=document.getElementById("private-upload-status");
       const privateButton=document.getElementById("private-upload-button");
+      let publicRates=null;
+      const money=value=>"₹"+Number(value).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+      function updatePriceEstimate(){
+        const estimate=document.getElementById("private-estimate");
+        const pages=Number(document.getElementById("private-pages-estimate").value);
+        const copies=Number(document.getElementById("private-copies").value);
+        if(!publicRates){
+          estimate.textContent="Prices temporarily unavailable. Please confirm with the shop owner.";
+          return;
+        }
+        if(!Number.isInteger(pages)||pages<1||pages>200){
+          estimate.textContent="Enter 1–200 pages per copy for an estimate.";
+          return;
+        }
+        const mode=document.getElementById("private-mode").value;
+        const rate=mode==="color"?publicRates.color:publicRates.bw;
+        estimate.textContent="Estimated total: "+money(pages*copies*rate)+
+          " ("+pages+" page(s) × "+copies+" copies × "+money(rate)+
+          "). Final bill only after the shop owner checks the pages. No payment now.";
+      }
+      document.getElementById("private-pages-estimate").addEventListener("input",updatePriceEstimate);
+      document.getElementById("private-copies").addEventListener("change",updatePriceEstimate);
+      document.getElementById("private-mode").addEventListener("change",updatePriceEstimate);
+
+      async function loadPublicPricing(shopCode){
+        try{
+          const response=await fetch("/api/public/shops/"+shopCode+"/pricing",{
+            credentials:"omit",cache:"no-store"
+          });
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||"Rates unavailable");
+          const rates=data.ratesRupees;
+          if(!rates || ![rates.bw,rates.aadhaarBw,rates.color].every(v=>
+            Number.isInteger(v)&&v>=1&&v<=1000))throw new Error("Invalid shop rates");
+          publicRates=rates;
+          document.getElementById("print-rate-card").textContent=
+            "B&W "+money(rates.bw)+" / page • Aadhaar B&W "+money(rates.aadhaarBw)+
+            " / copy • Colour "+money(rates.color)+" / page";
+          updatePriceEstimate();
+        }catch(error){
+          document.getElementById("print-rate-card").textContent="Price list temporarily unavailable";
+          document.getElementById("private-estimate").textContent=
+            "Confirm the print price with your shop before ordering.";
+        }
+      }
+
 
       function privateNotice(text, isError=false) {
         privateMessage.textContent=text;
@@ -226,7 +282,7 @@
         status.textContent="Shop verified • Guest test requests available";
         verifiedCode=code;
         submit.disabled=false;
-        await preparePrivateUpload(code);
+        await Promise.all([preparePrivateUpload(code),loadPublicPricing(code)]);
       } catch (error) {
         title.textContent="Shop unavailable";
         status.textContent=error.message;

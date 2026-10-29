@@ -12,6 +12,7 @@ const { installDemoOrderApis, ensureDemoOrderTables } = require("./demo-print-or
 const { installTestFileUploads, ensureTestUploadTables } = require("./private-test-uploads");
 const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
 const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
+const { installShopBilling, ensureShopBillingTables } = require("./shop-billing");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -276,6 +277,7 @@ installDemoOrderApis(app, pool);
 installTestFileUploads(app, pool);
 installAgentApis(app, pool);
 installCanonTestPrintApis(app, pool);
+installShopBilling(app, pool);
 
 // Explicit public assets: never expose backend JavaScript or package.json.
 app.get(["/", "/index.html"], (req, res) => {
@@ -309,6 +311,20 @@ app.get("/shop-print-preview.html", (req, res) => {
   }
   return res.sendFile(path.join(__dirname, "shop-print-preview.html"));
 });
+// Printable basic bill is shop-only; not an official tax invoice.
+app.get("/shop-bill.html", (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  res.set("Referrer-Policy", "no-referrer");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Content-Security-Policy",
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+    "connect-src 'self'; img-src 'none'; object-src 'none'; " +
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  if (!req.session || !req.session.shopOwnerId) {
+    return res.redirect("/shop-login.html");
+  }
+  return res.sendFile(path.join(__dirname, "shop-bill.html"));
+});
 app.get("/shop-dashboard.html", (req, res) => {
   res.set("Cache-Control", "no-store");
   if (!req.session || !req.session.shopOwnerId) {
@@ -331,6 +347,7 @@ async function start() {
   await ensureShopTables(pool);
   await ensureDemoOrderTables(pool);
   await ensureTestUploadTables(pool);
+  await ensureShopBillingTables(pool);
   await ensureAgentTables(pool);
   await ensureCanonTestPrintTables(pool);
 
