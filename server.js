@@ -295,6 +295,16 @@ app.get("/dashboard.html", (req, res) => {
   }
   return res.sendFile(path.join(__dirname, "dashboard.html"));
 });
+// Private review page: only authenticated shop owners may open uploaded samples.
+app.get("/shop-print-preview.html", (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  res.set("Referrer-Policy", "no-referrer");
+  res.set("X-Frame-Options", "DENY");
+  if (!req.session || !req.session.shopOwnerId) {
+    return res.redirect("/shop-login.html");
+  }
+  return res.sendFile(path.join(__dirname, "shop-print-preview.html"));
+});
 app.get("/shop-dashboard.html", (req, res) => {
   res.set("Cache-Control", "no-store");
   if (!req.session || !req.session.shopOwnerId) {
