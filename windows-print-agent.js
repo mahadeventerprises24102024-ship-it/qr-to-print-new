@@ -3,8 +3,8 @@
 /**
  * QR-To-Print Windows Printer Agent — CONNECTION PREVIEW ONLY
  *
- * This script only reports whether the local Windows PC is online and how many
- * printer devices Windows lists. It NEVER downloads documents or prints jobs.
+ * This script reports PC status and may print a fixed diagnostic page only after
+ * an explicit authenticated shop-owner click. It NEVER downloads or prints customer documents.
  * Requires Node.js 20+, Windows PowerShell and a shop-issued pairing key.
  * The secret key remains in memory only and is not written to disk.
  */
@@ -101,11 +101,41 @@ function hiddenPrompt() {
   });
 }
 
+
+// Only a static diagnostic page can be printed, after shop owner consent.
+function printCanonFixedTestPage() {
+  if (process.platform !== "win32") {
+    return { status: "failed", warning: "Windows only" };
+  }
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    "$p = Get-Printer -ErrorAction Stop | Where-Object {",
+    "  $_.Name -match '^Canon\\s+G2010\\s+series(?:\\s+Printer)?$'",
+    "} | Select-Object -First 1",
+    "if (-not $p) { throw 'Canon G2010 not found' }",
+    "@(",
+    "  'QR-To-Print TEST PAGE'",
+    "  'Canon PIXMA G2010'",
+    "  'Shop owner requested this diagnostic page.'",
+    "  'No customer documents are printed.'",
+    ") | Out-Printer -Name $p.Name -ErrorAction Stop"
+  ].join("\n");
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile", "-NonInteractive", "-Command", command
+  ], {
+    timeout: 20000, windowsHide: true, encoding: "utf8", maxBuffer: 1024
+  });
+  if (result.error || result.status !== 0) {
+    return { status: "failed", warning: "Could not submit Canon G2010 test page to Windows" };
+  }
+  return { status: "submitted", warning: null };
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function heartbeat(secret, printerCount) {
+async function heartbeat(secret, printerCount, testPrintResult = null) {
   const response = await fetch(SERVER + "/api/agent/heartbeat", {
     method: "POST",
     headers: {
@@ -113,7 +143,7 @@ async function heartbeat(secret, printerCount) {
       "Content-Type": "application/json",
       Accept: "application/json"
     },
-    body: JSON.stringify({ printerCount }),
+    body: JSON.stringify({ printerCount, ...(testPrintResult ? { testPrintResult } : {}) }),
     signal: AbortSignal.timeout(12_000)
   });
 
@@ -128,13 +158,14 @@ async function heartbeat(secret, printerCount) {
     throw new Error(result.error || "Heartbeat request failed (" + response.status + ")");
   }
   if (result.printingEnabled !== false) {
-    throw new Error("Unexpected server state. Agent stopped for safety");
+    throw new Error("Unexpected customer-print state. Agent stopped for safety");
   }
+  return result;
 }
 
 async function run() {
   console.log("\nQR-To-Print Windows Agent — connection preview");
-  console.log("Does not download customer files or send print commands.");
+  console.log("Customer documents are never downloaded or printed. Owner-requested fixed Canon test page only.");
   console.log("Keep the pairing key private. Press Ctrl+C to stop.\n");
 
   if (process.platform !== "win32") {
@@ -147,17 +178,29 @@ async function run() {
     throw new Error("Pairing key format is invalid. Generate a new one in Shop Dashboard");
   }
 
+  let pendingResult = null;
   while (true) {
     const result = countWindowsPrinters();
     if (result.warning) console.warn("Warning:", result.warning);
 
     try {
-      await heartbeat(secret, result.count);
+      const response = await heartbeat(secret, result.count, pendingResult);
+      pendingResult = null;
       console.log(
         new Date().toLocaleTimeString() +
         " — PC online; Windows printers detected: " + result.count +
-        " (printing OFF)"
+        " (customer printing OFF)"
       );
+      const job = response.testPrintJob;
+      if (response.canonTestPrintEnabled === true && job &&
+          job.kind === "canon_g2010_fixed_test_page" &&
+          /^[1-9][0-9]{0,14}$/.test(String(job.id))) {
+        console.log("Canon G2010 test page approved by shop owner; submitting...");
+        const printed = printCanonFixedTestPage();
+        pendingResult = { id: String(job.id), status: printed.status };
+        if (printed.warning) console.warn(printed.warning);
+        else console.log("Test page submitted to Windows print queue (paper output not verified).");
+      }
     } catch (error) {
       if (error.fatal) throw error;
       console.error("Connection retry:", error.message);
@@ -174,4 +217,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { countWindowsPrinters, heartbeat, readClipboardKey };
+module.exports = { countWindowsPrinters, heartbeat, readClipboardKey, printCanonFixedTestPage };
