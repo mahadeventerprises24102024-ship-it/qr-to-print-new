@@ -54,3 +54,16 @@ test("preview only supports bounded test file types and shop-owned APIs", () => 
   assert.match(preview, /credentials: "same-origin"/);
   assert.match(preview, /URL\.revokeObjectURL\(objectURL\)/);
 });
+
+
+test("private dashboard displays server-supplied printed state, not hardcoded unprinted copy", () => {
+  const start = dashboard.indexOf("async function loadPrivateOrders()");
+  const end = dashboard.indexOf('document.getElementById("refresh-private-orders")');
+  assert.ok(start >= 0 && end > start);
+  const markup = dashboard.slice(start, end);
+  assert.match(markup, /order\.status === "printed"/);
+  assert.match(markup, /Printed \(owner confirmed\)/);
+  assert.match(markup, /Private, awaiting print/);
+  assert.ok(!markup.includes('desc.textContent = "Private, not printed'));
+  assert.ok(!dashboard.includes("PRIVATE TEST FILES • NOT PRINTED"));
+});
