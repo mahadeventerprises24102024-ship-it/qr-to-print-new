@@ -3,12 +3,13 @@
 /**
  * QR-To-Print Windows Printer Agent — CONNECTION PREVIEW ONLY
  *
- * This script reports PC status and may print a fixed diagnostic page only after
- * an explicit authenticated shop-owner click. It NEVER downloads or prints customer documents.
+ * This preview agent prints only shop-owner-approved private TEST files and fixed diagnostic pages.
+ * No production customer printing: test files are not malware-scanned. Never use sensitive content.
  * Requires Node.js 20+, Windows PowerShell and a shop-issued pairing key.
  * The secret key remains in memory only and is not written to disk.
  */
 const { spawnSync } = require("node:child_process");
+const {validJob,sumatraPath,printOneApprovedTestFile} = require("./windows-approved-test-print");
 
 const SERVER = "https://qr-to-print-new.onrender.com";
 const HEARTBEAT_MS = 30_000;
@@ -135,7 +136,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function heartbeat(secret, printerCount, testPrintResult = null) {
+async function heartbeat(secret, printerCount, testPrintResult = null, ownerPrintResult = null) {
   const response = await fetch(SERVER + "/api/agent/heartbeat", {
     method: "POST",
     headers: {
@@ -144,7 +145,9 @@ async function heartbeat(secret, printerCount, testPrintResult = null) {
       Accept: "application/json"
     },
     body: JSON.stringify({ printerCount, supportsCanonTestPrint: true,
-      ...(testPrintResult ? { testPrintResult } : {}) }),
+      supportsOwnerApprovedTestPrint: true,
+      ...(testPrintResult ? { testPrintResult } : {}),
+      ...(ownerPrintResult ? { ownerPrintResult } : {}) }),
     signal: AbortSignal.timeout(12_000)
   });
 
@@ -166,7 +169,7 @@ async function heartbeat(secret, printerCount, testPrintResult = null) {
 
 async function run() {
   console.log("\nQR-To-Print Windows Agent — connection preview");
-  console.log("Customer documents are never downloaded or printed. Owner-requested fixed Canon test page only.");
+  console.log("TEST samples only. Manual owner approval is required for any private file print.");
   console.log("Keep the pairing key private. Press Ctrl+C to stop.\n");
 
   if (process.platform !== "win32") {
@@ -180,18 +183,35 @@ async function run() {
   }
 
   let pendingResult = null;
+  let pendingOwnerResult = null;
+  if (!sumatraPath()) console.warn("SumatraPDF missing: owner-approved PDF/photo test printing is unavailable.");
   while (true) {
     const result = countWindowsPrinters();
     if (result.warning) console.warn("Warning:", result.warning);
 
     try {
-      const response = await heartbeat(secret, result.count, pendingResult);
+      const response = await heartbeat(secret, result.count, pendingResult, pendingOwnerResult);
       pendingResult = null;
+      pendingOwnerResult = null;
       console.log(
         new Date().toLocaleTimeString() +
         " — PC online; Windows printers detected: " + result.count +
         " (customer printing OFF)"
       );
+      // Only owner-approved, checksum-verified private TEST uploads are printed.
+      // Old agents never claim such jobs; there are no automatic retries.
+      if (response.ownerApprovedTestPrintEnabled === true &&
+          validJob(response.approvedTestJob)) {
+        const approved = response.approvedTestJob;
+        let status = "failed";
+        try {
+          status = await printOneApprovedTestFile(secret, approved);
+          console.log("Approved TEST file submitted to Windows spooler; verify paper manually.");
+        } catch (error) {
+          console.warn("Approved TEST print blocked:", error.message);
+        }
+        pendingOwnerResult = { id: String(approved.id), status };
+      }
       const job = response.testPrintJob;
       if (response.canonTestPrintEnabled === true && job &&
           job.kind === "canon_g2010_fixed_test_page" &&
