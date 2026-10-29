@@ -6,7 +6,7 @@ const path=require("node:path");
 const vm=require("node:vm");
 const bcrypt=require("bcryptjs");
 const {
-  adminConfig,subscriptionActive,ensurePlatformTables,
+  adminConfig,credentialVersion,subscriptionActive,ensurePlatformTables,
   shopApiGate,shopPageGate,publicShopGate,installPlatformAdmin
 }=require("../platform-admin");
 
@@ -32,7 +32,7 @@ function makeApp(pool,env){
 const auth={PLATFORM_ADMIN_EMAIL:"admin@example.com",PLATFORM_ADMIN_PASSWORD_HASH:bcrypt.hashSync("test-secret-super-admin",4)};
 function sessionReq(body={},id="3"){
   return {
-    session:{platformAdminEmail:"admin@example.com"},
+    session:{platformAdminEmail:"admin@example.com",platformAdminCredentialVersion:credentialVersion(auth.PLATFORM_ADMIN_PASSWORD_HASH)},
     params:{id},body
   };
 }
@@ -130,6 +130,10 @@ test("admin and shop/customer roles are different; admin listing is protected",a
   let called=false;
   middleware(sessionReq(),passed,()=>{called=true;});
   assert.equal(called,true);
+  const oldSession=response();let oldCalled=false;
+  middleware({session:{platformAdminEmail:"admin@example.com",platformAdminCredentialVersion:"old-hash"}},oldSession,()=>{oldCalled=true;});
+  assert.equal(oldSession.statusCode,401);
+  assert.equal(oldCalled,false);
 });
 test("correct admin login rotates session and saves only the admin role",async()=>{
   const routes=makeApp({query:async()=>({rows:[]})},auth);
@@ -149,6 +153,7 @@ test("correct admin login rotates session and saves only the admin role",async()
   await handler(req,right);
   assert.equal(right.body.message,"Platform admin logged in");
   assert.equal(req.session.platformAdminEmail,"admin@example.com");
+  assert.equal(req.session.platformAdminCredentialVersion,credentialVersion(auth.PLATFORM_ADMIN_PASSWORD_HASH));
   assert.equal(req.session.shopOwnerId,undefined);
 });
 test("admin activation validates plan, fixed duration and manual payment confirmation",async()=>{
