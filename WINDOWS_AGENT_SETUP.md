@@ -1,6 +1,12 @@
-# QR-To-Print Windows Printer PC — Connection Preview
+# QR-To-Print Windows Printer PC — Connection & Test Features
 
-This feature is a **printer-PC connection test only**. It does **not** send customer files, download documents, produce paper prints, charge customers, or turn on a print queue. Only a heartbeat and an integer count of Windows-installed printers are transmitted to the shop's Render backend.
+The **baseline connection feature** sends only a heartbeat and an integer printer count.
+The agent also supports two **separately enabled, owner-approved TEST-only**
+printing experiments: a fixed Canon G2010 page, and a small, reviewed private
+PDF/photo sample. The private file test requires
+`ENABLE_OWNER_APPROVED_TEST_PRINTS=true`, private test storage and an
+independent SumatraPDF installation. See [Owner-approved test print setup](OWNER_APPROVED_AGENT_TEST_PRINT.md).
+No normal/production customer printing or billing is enabled.
 
 ## Before you start
 
@@ -42,9 +48,9 @@ This feature is a **printer-PC connection test only**. It does **not** send cust
 
 - The pairing key has 256 bits of randomness and is stored only as a SHA-256 hash in PostgreSQL. The plaintext is sent once to the logged-in shop owner. Protect it like a password.
 - Shop dashboard endpoints require an authenticated shop-owner session; database queries scope status and updates to that shop.
-- Only the single `POST /api/agent/heartbeat` endpoint accepts a non-browser request without an Origin header; it requires a valid bearer key and rejects browser Origins. Other API mutations retain their original same-origin checks.
+- The agent's `POST /api/agent/heartbeat` and opt-in claimed-job `GET /api/agent/approved-test-print/:jobId/file` use the bearer token and reject browser Origins. The file endpoint additionally checks shop ownership, job status, expiry and R2 digest. Other state-changing APIs retain their same-origin checks.
 - Each shop can have one active agent pairing key; rotating or revoking it disconnects the previous one.
-- No printer model names, file contents, documents, IP addresses inside the heartbeat payload, or customer data are transmitted by the Windows script. Render web logs and access logs can still contain standard request metadata.
+- No printer model names, file contents or IP addresses are sent in the heartbeat. Only when the owner separately enables and approves the private TEST print feature does the paired agent download one bounded, verified private test sample. Render logs can include standard request metadata.
 - **Printer count is informational only**; it does not mean any printer is configured to accept jobs.
 - The pairing key is never written to disk by the agent. Windows clipboard history or clipboard sync could retain a copied key; after starting the agent, clear your Windows clipboard by copying harmless text or using Windows clipboard controls.
 - If you close the terminal, copy the pairing key again only if you saved it securely outside the terminal. Otherwise generate a new key in Shop Dashboard to invalidate the lost one.
@@ -53,4 +59,4 @@ This feature is a **printer-PC connection test only**. It does **not** send cust
 
 Printer discovery/selection, secure per-job authorization, malware scanning of uploaded files, safe rendering, print preview, printer drivers, spooler error handling, cancellation, job reporting, rate limits, billing and audit logs. Production and real printing must remain disabled until these are designed and tested.
 
-This phase only verifies that the shop's own Windows PC can securely send a heartbeat and display **Online** in the QR-To-Print Dashboard.
+Connection can be verified independently of printing. Optional, owner-approved diagnostic/sample printing is documented separately; production customer printing remains disabled.
