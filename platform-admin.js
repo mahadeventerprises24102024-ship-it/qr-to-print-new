@@ -49,7 +49,7 @@ const activeStatusSQL = [
 ].join(" ");
 function shopApiGate(pool) {
   return async (req,res,next)=>{
-    if(!req.session?.shopOwnerId || req.path==="/logout") return next();
+    if(!req.session?.shopOwnerId || ["/logout","/login","/register"].includes(req.path)) return next();
     try {
       const result=await pool.query(activeStatusSQL,[req.session.shopOwnerId]);
       if (!subscriptionActive(result.rows[0])) return res.status(403).json({
