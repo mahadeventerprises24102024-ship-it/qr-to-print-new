@@ -345,7 +345,9 @@ app.get("/admin-dashboard.html", (req, res) => {
     "connect-src 'self'; img-src 'none'; object-src 'none'; " +
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   const config = require("./platform-admin").adminConfig();
-  if (!config.configured || req.session?.platformAdminEmail !== config.email) {
+  if (!config.configured || req.session?.platformAdminEmail !== config.email ||
+      req.session.platformAdminCredentialVersion !==
+        require("./platform-admin").credentialVersion(config.passwordHash)) {
     return res.redirect("/admin-login.html");
   }
   return res.sendFile(path.join(__dirname, "admin-dashboard.html"));
