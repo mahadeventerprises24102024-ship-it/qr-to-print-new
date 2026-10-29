@@ -1,6 +1,7 @@
 "use strict";
 
 const bcrypt = require("bcryptjs");
+const { createHash } = require("node:crypto");
 const rateLimit = require("express-rate-limit");
 const PLANS = Object.freeze(["starter", "pro", "business"]);
 const loginLimiter = rateLimit({
@@ -16,6 +17,9 @@ function adminConfig(env=process.env) {
     configured: email.length<=254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
       /^\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}$/.test(passwordHash)
   };
+}
+function credentialVersion(passwordHash) {
+  return createHash("sha256").update(passwordHash).digest("hex");
 }
 function subscriptionActive(shop,now=new Date()) {
   if (!shop || shop.subscription_status!=="active") return false;
@@ -99,7 +103,8 @@ function publicShopGate(pool) {
 function installPlatformAdmin(app,pool,env=process.env) {
   function requireAdmin(req,res,next) {
     const config=adminConfig(env);
-    if(!config.configured || req.session?.platformAdminEmail!==config.email) {
+    if(!config.configured || req.session?.platformAdminEmail!==config.email ||
+       req.session.platformAdminCredentialVersion !== credentialVersion(config.passwordHash)) {
       return res.status(401).json({error:"Platform admin login required"});
     }
     next();
@@ -124,6 +129,7 @@ function installPlatformAdmin(app,pool,env=process.env) {
       req.session.regenerate(error=>{
         if(error)return res.status(500).json({error:"Unable to create admin session"});
         req.session.platformAdminEmail=config.email;
+        req.session.platformAdminCredentialVersion=credentialVersion(config.passwordHash);
         req.session.save(saveError=>{
           if(saveError)return res.status(500).json({error:"Unable to save admin session"});
           res.set("Cache-Control","no-store");
@@ -269,5 +275,5 @@ function installPlatformAdmin(app,pool,env=process.env) {
   });
   return {requireAdmin};
 }
-module.exports={PLANS,adminConfig,subscriptionActive,ensurePlatformTables,
+module.exports={PLANS,adminConfig,credentialVersion,subscriptionActive,ensurePlatformTables,
   shopApiGate,shopPageGate,publicShopGate,installPlatformAdmin};
