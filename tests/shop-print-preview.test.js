@@ -28,7 +28,8 @@ test("dashboard provides review action only from private test file order cards",
   const markup = dashboard.slice(start, end);
   assert.match(markup, /review\.href = "\/shop-print-preview\.html\?order="/);
   assert.match(markup, /review\.rel = "noopener noreferrer"/);
-  assert.match(markup, /controls\.append\(review, download, remove\)/);
+  assert.match(markup, /controls\.append\(review, approve, download, remove\)/);
+  assert.match(markup, /Approve & Print \(TEST\)/);
   assert.ok(!dashboard.includes("/api/agent/print-customer"));
 });
 
