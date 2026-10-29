@@ -145,7 +145,8 @@ function installAgentApis(app, pool) {
         return res.status(401).json({ error: "Printer agent key revoked or invalid" });
       }
       let testPrintJob = null;
-      try {
+      // Old PC agents lack test-print support. Never claim a job for them.
+      if ((req.body || {}).supportsCanonTestPrint === true) try {
         testPrintJob = await handleCanonTestHeartbeat(
           pool, result.rows[0].shop_id, (req.body || {}).testPrintResult
         );
