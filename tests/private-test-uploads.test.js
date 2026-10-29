@@ -142,3 +142,125 @@ test("shop orders require owner session and restrict SQL by owner id", async () 
     q.params[0] === 123
   ));
 });
+
+
+test("guest uploads need an independent opt-in and working private storage", () => {
+  const mod = loadModule();
+  const cfg = {
+    ENABLE_TEST_UPLOADS: "true",
+    FILE_STORAGE_ENDPOINT: "https://" + "a".repeat(32) + ".r2.cloudflarestorage.com",
+    FILE_STORAGE_BUCKET: "test-private-documents",
+    FILE_STORAGE_ACCESS_KEY_ID: "bucket-key",
+    FILE_STORAGE_SECRET_ACCESS_KEY: "bucket-secret"
+  };
+  assert.equal(mod.guestTestUploadsEnabled(cfg), false);
+  assert.equal(mod.guestTestUploadsEnabled({
+    ...cfg, ENABLE_GUEST_TEST_UPLOADS: "true"
+  }), true);
+  assert.equal(mod.guestTestUploadsEnabled({
+    ...cfg, ENABLE_TEST_UPLOADS: "false", ENABLE_GUEST_TEST_UPLOADS: "true"
+  }), false);
+  assert.equal(mod.guestTestUploadsEnabled({
+    ...cfg, FILE_STORAGE_SECRET_ACCESS_KEY: "", ENABLE_GUEST_TEST_UPLOADS: "true"
+  }), false);
+});
+
+test("guest uploads disabled by default and owner-only endpoints stay private", () => {
+  const mod = loadModule();
+  const routes = {};
+  const app = {
+    get(p,...h){routes["GET "+p]=h;},
+    post(p,...h){routes["POST "+p]=h;},
+    delete(p,...h){routes["DELETE "+p]=h;}
+  };
+  mod.installTestFileUploads(app,{query:async()=>({rows:[]})},
+    { ENABLE_TEST_UPLOADS:"false", ENABLE_GUEST_TEST_UPLOADS:"true" });
+  const noGuest = response();
+  routes["POST /api/public/shops/:code/test-file-orders"][0](
+    {session:{}},noGuest,()=>{throw Error("Guest should not be authorized");});
+  assert.equal(noGuest.statusCode,401);
+
+  const noShop = response();
+  routes["GET /api/shop/test-file-orders"][0](
+    {session:{}},noShop,()=>{throw Error("Shop API must require login");});
+  assert.equal(noShop.statusCode,401);
+
+  const noCustomer = response();
+  routes["GET /api/customer/test-file-orders"][0](
+    {session:{}},noCustomer,()=>{throw Error("Customer order list must stay protected");});
+  assert.equal(noCustomer.statusCode,401);
+});
+
+test("guest test upload inserts NULL customer ID when explicitly enabled", async () => {
+  const mod=loadModule();
+  const env={
+    ENABLE_TEST_UPLOADS:"true", ENABLE_GUEST_TEST_UPLOADS:"true",
+    FILE_STORAGE_ENDPOINT:"https://"+"a".repeat(32)+".r2.cloudflarestorage.com",
+    FILE_STORAGE_BUCKET:"test-private-documents",
+    FILE_STORAGE_ACCESS_KEY_ID:"bucket-key",
+    FILE_STORAGE_SECRET_ACCESS_KEY:"bucket-secret"
+  };
+  const routes={};
+  const app={
+    get(p,...h){routes["GET "+p]=h;},
+    post(p,...h){routes["POST "+p]=h;},
+    delete(p,...h){routes["DELETE "+p]=h;}
+  };
+  let insertValues=null;
+  const pool={async query(sql,params){
+    if(sql.includes("SELECT id FROM shops")) return {rows:[{id:42}]};
+    if(sql.includes("COUNT(*)")) return {rows:[{total:0}]};
+    if(sql.includes("INSERT INTO test_file_orders")) {
+      insertValues=params;
+      return {rows:[{id:13,status:"test_only"}]};
+    }
+    throw Error("Unexpected query: "+sql);
+  }};
+  mod.installTestFileUploads(app,pool,env);
+  const handlers=routes["POST /api/public/shops/:code/test-file-orders"];
+  const request={
+    session:{},params:{code:"a".repeat(32)},
+    body:{copies:"1",printMode:"bw"},
+    file:{
+      buffer:Buffer.from([255,216,255,1,2,3,255,217]),
+      size:8,mimetype:"image/jpeg",originalname:"sample.jpg"
+    }
+  };
+  let authorized=false;
+  handlers[0](request,response(),()=>{authorized=true;});
+  assert.equal(authorized,true);
+  const reply=response();
+  handlers[2](request,reply);
+  // multer invokes its async callback without returning a promise to the caller.
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reply.statusCode,201);
+  assert.equal(reply.body.guest,true);
+  assert.equal(reply.body.order.id,13);
+  assert.equal(insertValues[0],42);
+  assert.equal(insertValues[1],null);
+  assert.ok(insertValues[2].startsWith("test-uploads/42/"));
+  assert.equal(insertValues[3],"jpeg");
+});
+
+test("existing database schema migration accepts a null customer id",async()=>{
+  const mod=loadModule();
+  const statements=[];
+  const pool={async query(sql){statements.push(sql);return {rows:[]};}};
+  await mod.ensureTestUploadTables(pool);
+  assert.ok(statements.some(sql=>
+    sql.includes("ALTER TABLE test_file_orders ALTER COLUMN customer_id DROP NOT NULL")));
+});
+
+test("customer QR page has no customer login requirement or login links",()=>{
+  const fs=require("node:fs");
+  const path=require("node:path");
+  const page=fs.readFileSync(path.join(__dirname,"..","print.html"),"utf8");
+  assert.ok(page.includes("config.guestTestUploadsEnabled"));
+  assert.ok(page.includes("privateForm.hidden=false"));
+  assert.ok(!page.includes('id="customer-login"'));
+  assert.ok(!page.includes('id="private-login-link"'));
+  assert.ok(!page.includes('fetch("/api/me"'));
+  const script=page.match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(script);
+  new (require("node:vm").Script)(script[1]);
+});

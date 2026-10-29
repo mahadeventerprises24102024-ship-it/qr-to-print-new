@@ -26,6 +26,7 @@ In Render → your `qr-to-print-new` web service → **Environment**, add:
 | `FILE_STORAGE_ACCESS_KEY_ID` | Your **bucket-scoped** R2 Access Key ID |
 | `FILE_STORAGE_SECRET_ACCESS_KEY` | Your R2 Secret Access Key |
 | `ENABLE_TEST_UPLOADS` | `true` **only after the private bucket and 1-day lifecycle are ready** |
+| `ENABLE_GUEST_TEST_UPLOADS` | `true` **only if you want visitors to submit disposable TEST files without login**. Default is `false`. |
 
 Keep existing `DATABASE_URL`, `SESSION_SECRET` and `NODE_ENV=production`. Never commit credentials to GitHub, paste them into a chat, share screenshots of them, or put them in frontend code.
 
@@ -39,18 +40,18 @@ If any required setting is absent, the upload feature **stays disabled**. The ex
    - `enabled:false`: storage has not been configured (safe default).
    - `enabled:true`: test upload form may be used.
 2. Open the **shop QR customer page** on a phone or in an incognito window.
-3. Use the Customer Login link. If you haven't created a customer account, create a disposable test account on the Customer Login page, then log in.
-4. After login, you should return to the same shop's QR page.
+3. Set `ENABLE_GUEST_TEST_UPLOADS=true` in Render and deploy; leave the bucket private and the 1-day deletion rule enabled. The customer QR page no longer needs a Customer Login.
+4. The verified shop page shows a **Upload PDF / Photo • TEST ONLY** form; it is available without an account when guest uploads are enabled.
 5. Use **Private file upload • TEST ONLY** with a sample PDF, JPG or PNG of **at most 2 MB**, choose copies and Black & White or Color. Do not use real personal, medical, ID, financial or confidential documents.
 6. After submission, the page should display a **TEST order ID**. This file is stored privately but **not printed**.
-7. On a **separate browser/device** (since shop and customer share a session cookie), log in as the shop owner, open **Print orders**, click **Refresh private files**, and confirm the TEST order.
+7. Log in separately as the shop owner, open **Print orders**, click **Refresh private files**, and confirm the TEST order.
 8. Click **Download TEST**, check the file downloads as an attachment and cannot be downloaded while signed out.
 9. Click **Delete** and confirm the object and order record disappear.
 10. When finished, remove any test files and change `ENABLE_TEST_UPLOADS=false`. Ensure no credentials are visible in screenshots.
 
 ## Server protections in this trial
 
-- Upload POST requires a logged-in **customer** and same-origin browser request.
+- Guest upload POST requires the separate `ENABLE_GUEST_TEST_UPLOADS=true` opt-in, configured private R2 test storage, and a same-origin browser request. Existing registered-customer uploads remain compatible.
 - Shop-only list/download/delete uses server-side session authorization and a shop-ID join.
 - Only 1 file per request; maximum **2 MB**; PDF, JPG and PNG content is checked for basic signatures and expected MIME type.
 - Maximum 10 stored test files per shop, with 5 submissions per IP per hour.
@@ -58,7 +59,7 @@ If any required setting is absent, the upload feature **stays disabled**. The ex
 - Files are downloaded as attachments (not inline).
 - Owner download endpoint rejects test files older than 24 hours; the R2 lifecycle must delete the underlying objects.
 - File checksum is recorded and checked when the owner downloads a file.
-- Customer order list shows only that signed-in customer's test orders.
+- Existing customer order list remains login-protected and returns only that signed-in customer's orders; anonymous guest uploads do not appear in a customer account list. Shop-owner API remains login-protected.
 
 ## Important limitations
 
@@ -66,4 +67,23 @@ Basic file signatures **are not a malware scan**, and document previews/printing
 
 The database table stores test-order metadata for longer than the R2 object's 1-day lifetime until records are explicitly deleted. Render's free PostgreSQL is temporary; move to a durable backed-up production database before any real business use. A complete system still needs malware scanning, an upload cleanup process, file encryption/key management review, audit logs, reliable printer agent and billing.
 
-The current data path is: Customer Login → Private R2 upload → Database test order → Authenticated shop owner download / delete. **No automatic printer job or payment occurs.**
+The guest test data path is: Shop QR (no customer login) → Private R2 upload → Database test order with **NULL customer_id** → Authenticated shop owner review/download/delete. **No automatic printer job or payment occurs.**
+
+
+## Guest test upload risks and controls
+
+Anyone who scans or obtains your shop QR link can send a sample when
+`ENABLE_GUEST_TEST_UPLOADS=true`. It is not a customer identification system.
+Anonymous senders could exhaust the 10-file shop test quota or submit malicious
+content. Keep this mode **OFF** except for controlled shop tests; for a busy
+public service, require anti-spam protection, scanning/sandboxed file handling,
+more reliable quotas, and abuse reporting before accepting real documents.
+
+The guest route keeps the 2 MB per-file cap, PDF/JPG/PNG basic signature checks,
+5 IP uploads per hour and at most 10 stored test records per shop. Files remain
+private, original filenames are not recorded, and guest users cannot list,
+download or delete stored files. Only signed-in shop owners can review or
+download private test files. Avoid opening suspicious uploads.
+
+To disable guest submissions immediately, set `ENABLE_GUEST_TEST_UPLOADS=false`
+in Render, save and deploy. The shop login requirement remains unchanged.
