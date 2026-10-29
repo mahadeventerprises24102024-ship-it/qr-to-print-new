@@ -77,7 +77,7 @@
       <div style="border-top:1px solid var(--line);margin:30px 0 22px"></div>
       <div class="eyebrow">PRIVATE TEST FILES • NOT PRINTED</div>
       <h2 style="margin-top:10px">Private test uploads</h2>
-      <p>Customer-login test files stored in a private bucket. Only this shop owner can download them. Do not open untrusted files on a production computer. Download access ends after 24 hours.</p>
+      <p>Customer-login test files stored in a private bucket. Only this shop owner can download them. Do not open untrusted files on a production computer. Download access ends after 24 hours. Use Review &amp; Print to open your local print dialog only after reviewing a file. Printing is not automatic.</p>
       <div class="section-head" style="margin-top:22px;gap:12px;flex-wrap:wrap">
         <span class="pill" id="private-order-summary">Loading private test uploads...</span>
         <button class="btn light" id="refresh-private-orders" type="button">Refresh private files</button>
@@ -270,6 +270,12 @@
         const controls = document.createElement("div");
         controls.style.display = "flex";
         controls.style.gap = "8px";
+        const review = document.createElement("a");
+        review.className = "btn teal";
+        review.href = "/shop-print-preview.html?order=" + encodeURIComponent(id);
+        review.target = "_blank";
+        review.rel = "noopener noreferrer";
+        review.textContent = "Review & Print";
         const download = document.createElement("a");
         download.className = "btn light";
         download.href = "/api/shop/test-file-orders/" + id + "/download";
@@ -294,7 +300,7 @@
             remove.disabled = false;
           }
         });
-        controls.append(download, remove);
+        controls.append(review, download, remove);
         item.append(info, controls);
         list.appendChild(item);
       });
