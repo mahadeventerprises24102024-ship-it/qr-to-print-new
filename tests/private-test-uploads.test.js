@@ -264,3 +264,48 @@ test("customer QR page has no customer login requirement or login links",()=>{
   assert.ok(script);
   new (require("node:vm").Script)(script[1]);
 });
+
+test("owner-confirmed print status endpoint requires session, origin and paper confirmation", async () => {
+  const mod = loadModule();
+  const routes = {};
+  const app = {
+    get(p,...h){routes["GET "+p]=h;},
+    post(p,...h){routes["POST "+p]=h;},
+    delete(p,...h){routes["DELETE "+p]=h;}
+  };
+  let sql = "";
+  let values = [];
+  mod.installTestFileUploads(app, {async query(q,args){sql=q;values=args;return {rows:[{id:9,status:"printed"}]};}}, {});
+  const [owner,handler] = routes["POST /api/shop/test-file-orders/:id/mark-printed"];
+  const fakeResponse = response();
+  owner({session:{}},fakeResponse,()=>{throw Error("Owner required");});
+  assert.equal(fakeResponse.statusCode,401);
+  function request(origin, body) {
+    return { session:{shopOwnerId:52},params:{id:"9"},body,
+      protocol:"https",get:()=>origin };
+  }
+  const invalidOrigin = response();
+  await handler(request("https://evil.example",{confirmedPaperOutput:true}),invalidOrigin);
+  assert.equal(invalidOrigin.statusCode,403);
+  const notConfirmed = response();
+  await handler(request("https://shop.example",{confirmedPaperOutput:false}),notConfirmed);
+  assert.equal(notConfirmed.statusCode,400);
+  const confirmed = response();
+  await handler(request("https://shop.example",{confirmedPaperOutput:true}),confirmed);
+  assert.equal(confirmed.body.order.status,"printed");
+  assert.equal(values[0],52);
+  assert.equal(values[1],"9");
+  assert.ok(sql.includes("owner.id = $1"));
+  assert.ok(sql.includes("o.id = $2"));
+});
+
+test("print preview only marks printed after explicit physical paper confirmation", () => {
+  const fs=require("node:fs");
+  const path=require("node:path");
+  const page=fs.readFileSync(path.join(__dirname,"..","shop-print-preview.html"),"utf8");
+  assert.ok(page.includes('id="mark-printed"'));
+  assert.ok(page.includes('id="print-image"'));
+  assert.ok(page.includes("confirmedPaperOutput: true"));
+  assert.ok(page.includes("physically check"));
+  new (require("node:vm").Script)(page.match(/<script>([\s\S]*?)<\/script>/)[1]);
+});
