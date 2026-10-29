@@ -282,7 +282,7 @@ test("owner-confirmed print status endpoint requires session, origin and paper c
   assert.equal(fakeResponse.statusCode,401);
   function request(origin, body) {
     return { session:{shopOwnerId:52},params:{id:"9"},body,
-      protocol:"https",get:()=>origin };
+      protocol:"https",get:(name)=>name==="host"?"shop.example":origin };
   }
   const invalidOrigin = response();
   await handler(request("https://evil.example",{confirmedPaperOutput:true}),invalidOrigin);
