@@ -48,11 +48,12 @@
     <div class="page-preview" id="preview"><p>Loading your private file...</p></div>
     <p id="pdf-help" hidden>PDF: click <strong>Open PDF to Print</strong>, then use the PDF viewer's print button or <strong>Ctrl + P</strong>. Select Canon G2010 and choose copies / colour in the print dialog.</p>
     <div id="actions" hidden>
-      <button id="print-image" type="button" hidden>Print image on Canon G2010</button>
+      <button id="print-image" type="button" hidden>Approve &amp; Print image</button>
       <a class="btn" id="open-pdf" target="_blank" rel="noopener noreferrer" hidden>Open PDF to Print</a>
       <a class="btn secondary" id="download-file">Download private file</a>
+      <button id="mark-printed" type="button" style="background:#285667" hidden>Mark Printed (after checking paper)</button>
     </div>
-    <p class="help">For photos: your browser opens the Windows print dialog. Choose <strong>Canon G2010 series</strong>, A4, the displayed copy count and colour / black &amp; white setting. For PDFs use the PDF viewer's print dialog. Printing only happens when you confirm it there.</p>
+    <p class="help">For photos: your browser opens the Windows print dialog. Choose <strong>Canon G2010 series</strong>, A4, the displayed copy count and colour / black &amp; white setting. For PDFs use the PDF viewer's print dialog. Printing only happens when you confirm it there. Afterwards, inspect the paper and choose Mark Printed.</p>
   </section>
 </main>
 <div id="print-area" aria-hidden="true"></div>
@@ -67,6 +68,8 @@
   const imageButton = document.getElementById("print-image");
   const pdfLink = document.getElementById("open-pdf");
   const downloadLink = document.getElementById("download-file");
+  const markPrinted = document.getElementById("mark-printed");
+  let currentOrderId = null;
   let objectURL = null;
   function status(message) { state.textContent = message; }
   window.addEventListener("pagehide", () => {
@@ -80,6 +83,7 @@
       preview.textContent = "No preview available.";
       return;
     }
+    currentOrderId = id;
     document.getElementById("order-heading").textContent = "#" + id;
     try {
       const listResponse = await fetch("/api/shop/test-file-orders", {
@@ -125,6 +129,8 @@
       downloadLink.href = objectURL;
       downloadLink.download = "test-order-" + id + "." + extension;
       actions.hidden = false;
+      markPrinted.hidden = order.status === "printed";
+      if (order.status === "printed") status("Order marked Printed by shop owner.");
 
       if (order.fileType === "pdf") {
         preview.textContent = "PDF is ready. Use Open PDF to Print to review it in your browser.";
@@ -167,6 +173,26 @@
       "Check copies and colour there. This action does not auto-print."
     )) return;
     window.print();
+  });
+
+  markPrinted.addEventListener("click", async () => {
+    if (!currentOrderId || !objectURL || markPrinted.disabled) return;
+    if (!window.confirm("Did you physically check that the correct pages came out of Canon G2010? Only click OK after successful printing.")) return;
+    markPrinted.disabled = true;
+    try {
+      const response = await fetch("/api/shop/test-file-orders/" + encodeURIComponent(currentOrderId) + "/mark-printed", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmedPaperOutput: true })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Unable to mark printed");
+      markPrinted.hidden = true;
+      status("Marked Printed by shop owner after confirming physical paper output.");
+    } catch (error) {
+      status(error.message || "Could not update status");
+      markPrinted.disabled = false;
+    }
   });
   load();
 })();
