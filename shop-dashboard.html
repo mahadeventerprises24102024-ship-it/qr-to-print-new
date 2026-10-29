@@ -248,6 +248,23 @@
         return;
       }
 
+      // Only owner-approved test jobs. Normal customer auto-printing stays OFF.
+      let approvalEnabled = false;
+      const printJobs = new Map();
+      try {
+        const printResponse = await fetch("/api/shop/approved-test-print/status", {
+          credentials: "same-origin", cache: "no-store"
+        });
+        if (printResponse.ok) {
+          const printData = await printResponse.json();
+          approvalEnabled = printData.enabled === true;
+          (Array.isArray(printData.jobs) ? printData.jobs : []).forEach(job => {
+            const key = String(job.orderId);
+            if (!printJobs.has(key)) printJobs.set(key, job);
+          });
+        }
+      } catch { /* Old deployments or print service disabled; keep button OFF. */ }
+
       orders.forEach(order => {
         const id = String(order.id);
         if (!/^[1-9][0-9]{0,14}$/.test(id)) return;
@@ -264,6 +281,11 @@
         desc.textContent = "Private, not printed • " +
           Math.round(Number(order.fileSizeBytes)/1024) + " KB • " +
           (Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-IN"));
+        const approvedJob = printJobs.get(id);
+        if (approvedJob) {
+          desc.textContent += " • Owner-approved TEST print: " + approvedJob.status +
+            " (submitted means Windows queue, not paper confirmed)";
+        }
         desc.style.display = "block";
         info.append(heading, desc);
 
@@ -300,7 +322,42 @@
             remove.disabled = false;
           }
         });
-        controls.append(review, download, remove);
+        const approve = document.createElement("button");
+        approve.className = "btn teal";
+        approve.type = "button";
+        approve.textContent = "Approve & Print (TEST)";
+        approve.disabled = !approvalEnabled || Number(order.copies) > 2 ||
+          Boolean(approvedJob);
+        approve.title = !approvalEnabled
+          ? "Set ENABLE_OWNER_APPROVED_TEST_PRINTS=true in Render first"
+          : approvedJob ? "This file has already been approved once"
+          : Number(order.copies) > 2 ? "Test mode permits at most 2 copies"
+          : "Review the file first, then approve ONE test print";
+        approve.addEventListener("click", async () => {
+          if (!window.confirm(
+            "Have you reviewed TEST file #" + id + "?\n" +
+            "Print it ONCE through your paired Canon G2010 using SumatraPDF?\n" +
+            "Maximum 2 PDF pages / 2 copies, A4 paper.\n" +
+            "TEST FILES ONLY: no malware scanning. Do NOT approve untrusted documents."
+          )) return;
+          approve.disabled = true;
+          try {
+            const response = await fetch(
+              "/api/shop/approved-test-print/" + encodeURIComponent(id), {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reviewed: true })
+              }
+            );
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.error || "Could not approve test print");
+            showToast("Approved TEST file queued. Windows Agent will submit it once.");
+          } catch (error) {
+            showToast(error.message);
+          }
+          await loadPrivateOrders();
+        });
+        controls.append(review, approve, download, remove);
         item.append(info, controls);
         list.appendChild(item);
       });
