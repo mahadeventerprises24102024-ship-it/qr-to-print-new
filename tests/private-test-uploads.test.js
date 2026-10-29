@@ -309,3 +309,19 @@ test("print preview only marks printed after explicit physical paper confirmatio
   assert.ok(page.includes("physically check"));
   new (require("node:vm").Script)(page.match(/<script>([\s\S]*?)<\/script>/)[1]);
 });
+
+
+test("Render startup migration uses valid repeatable ALTER TABLE instead of malformed DO block", async () => {
+  const mod = loadModule();
+  const statements = [];
+  await mod.ensureTestUploadTables({
+    async query(sql) { statements.push(sql); return {rows:[]}; }
+  });
+  const migration = statements.find(sql =>
+    sql.includes("DROP CONSTRAINT IF EXISTS test_file_orders_status_check"));
+  assert.ok(migration, "must replace the old status check constraint");
+  assert.match(migration, /ADD CONSTRAINT test_file_orders_status_check/);
+  assert.match(migration, /CHECK \(status IN \('test_only','printed'\)\)/);
+  assert.ok(!statements.some(sql => /\bDO\s+\$/.test(sql)),
+    "a malformed dollar-quoted block must not block Render startup");
+});
