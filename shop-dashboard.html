@@ -29,7 +29,7 @@
       <button type="button" data-section="dashboard" class="active"><span class="ni">▦</span>Overview</button>
       <button type="button" data-section="orders"><span class="ni">▤</span>Print orders</button>
       <button type="button" data-section="printers"><span class="ni">▣</span>Printers</button>
-      <button type="button" data-section="wallet"><span class="ni">₹</span>Wallet & plans</button>
+      <button type="button" data-section="wallet"><span class="ni">₹</span>Pricing & Bills</button>
       <button type="button" data-section="reports"><span class="ni">◫</span>Reports</button>
       <button type="button" data-section="profile"><span class="ni">◉</span>Shop profile</button>
       <button type="button" data-section="settings"><span class="ni">⚙</span>Settings</button>
@@ -59,7 +59,7 @@
         <section class="card"><h2>Quick actions</h2><p class="description">Build your printing workspace step by step.</p><div class="quick-list">
           <button class="quick-row" data-go="printers"><span class="quick-symbol">▣</span><span class="quick-txt"><strong>Set up a printer</strong><span>Device connection coming later</span></span><span class="arrow">›</span></button>
           <button class="quick-row" data-go="orders"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>View print orders</strong><span>Order management is in development</span></span><span class="arrow">›</span></button>
-          <button class="quick-row" data-go="wallet"><span class="quick-symbol">₹</span><span class="quick-txt"><strong>Wallet and plans</strong><span>Payment features not connected</span></span><span class="arrow">›</span></button>
+          <button class="quick-row" data-go="wallet"><span class="quick-symbol">₹</span><span class="quick-txt"><strong>Pricing & Bills</strong><span>Set print rates and view simple test bills</span></span><span class="arrow">›</span></button>
         </div></section>
       </div>
       <div class="bottom-grid"><section class="card"><div class="section-head"><h2>Recent activity</h2><span class="pill">Not connected</span></div><div class="empty"><div class="empty-icon">☷</div><div>No shop events yet.<br>Once real order APIs are connected, updates can appear here.</div></div></section><section class="card"><div class="section-head"><h2>Set-up progress</h2><span class="pill">Preview only</span></div><p class="description">The interface is ready for review. Production shop accounts, printers and payments still need backend work.</p><div class="progress"><span></span></div><div class="footer-tip">Next: secure shop authentication and printer connectivity.</div></section></div>
@@ -127,17 +127,38 @@
       </div>
       <p class="description" style="margin-top:18px">Agent is for Windows only. It requires an internet connection and stays in memory while the terminal remains open. Do not put the secret in GitHub, browser screenshots or PowerShell commands.</p>
     </div></section>
-    <section class="panel" id="panel-wallet"><div class="card content-panel"><div class="eyebrow">BILLING</div><div class="content-icon">₹</div><h2>Wallet & plans</h2><p>A future section for subscription details, invoices and payment history. No payments or wallet balances are processed in this demo.</p><div class="info-list"><div class="info-item"><strong>Current plan</strong><span>Not activated</span></div><div class="info-item"><strong>Wallet balance</strong><span>Unavailable — billing not connected</span></div></div></div></section>
+    <section class="panel" id="panel-wallet"><div class="card content-panel">
+      <div class="eyebrow">MAHADEV ENTERPRISES • PRINT PRICING</div>
+      <div class="content-icon">₹</div><h2>Pricing &amp; Bills</h2>
+      <p>Save your shop's per-page rates. B&amp;W and Colour are charged per printed page; Aadhaar B&amp;W is a flat rate per card/copy. Only owner-confirmed Printed TEST orders can generate simple bills. No online payments or GST tax invoicing.</p>
+      <form id="rates-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end;margin-top:22px">
+        <label style="font-size:12px;font-weight:700">B&amp;W ₹ / page
+          <input id="rate-bw" type="number" min="1" max="1000" step="1" value="3" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        </label>
+        <label style="font-size:12px;font-weight:700">Aadhaar B&amp;W ₹ / copy
+          <input id="rate-aadhaar" type="number" min="1" max="1000" step="1" value="5" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        </label>
+        <label style="font-size:12px;font-weight:700">Colour ₹ / page
+          <input id="rate-color" type="number" min="1" max="1000" step="1" value="10" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        </label>
+        <button class="btn teal" id="save-rates" type="submit">Save print rates</button>
+      </form>
+      <p id="rates-state" class="description" role="status" aria-live="polite">Loading rates...</p>
+      <div style="border-top:1px solid var(--line);margin:26px 0"></div>
+      <div class="section-head"><h2 style="margin:0">Recent simple bills</h2><button class="btn light" id="refresh-bills" type="button">Refresh bills</button></div>
+      <div id="bills-list" class="demo-order-list" role="status" aria-live="polite">Loading bills...</div>
+      <p class="description">Create a bill from Print orders → Private test uploads → a Printed order → Create bill. Enter the actual page count after checking the PDF. No Aadhaar number or ID data is stored in the bill. Bills are not GST invoices; Cash/UPI payment can only be marked after manual receipt.</p>
+    </div></section>
     <section class="panel" id="panel-reports"><div class="card content-panel"><div class="eyebrow">ANALYTICS</div><div class="content-icon">◫</div><h2>Reports</h2><p>Daily printing totals, file types, completed pages and revenue reports will appear here after order and payment integrations are built.</p><div class="info-list"><div class="info-item"><strong>Print report</strong><span>Awaiting real data</span></div><div class="info-item"><strong>Sales report</strong><span>Awaiting payment data</span></div></div></div></section>
     <section class="panel" id="panel-profile"><div class="card content-panel"><div class="eyebrow">IDENTITY</div><div class="content-icon">◉</div><h2>Shop profile</h2><p>Shop name, contact details, hours and physical address will be editable here once shop-owner accounts are implemented. Your shop-owner account is separate from customer login. Shop profile editing will be added later.</p></div></section>
     <section class="panel" id="panel-settings"><div class="card content-panel"><div class="eyebrow">PREFERENCES</div><div class="content-icon">⚙</div><h2>Settings</h2><p>Future controls include printer defaults, paper formats, pricing, notifications and team permissions. This page does not save changes yet.</p><div class="info-list"><div class="info-item"><strong>Printing preferences</strong><span>Not configured</span></div><div class="info-item"><strong>Shop security</strong><span>Separate shop-role authentication required</span></div></div></div></section>
-    <p class="footer-tip">QR-To-Print © 2026 · Shop Dashboard design prototype · Do not use this page for live printing or payments.</p>
+    <p class="footer-tip">QR-To-Print © 2026 · Test-only printing and manually confirmed billing. No live payments or GST invoices.</p>
   </main>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script>
 (function(){
-  const names={dashboard:"Overview",orders:"Print orders",printers:"Printers",wallet:"Wallet & plans",reports:"Reports",profile:"Shop profile",settings:"Settings"};
+  const names={dashboard:"Overview",orders:"Print orders",printers:"Printers",wallet:"Pricing & Bills",reports:"Reports",profile:"Shop profile",settings:"Settings"};
   const title=document.getElementById("page-title");
   const crumb=document.getElementById("breadcrumb");
   const toast=document.getElementById("toast");
@@ -150,6 +171,7 @@
     crumb.textContent="Shop panel / "+names[key];
     location.hash=key;
     if(key==="orders") { loadDemoOrders(); loadPrivateOrders(); }
+    if(key==="wallet") { loadShopPrices(); loadShopBills(); }
     if(key==="printers") loadAgentStatus();
   }
   document.querySelectorAll("[data-section]").forEach(b=>b.addEventListener("click",()=>openSection(b.dataset.section)));
@@ -178,7 +200,7 @@
     try{if(!customerUrl) return showToast("Your shop QR is still loading.");await navigator.clipboard.writeText(customerUrl);showToast("Shop-specific print link copied.");}
     catch{showToast("Copy unavailable. Open the customer page to copy its URL.");}
   });
-  document.getElementById("notice-info").addEventListener("click",()=>showToast("Demo request details are available. Real document upload, printer agent and billing remain disabled."));
+  document.getElementById("notice-info").addEventListener("click",()=>showToast("TEST uploads, shop rates and basic manual bills are available. Payment gateway and automatic customer printing are not connected."));
 
   async function loadDemoOrders() {
     const container = document.getElementById("demo-order-list");
@@ -230,6 +252,144 @@
     .addEventListener("click", loadDemoOrders);
   loadDemoOrders();
 
+  let currentShopRates = { bw: 3, aadhaarBw: 5, color: 10 };
+  const rupees = value => "₹" + Number(value).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  async function loadShopPrices() {
+    const state = document.getElementById("rates-state");
+    try {
+      const response=await fetch("/api/shop/pricing",{credentials:"same-origin",cache:"no-store"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Could not read rates");
+      currentShopRates=data.ratesRupees;
+      document.getElementById("rate-bw").value=currentShopRates.bw;
+      document.getElementById("rate-aadhaar").value=currentShopRates.aadhaarBw;
+      document.getElementById("rate-color").value=currentShopRates.color;
+      state.textContent="Current shop rates loaded. Save changes to publish them on your QR page.";
+      return currentShopRates;
+    }catch(error){state.textContent=error.message;throw error;}
+  }
+
+  document.getElementById("rates-form").addEventListener("submit",async(event)=>{
+    event.preventDefault();
+    const save=document.getElementById("save-rates");
+    const state=document.getElementById("rates-state");
+    const rates={
+      bw:Number(document.getElementById("rate-bw").value),
+      aadhaarBw:Number(document.getElementById("rate-aadhaar").value),
+      color:Number(document.getElementById("rate-color").value)
+    };
+    if(!Object.values(rates).every(v=>Number.isInteger(v)&&v>=1&&v<=1000)){
+      state.textContent="Rates must be whole rupees from ₹1 to ₹1000.";
+      return;
+    }
+    save.disabled=true;
+    try{
+      const response=await fetch("/api/shop/pricing",{
+        method:"PUT",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({ratesRupees:rates})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Could not save rates");
+      currentShopRates=data.ratesRupees;
+      state.textContent="Rates saved successfully — B&W "+rupees(currentShopRates.bw)+
+        ", Aadhaar B&W "+rupees(currentShopRates.aadhaarBw)+
+        ", Colour "+rupees(currentShopRates.color)+".";
+    }catch(error){state.textContent=error.message;}
+    finally{save.disabled=false;}
+  });
+
+  async function fetchShopBills(){
+    const response=await fetch("/api/shop/bills",{credentials:"same-origin",cache:"no-store"});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||"Could not fetch bills");
+    return Array.isArray(data.bills)?data.bills:[];
+  }
+
+  async function loadShopBills(){
+    const list=document.getElementById("bills-list");
+    list.textContent="Loading recent bills...";
+    try{
+      const bills=await fetchShopBills();
+      list.replaceChildren();
+      if(!bills.length){list.textContent="No bills yet. Confirm a TEST print, then create a bill in Print orders.";return;}
+      bills.forEach(b=>{
+        const item=document.createElement("div");item.className="demo-order";
+        const info=document.createElement("div");
+        const heading=document.createElement("strong");
+        heading.textContent="BILL #"+b.id+" • TEST Order #"+b.orderId+" • "+rupees(Number(b.totalPaise)/100);
+        const desc=document.createElement("span");
+        desc.textContent=b.category.replace("_"," ").toUpperCase()+
+          " • "+(b.paymentStatus==="paid"?"Payment manually received":"Payment pending")+
+          " • "+new Date(b.issuedAt).toLocaleString("en-IN");
+        desc.style.display="block";info.append(heading,desc);
+        const link=document.createElement("a");link.className="btn light";
+        link.href="/shop-bill.html?id="+encodeURIComponent(b.id);
+        link.textContent="View / Print bill";
+        item.append(info,link);list.append(item);
+      });
+    }catch(error){list.textContent=error.message;}
+  }
+  document.getElementById("refresh-bills").addEventListener("click",loadShopBills);
+
+  function makeBillEditor(order, item) {
+    const existing=item.querySelector(".bill-editor");
+    if(existing){existing.remove();return;}
+    const editor=document.createElement("form");
+    editor.className="bill-editor";
+    editor.style.cssText="flex-basis:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;background:#eaf5f0;border-radius:9px";
+    const categoryLabel=document.createElement("label");categoryLabel.textContent="Print type ";
+    const category=document.createElement("select");
+    category.style.cssText="margin-left:6px;padding:8px;border:1px solid #cbded5;border-radius:6px";
+    const types=order.printMode==="color"?
+      [["color","Colour ₹"+currentShopRates.color+"/page"]]:
+      [["bw","B&W ₹"+currentShopRates.bw+"/page"],["aadhaar_bw","Aadhaar B&W ₹"+currentShopRates.aadhaarBw+"/copy"]];
+    types.forEach(([value,label])=>{
+      const option=document.createElement("option");option.value=value;option.textContent=label;
+      category.append(option);
+    });
+    categoryLabel.append(category);
+    const pageLabel=document.createElement("label");pageLabel.textContent="Pages per copy ";
+    const pages=document.createElement("input");pages.type="number";pages.min="1";pages.max="200";pages.step="1";
+    pages.value="1";pages.required=true;pages.style.cssText="width:65px;margin-left:6px;padding:8px;border:1px solid #cbded5;border-radius:6px";
+    pageLabel.append(pages);
+    const estimate=document.createElement("strong");
+    const update=()=>{
+      const count=Number(pages.value);
+      if(category.value==="aadhaar_bw"){pages.value="1";pages.disabled=true;}else{pages.disabled=false;}
+      const actualPages=Number(pages.value);
+      const rate=category.value==="aadhaar_bw"?currentShopRates.aadhaarBw:
+        (category.value==="color"?currentShopRates.color:currentShopRates.bw);
+      estimate.textContent=Number.isInteger(actualPages)&&actualPages>=1&&actualPages<=200?
+        "Total: "+rupees((category.value==="aadhaar_bw"?1:actualPages)*Number(order.copies)*rate):
+        "Enter 1–200 pages";
+    };
+    category.addEventListener("change",update);
+    pages.addEventListener("input",update);
+    update();
+    const submit=document.createElement("button");submit.className="btn teal";submit.type="submit";
+    submit.textContent="Create simple bill";
+    const note=document.createElement("span");note.style.fontSize="12px";
+    note.textContent="Check PDF pages before billing. Aadhaar is a rate label only — no real ID uploads.";
+    editor.append(categoryLabel,pageLabel,estimate,submit,note);
+    editor.addEventListener("submit",async(event)=>{
+      event.preventDefault();
+      if(!window.confirm("Have you checked the real page count and print copies? This bill amount is saved permanently."))return;
+      submit.disabled=true;
+      try{
+        const response=await fetch("/api/shop/test-file-orders/"+encodeURIComponent(order.id)+"/bill",{
+          method:"POST",credentials:"same-origin",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({category:category.value,pagesPerCopy:Number(pages.value)})
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||"Could not create bill");
+        location.href="/shop-bill.html?id="+encodeURIComponent(data.billId);
+      }catch(error){note.textContent=error.message;submit.disabled=false;}
+    });
+    item.append(editor);
+  }
+
   async function loadPrivateOrders() {
     const list = document.getElementById("private-order-list");
     const summary = document.getElementById("private-order-summary");
@@ -242,6 +402,11 @@
       if (!response.ok) throw new Error(data.error || "Unable to fetch private test files");
       list.replaceChildren();
       const orders = Array.isArray(data.orders) ? data.orders : [];
+      const [bills] = await Promise.all([
+        fetchShopBills().catch(()=>[]),
+        loadShopPrices().catch(()=>null)
+      ]);
+      const billsByOrder = new Map(bills.map(b=>[String(b.orderId),b]));
       summary.textContent = orders.length + " private test upload(s)";
       if (!orders.length) {
         list.textContent = "No private test files yet. Private storage must be configured before customers can upload.";
@@ -301,6 +466,20 @@
           }
         });
         controls.append(review, download, remove);
+        const existingBill=billsByOrder.get(id);
+        if(existingBill){
+          const billLink=document.createElement("a");
+          billLink.className="btn light";
+          billLink.href="/shop-bill.html?id="+encodeURIComponent(existingBill.id);
+          billLink.textContent="View Bill "+rupees(Number(existingBill.totalPaise)/100);
+          controls.insertBefore(billLink,download);
+        }else if(order.status==="printed"){
+          const billButton=document.createElement("button");
+          billButton.className="btn light";billButton.type="button";
+          billButton.textContent="Create Bill";
+          billButton.addEventListener("click",()=>makeBillEditor(order,item));
+          controls.insertBefore(billButton,download);
+        }
         item.append(info, controls);
         list.appendChild(item);
       });
