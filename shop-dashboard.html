@@ -75,7 +75,7 @@
       </div>
       <div id="demo-order-list" class="demo-order-list" role="status" aria-live="polite">Loading...</div>
       <div style="border-top:1px solid var(--line);margin:30px 0 22px"></div>
-      <div class="eyebrow">PRIVATE TEST FILES • NOT PRINTED</div>
+      <div class="eyebrow">PRIVATE TEST FILES • OWNER REVIEW</div>
       <h2 style="margin-top:10px">Private test uploads</h2>
       <p>Guest / test-customer files stored in a private bucket. Only this shop owner can download them. Do not open untrusted files on a production computer. Download access ends after 24 hours. Use Review &amp; Print to open your local print dialog only after reviewing a file. Printing is not automatic.</p>
       <div class="section-head" style="margin-top:22px;gap:12px;flex-wrap:wrap">
@@ -261,7 +261,7 @@
           (order.printMode === "color" ? "Color" : "B&W");
         const desc = document.createElement("span");
         const date = new Date(order.createdAt);
-        desc.textContent = "Private, not printed • " +
+        desc.textContent = (order.status === "printed" ? "Printed (owner confirmed)" : "Private, awaiting print") + " • " +
           Math.round(Number(order.fileSizeBytes)/1024) + " KB • " +
           (Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-IN"));
         desc.style.display = "block";
