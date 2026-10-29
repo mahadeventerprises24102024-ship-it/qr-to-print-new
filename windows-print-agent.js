@@ -41,6 +41,21 @@ function countWindowsPrinters() {
   return { count: parsed, warning: null };
 }
 
+
+function readClipboardKey() {
+  // Read only a shop pairing key. Do not echo it or pass it as a command argument.
+  if (process.platform !== "win32") return null;
+  const command = "Get-Clipboard -Raw -ErrorAction SilentlyContinue";
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile", "-NonInteractive", "-Command", command
+  ], {
+    timeout: 10000, windowsHide: true, encoding: "utf8", maxBuffer: 512
+  });
+  if (result.error || result.status !== 0) return null;
+  const token = (result.stdout || "").trim();
+  return TOKEN_PATTERN.test(token) ? token : null;
+}
+
 function hiddenPrompt() {
   return new Promise((resolve, reject) => {
     const input = process.stdin;
@@ -126,7 +141,8 @@ async function run() {
     throw new Error("Run this script on your Windows print-shop PC");
   }
 
-  const secret = await hiddenPrompt();
+  const secret = readClipboardKey() || await hiddenPrompt();
+  console.log("Pairing key accepted from clipboard or hidden input.");
   if (!TOKEN_PATTERN.test(secret)) {
     throw new Error("Pairing key format is invalid. Generate a new one in Shop Dashboard");
   }
@@ -158,4 +174,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { countWindowsPrinters, heartbeat };
+module.exports = { countWindowsPrinters, heartbeat, readClipboardKey };
