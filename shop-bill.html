@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Print Bill | QR-To-Print</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#eef4f3;color:#203438;font-family:system-ui,"Segoe UI",Arial,sans-serif}
+  header{background:#101923;color:#fff;padding:16px max(16px,calc((100vw - 700px)/2))}
+  header a{color:#c6ffee}
+  main{max-width:700px;margin:28px auto;padding:0 16px}
+  .sheet{background:white;padding:32px;border:1px solid #d9e6e4;box-shadow:0 8px 38px #173a3820;border-radius:14px}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:#087d71;font-weight:800}
+  h1{font-size:30px;margin:8px 0 2px}
+  p{font-size:13px;line-height:1.6;color:#50686c}
+  .meta{display:flex;justify-content:space-between;gap:16px;margin:24px 0;font-size:13px;line-height:1.9;flex-wrap:wrap}
+  .meta b{display:block;color:#17343a}
+  .receipt-table{width:100%;border-collapse:collapse;font-size:13px}
+  .receipt-table th{text-align:left;border-bottom:2px solid #a7c8c1;padding:12px 7px}
+  .receipt-table td{padding:16px 7px;border-bottom:1px solid #dfebea}
+  .receipt-table .num{text-align:right;font-variant-numeric:tabular-nums}
+  .total{display:flex;justify-content:space-between;align-items:center;font-size:22px;font-weight:800;margin:20px 7px}
+  .status{background:#edf6f2;padding:12px;border-radius:9px;font-size:13px;margin:20px 0}
+  .small{font-size:12px;color:#697f81}
+  button,select{border:1px solid #c3dad5;border-radius:8px;padding:10px 14px;font-size:14px}
+  button{background:#087d71;color:white;font-weight:700;cursor:pointer}
+  button:disabled{opacity:.6;cursor:not-allowed}
+  .actions{margin:18px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  @media print {
+    @page{size:A4;margin:12mm}
+    body{background:#fff}
+    header,.actions,.no-print{display:none!important}
+    main{max-width:100%;margin:0;padding:0}
+    .sheet{box-shadow:none;border:0;border-radius:0;padding:0}
+  }
+</style>
+</head>
+<body>
+<header class="no-print"><strong>QR-To-Print • Shop billing</strong> · <a href="/shop-dashboard.html#wallet">Back to Pricing & Billing</a></header>
+<main>
+  <div class="sheet">
+    <div class="eyebrow">Simple shop bill • Not a GST tax invoice</div>
+    <h1 id="bill-shop">Shop print bill</h1>
+    <p id="bill-load" role="status">Loading bill...</p>
+    <div id="bill-details" hidden>
+      <div class="meta">
+        <div><span>Bill no.</span><b id="bill-id"></b><span>Order reference</span><b id="bill-order"></b></div>
+        <div><span>Issued</span><b id="bill-date"></b><span>Copies</span><b id="bill-copies"></b></div>
+      </div>
+      <table class="receipt-table">
+        <thead><tr><th>Print type</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+        <tbody><tr><td id="bill-type"></td><td class="num" id="bill-quantity"></td><td class="num" id="bill-rate"></td><td class="num" id="bill-line-total"></td></tr></tbody>
+      </table>
+      <p class="small" id="bill-formula"></p>
+      <div class="total"><span>Total</span><span id="bill-total"></span></div>
+      <div class="status" id="bill-payment"></div>
+      <p class="small">This basic bill is generated for a TEST print order. Rates are saved at issue time. No GST/tax calculation, payment gateway or online payment verification is provided. Cash/UPI status is recorded only after the shop owner manually confirms receipt.</p>
+    </div>
+  </div>
+  <div class="actions no-print" id="bill-actions" hidden>
+    <button type="button" id="bill-print">Print / Save PDF</button>
+    <label for="payment-method">Payment received by:</label>
+    <select id="payment-method"><option value="cash">Cash</option><option value="upi">UPI (external)</option></select>
+    <button type="button" id="bill-paid">Mark payment received</button>
+  </div>
+</main>
+<script>
+"use strict";
+(() => {
+  const id = new URLSearchParams(location.search).get("id");
+  const status = document.getElementById("bill-load");
+  const detail = document.getElementById("bill-details");
+  const actions = document.getElementById("bill-actions");
+  const paidButton = document.getElementById("bill-paid");
+  let current = null;
+  const money = paise => "₹" + (Number(paise) / 100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const set = (id,value) => { document.getElementById(id).textContent = value; };
+  const typeNames = {bw:"Black & White",aadhaar_bw:"Aadhaar B&W (card price)",color:"Colour"};
+  function showBill(bill) {
+    current = bill;
+    set("bill-shop",bill.shopName);
+    set("bill-id","#"+bill.id);
+    set("bill-order","#"+bill.orderId);
+    set("bill-date",new Date(bill.issuedAt).toLocaleString("en-IN"));
+    set("bill-copies",String(bill.copies));
+    set("bill-type",typeNames[bill.category] || bill.category);
+    set("bill-quantity",String(bill.quantity));
+    set("bill-rate",money(bill.ratePaise));
+    set("bill-line-total",money(bill.totalPaise));
+    set("bill-total",money(bill.totalPaise));
+    set("bill-formula",bill.category==="aadhaar_bw"
+      ? String(bill.copies)+" card copy/copies × "+money(bill.ratePaise)
+      : String(bill.pagesPerCopy)+" page(s) × "+String(bill.copies)+" copies × "+money(bill.ratePaise));
+    set("bill-payment",bill.paymentStatus==="paid"
+      ? "Payment received manually • "+String(bill.paymentMethod).toUpperCase()+
+        " • "+new Date(bill.paidAt).toLocaleString("en-IN")
+      : "Payment pending — not collected online");
+    paidButton.hidden = bill.paymentStatus==="paid";
+    detail.hidden = false;
+    actions.hidden = false;
+    status.textContent = "Bill ready. Confirm payments only after actual receipt.";
+  }
+  async function load() {
+    if(!/^[1-9][0-9]{0,14}$/.test(id||"")) {
+      status.textContent = "Invalid bill link.";
+      return;
+    }
+    try {
+      const response=await fetch("/api/shop/bills/"+encodeURIComponent(id),{
+        credentials:"same-origin",cache:"no-store"
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(data.error||"Cannot load bill");
+      showBill(data.bill);
+    }catch(error){status.textContent=error.message;detail.hidden=true;actions.hidden=true;}
+  }
+  document.getElementById("bill-print").addEventListener("click",()=>{ if(current)window.print(); });
+  paidButton.addEventListener("click",async()=>{
+    if(!current || paidButton.disabled) return;
+    const method=document.getElementById("payment-method").value;
+    if(!confirm("Have you actually RECEIVED the "+money(current.totalPaise)+" payment by "+method.toUpperCase()+"? This does not charge or verify online payment."))return;
+    paidButton.disabled=true;
+    try {
+      const response=await fetch("/api/shop/bills/"+encodeURIComponent(id)+"/mark-paid",{
+        method:"POST",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({paymentMethod:method,confirmedReceipt:true})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to record payment");
+      await load();
+    }catch(error){status.textContent=error.message;}
+    finally{paidButton.disabled=false;}
+  });
+  load();
+})();
+</script>
+</body>
+</html>
