@@ -50,7 +50,7 @@
     <section class="intro">
       <span class="eyebrow">Customer printing</span>
       <h1>Scan. Upload.<br><span>Print.</span></h1>
-      <p>एक दुकान के लिए अलग QR लिंक। इस पेज पर दुकान का नाम दिखाई देगा। अभी केवल टेस्ट ऑर्डर की जानकारी भेज सकते हैं। आपकी असली फाइल अपलोड या प्रिंट नहीं होगी।</p>
+      <p>QR स्कैन करके दुकान चुनें और बिना Customer Login के टेस्ट अनुरोध भेजें। Private TEST Upload भी दुकान की अनुमति से ही चालू होगा। अभी वास्तविक ग्राहक दस्तावेज़ या अपने आप प्रिंटिंग शुरू नहीं होती।</p>
       <div class="shop" aria-live="polite">
         <small>YOU ARE VISITING</small>
         <strong id="shop-name">Checking shop...</strong>
@@ -59,7 +59,7 @@
       <div class="steps">
         <div class="step"><b>01</b> Scan the QR at your print shop</div>
         <div class="step"><b>02</b> Check the shop name</div>
-        <div class="step"><b>03</b> Send test request details (no file uploaded)</div>
+        <div class="step"><b>03</b> Send a test request or private sample (no login)</div>
       </div>
       <p class="footer">QR-To-Print • Demo customer print page</p>
     </section>
@@ -76,12 +76,10 @@
       </form>
       <p id="demo-result" class="response" role="status" aria-live="polite" hidden></p>
       <div class="info">⚠ ऊपर वाला फॉर्म केवल फाइल की जानकारी भेजता है; फाइल स्वयं नहीं भेजता। यह डेमो है, असली प्रिंट ऑर्डर नहीं।</div>
-      <a class="btn" id="customer-login" href="/login.html" style="background:#e4f3ec;color:#12694f">Existing customer login ↗</a>
       <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
       <h2>Private file upload • TEST ONLY</h2>
-      <p class="subtitle">यह सुविधा सिर्फ स्टोरेज सेटअप और Customer Login के बाद चालू होगी। केवल गैर-निजी टेस्ट PDF/JPG/PNG इस्तेमाल करें। असली दस्तावेज़ अभी न भेजें।</p>
+      <p class="subtitle">बिना Customer Login के एक छोटी टेस्ट PDF/JPG/PNG अपलोड करें (अधिकतम 2 MB)। यह सुविधा सिर्फ दुकान द्वारा Guest Test Upload सक्षम होने पर उपलब्ध होगी। निजी या असली ग्राहक दस्तावेज़ अभी न भेजें।</p>
       <p id="private-upload-status" class="response" role="status" aria-live="polite">Checking private storage...</p>
-      <a id="private-login-link" class="btn" href="/login.html" hidden style="background:#e4f3ec;color:#12694f">Customer Login to Test Upload ↗</a>
       <form id="private-upload-form" hidden>
         <label for="private-file">Non-sensitive test file (max 2 MB)</label>
         <input id="private-file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg" required>
@@ -99,7 +97,7 @@
         </select>
         <button id="private-upload-button" class="btn" type="submit">Upload TEST file privately →</button>
       </form>
-      <div class="info">Only a shop owner can download this test file. Nothing goes to a printer and there is no payment. Download access ends after 24 hours, and the storage bucket must have an expiry policy.</div>
+      <div class="info">The shop owner can access this test file without knowing your identity. No login or payment is required; the shop owner must manually review before printing. Download access ends after 24 hours, and the private bucket has a 1-day expiry policy. Do not upload personal or sensitive documents in test mode.</div>
     </section>
   </main>
   <script>
@@ -113,7 +111,6 @@
       let verifiedCode=null;
       const privateForm=document.getElementById("private-upload-form");
       const privateMessage=document.getElementById("private-upload-status");
-      const privateLogin=document.getElementById("private-login-link");
       const privateButton=document.getElementById("private-upload-button");
 
       function privateNotice(text, isError=false) {
@@ -122,8 +119,6 @@
       }
 
       async function preparePrivateUpload(shopCode) {
-        privateLogin.href="/login.html?next="+
-          encodeURIComponent("/print.html?shop="+shopCode);
         try {
           const configResponse=await fetch("/api/test-upload/config",{
             credentials:"same-origin",cache:"no-store"
@@ -134,13 +129,11 @@
             privateNotice("Private TEST upload is not configured yet. The original demo form above still works.");
             return;
           }
-          const me=await fetch("/api/me", {credentials:"same-origin",cache:"no-store"});
-          if(!me.ok) {
-            privateNotice("Please log in as a Customer to send a private test file.");
-            privateLogin.hidden=false;
+          if(!config.guestTestUploadsEnabled || config.customerLoginRequired) {
+            privateNotice("Guest TEST uploads are not enabled by this shop yet. You can still send the demo request above.");
             return;
           }
-          privateNotice("Private TEST storage is ready. Upload only disposable sample files (up to 2 MB).");
+          privateNotice("Guest TEST upload ready — no login. Only disposable PDF/JPG/PNG samples up to 2 MB; no automatic printing.");
           privateForm.hidden=false;
         } catch(error) {
           privateNotice(error.message,true);
@@ -166,10 +159,6 @@
           );
           const result=await response.json().catch(()=>({}));
           if(!response.ok) {
-            if(response.status===401) {
-              privateLogin.hidden=false;
-              privateForm.hidden=true;
-            }
             throw new Error(result.error || "Private test upload failed");
           }
           privateNotice("TEST #"+result.order.id+" stored privately. The shop owner can download it in Print orders. Nothing was printed or charged.");
@@ -234,11 +223,9 @@
         if(!response.ok) throw new Error(response.status===404?"Shop not found":"Unable to verify shop");
         const data=await response.json();
         title.textContent=data.shop.name;
-        status.textContent="Shop verified • Test requests enabled (no file upload)";
+        status.textContent="Shop verified • Guest test requests available";
         verifiedCode=code;
         submit.disabled=false;
-        document.getElementById("customer-login").href =
-          "/login.html?next="+encodeURIComponent("/print.html?shop="+code);
         await preparePrivateUpload(code);
       } catch (error) {
         title.textContent="Shop unavailable";
