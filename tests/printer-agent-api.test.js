@@ -21,6 +21,10 @@ function makeHarness() {
         canonTestPrintEnabled: () => false,
         handleCanonTestHeartbeat: async () => null
       };
+      if (name === "./approved-test-print") return {
+        enabled: () => false,
+        processAgentApprovedHeartbeat: async () => null
+      };
       throw new Error("Unexpected dependency: " + name);
     },
     console,

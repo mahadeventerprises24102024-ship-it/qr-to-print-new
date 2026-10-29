@@ -5,6 +5,7 @@
 const { randomBytes, createHash } = require("node:crypto");
 const rateLimit = require("express-rate-limit");
 const { handleCanonTestHeartbeat, canonTestPrintEnabled } = require("./canon-test-print-api");
+const { processAgentApprovedHeartbeat, enabled: ownerPrintEnabled } = require("./approved-test-print");
 
 const heartbeatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -32,10 +33,12 @@ async function ensureAgentTables(pool) {
       token_hash CHAR(64) NOT NULL UNIQUE,
       device_label VARCHAR(80) NOT NULL DEFAULT 'Windows printer PC',
       printer_count SMALLINT NOT NULL DEFAULT 0,
+      supports_approved_test_print BOOLEAN NOT NULL DEFAULT FALSE,
       last_seen_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query("ALTER TABLE shop_print_agents ADD COLUMN IF NOT EXISTS supports_approved_test_print BOOLEAN NOT NULL DEFAULT FALSE");
 }
 
 function installAgentApis(app, pool) {
@@ -50,6 +53,7 @@ function installAgentApis(app, pool) {
          ON CONFLICT (shop_id)
          DO UPDATE SET token_hash = EXCLUDED.token_hash,
                        printer_count = 0,
+                       supports_approved_test_print = FALSE,
                        last_seen_at = NULL
          RETURNING shop_id`,
         [req.session.shopOwnerId, sha256(token)]
@@ -73,6 +77,7 @@ function installAgentApis(app, pool) {
     try {
       const result = await pool.query(
         `SELECT a.device_label AS "deviceLabel", a.printer_count AS "printerCount",
+                a.supports_approved_test_print AS "supportsOwnerApprovedTestPrint",
                 a.last_seen_at AS "lastSeenAt",
                 (a.last_seen_at IS NOT NULL
                   AND a.last_seen_at > NOW() - INTERVAL '100 seconds') AS "online"
@@ -91,7 +96,8 @@ function installAgentApis(app, pool) {
         lastSeenAt: agent ? agent.lastSeenAt : null,
         previewOnly: true,
         printingEnabled: false,
-        canonTestPrintEnabled: canonTestPrintEnabled()
+        canonTestPrintEnabled: canonTestPrintEnabled(),
+        supportsOwnerApprovedTestPrint: agent ? Boolean(agent.supportsOwnerApprovedTestPrint) : false
       });
     } catch (error) {
       console.error("Agent status failed:", error);
@@ -137,9 +143,9 @@ function installAgentApis(app, pool) {
     try {
       const result = await pool.query(
         `UPDATE shop_print_agents
-         SET printer_count = $2, last_seen_at = NOW()
+         SET printer_count = $2, last_seen_at = NOW(), supports_approved_test_print = $3
          WHERE token_hash = $1 RETURNING shop_id`,
-        [sha256(token), printerCount]
+        [sha256(token), printerCount, (req.body || {}).supportsOwnerApprovedTestPrint === true]
       );
       if (!result.rows.length) {
         return res.status(401).json({ error: "Printer agent key revoked or invalid" });
@@ -157,13 +163,30 @@ function installAgentApis(app, pool) {
         console.error("Canon test job processing failed:", jobError);
         // Heartbeat stays online even if the optional test print queue is unavailable.
       }
+      let approvedTestJob = null;
+      if ((req.body || {}).supportsOwnerApprovedTestPrint === true) {
+        try {
+          approvedTestJob = await processAgentApprovedHeartbeat(
+            pool, result.rows[0].shop_id,
+            true, (req.body || {}).ownerPrintResult
+          );
+        } catch (error) {
+          if (error.message === "Invalid approved print acknowledgment") {
+            return res.status(400).json({ error: error.message });
+          }
+          console.error("Approved test print heartbeat processing failed:", error);
+          // Do not block agent connection status.
+        }
+      }
       res.set("Cache-Control", "no-store");
       return res.json({
         connected: true,
         previewOnly: true,
         printingEnabled: false,
         canonTestPrintEnabled: canonTestPrintEnabled(),
-        testPrintJob
+        testPrintJob,
+        ownerApprovedTestPrintEnabled: ownerPrintEnabled(),
+        approvedTestJob
       });
     } catch (error) {
       console.error("Agent heartbeat failed:", error);
