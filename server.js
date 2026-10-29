@@ -11,6 +11,7 @@ const { installShopAuth, ensureShopTables } = require("./shop-auth");
 const { installDemoOrderApis, ensureDemoOrderTables } = require("./demo-print-orders");
 const { installTestFileUploads, ensureTestUploadTables } = require("./private-test-uploads");
 const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
+const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -274,6 +275,7 @@ installShopAuth(app, pool);
 installDemoOrderApis(app, pool);
 installTestFileUploads(app, pool);
 installAgentApis(app, pool);
+installCanonTestPrintApis(app, pool);
 
 // Explicit public assets: never expose backend JavaScript or package.json.
 app.get(["/", "/index.html"], (req, res) => {
@@ -316,6 +318,7 @@ async function start() {
   await ensureDemoOrderTables(pool);
   await ensureTestUploadTables(pool);
   await ensureAgentTables(pool);
+  await ensureCanonTestPrintTables(pool);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);

@@ -62,3 +62,26 @@ test("Clipboard only read on Windows", () => {
   assert.equal(agent.readClipboardKey(), null);
   assert.equal(agent.calls.length, 0);
 });
+
+
+test("Canon fixed page is sent only to a named Windows G2010 printer", () => {
+  const agent = loadAgent("");
+  const result = agent.printCanonFixedTestPage();
+  assert.equal(result.status, "submitted");
+  assert.equal(agent.calls.length, 1);
+  assert.equal(agent.calls[0].command, "powershell.exe");
+  const code = agent.calls[0].args.join(" ");
+  assert.ok(code.includes("Get-Printer"));
+  assert.ok(code.includes("Out-Printer"));
+  assert.ok(code.includes("G2010"));
+  assert.ok(code.includes("No customer documents are printed."));
+  assert.ok(!code.includes("http"));
+  assert.ok(!code.includes("Download"));
+});
+
+test("Canon print failures are not reported as success", () => {
+  assert.equal(loadAgent("", { status: 1 }).printCanonFixedTestPage().status, "failed");
+  assert.equal(loadAgent("", { platform: "linux" }).printCanonFixedTestPage().status, "failed");
+  assert.equal(loadAgent("", { error: new Error("unavailable") })
+    .printCanonFixedTestPage().status, "failed");
+});
