@@ -204,7 +204,7 @@ function installShopAuth(app, pool) {
       client = await pool.connect();
       await client.query("BEGIN");
       const shop = await client.query(
-        "INSERT INTO shops(name, public_code) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO shops(name, public_code, subscription_status, plan_code) VALUES ($1, $2, 'pending', 'starter') RETURNING id",
         [shopName.trim(), randomBytes(16).toString("hex")]
       );
       await client.query(
@@ -214,7 +214,7 @@ function installShopAuth(app, pool) {
       );
       await client.query("COMMIT");
       return res.status(201).json({
-        message: "Shop account created. You can now log in."
+        message: "Shop account created. Await platform admin approval and plan activation before logging in."
       });
     } catch (error) {
       if (client) {
@@ -242,7 +242,8 @@ function installShopAuth(app, pool) {
     try {
       const result = await pool.query(
         `SELECT o.id AS owner_id, o.name AS owner_name, o.email,
-                o.password_hash, s.id AS shop_id, s.name AS shop_name, s.public_code
+                o.password_hash, s.id AS shop_id, s.name AS shop_name, s.public_code,
+                s.subscription_status, s.subscription_expires_at
          FROM shop_owners AS o
          JOIN shops AS s ON s.id = o.shop_id
          WHERE o.email = $1`,
@@ -252,6 +253,14 @@ function installShopAuth(app, pool) {
       // Keep user-facing failure messages the same for absent accounts.
       if (!account || !(await bcrypt.compare(password, account.password_hash))) {
         return res.status(401).json({ error: "Invalid email or password" });
+      }
+      if (account.subscription_status !== "active" ||
+          (account.subscription_expires_at !== null &&
+           (!Number.isFinite(new Date(account.subscription_expires_at).getTime()) ||
+            new Date(account.subscription_expires_at).getTime() <= Date.now()))) {
+        return res.status(403).json({
+          error: "Your shop is pending approval, suspended or the plan has expired. Contact the QR-To-Print platform administrator."
+        });
       }
       return saveShopSession(req, res, account);
     } catch (error) {

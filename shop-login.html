@@ -33,7 +33,7 @@
     <section class="intro">
       <span class="tag">For print shop owners</span>
       <h1>Your shop.<br><span>Your workspace.</span></h1>
-      <p>दुकान के लिए अलग अकाउंट बनाएँ और अपना QR-To-Print Shop Dashboard खोलें। प्रिंटर, वॉलेट और लाइव ऑर्डर की सुविधाएँ आगे जोड़ेंगे।</p>
+      <p>अपनी दुकान का QR-To-Print अकाउंट बनाएँ। नया अकाउंट Super Admin की मंज़ूरी और प्लान एक्टिवेशन के बाद ही खुलेगा। हर दुकान का अपना QR, Dashboard, रेट और ऑर्डर होते हैं।</p>
       <div class="features"><div><span class="check">✓</span>Secure shop-owner session</div><div><span class="check">✓</span>Separate customer accounts</div><div><span class="check">✓</span>Modern shop dashboard preview</div></div>
     </section>
     <section class="card" aria-label="Shop login and registration">
@@ -45,7 +45,7 @@
           <button type="submit">Open Shop Dashboard →</button>
         </form>
       </section>
-      <section id="registerPanel" hidden><h2>Create your shop</h2><p class="caption">Start a separate shop-owner account for testing.</p>
+      <section id="registerPanel" hidden><h2>Create your shop</h2><p class="caption">Create a shop-owner account. Super Admin must activate your subscription before you can log in.</p>
         <form id="registerForm">
           <label for="shopName">Shop name</label><input id="shopName" type="text" minlength="2" maxlength="120" autocomplete="organization" required placeholder="My Print Shop">
           <label for="ownerName">Owner name</label><input id="ownerName" type="text" minlength="2" maxlength="100" autocomplete="name" required placeholder="Your full name">
@@ -57,7 +57,7 @@
         </form>
       </section>
       <p id="message" class="alert" role="status" aria-live="polite" hidden></p>
-      <p class="bottom">Prototype only: email verification, password reset, permanent database/backup, billing and real printing still need to be completed before accepting real shops.</p>
+      <p class="bottom">Test platform: New shops require admin approval. Email verification, password reset, anti-malware scanning, production payments, and full live printing must be completed before commercial use.</p>
     </section>
   </main>
   <script>
@@ -144,6 +144,9 @@
       }
     });
 
+    if(new URLSearchParams(location.search).get("inactive")==="1"){
+      notice("Shop access is pending approval, suspended, or expired. Contact the QR-To-Print administrator.",true);
+    }
     // Already authenticated shop owners go straight to their dashboard.
     fetch("/api/shop/me", { credentials: "same-origin" })
       .then(response => {

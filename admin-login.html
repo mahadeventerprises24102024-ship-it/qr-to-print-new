@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Super Admin Login • QR-To-Print</title>
+<style>
+:root{font-family:system-ui,"Segoe UI",Arial,sans-serif;color:#16323b;background:#eef5f6}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px}
+main{width:100%;max-width:460px}.brand{text-align:center;font-weight:900;font-size:23px;margin-bottom:22px;color:#12232e}
+.mark{display:inline-grid;place-items:center;background:#dffe8d;color:#163525;width:45px;height:45px;border-radius:12px;margin-right:9px}
+.card{border-radius:18px;background:white;box-shadow:0 16px 50px #102a3b15;padding:clamp(22px,5vw,36px)}
+.eyebrow{font-size:12px;font-weight:850;letter-spacing:1.8px;color:#087d71;text-transform:uppercase}
+h1{margin:10px 0;font-size:28px}p{font-size:14px;color:#62747e;line-height:1.6}
+label{display:block;font-size:13px;font-weight:750;margin-top:20px}
+input{margin-top:7px;width:100%;padding:13px;border:1px solid #cbdade;border-radius:10px;font:inherit}
+button{background:#087d71;color:white;border:0;border-radius:10px;width:100%;padding:14px;margin-top:23px;font-weight:850;font-size:14px;cursor:pointer}
+button:disabled{opacity:.55}
+.message{padding:12px;background:#fff3e6;color:#774820;border-radius:8px;font-size:13px;margin-top:16px;line-height:1.5}
+a{color:#087d71}.foot{text-align:center;margin-top:20px}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><span class="mark">QR</span> QR-To-Print</div>
+  <section class="card">
+    <div class="eyebrow">Platform owner access</div>
+    <h1>Super Admin Login</h1>
+    <p>सभी Shop Owners, Pending Registrations और Subscription Plans को मैनेज करें। यह Shop Owner Login से अलग है।</p>
+    <form id="form">
+      <label for="email">Admin email</label>
+      <input id="email" type="email" autocomplete="username" maxlength="254" required>
+      <label for="password">Admin password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button id="login" type="submit">Open Admin Panel</button>
+    </form>
+    <div class="message" role="status" id="message" hidden></div>
+    <p class="foot"><a href="/shop-login.html">Shop Owner Login</a></p>
+  </section>
+  <p class="foot">Credentials are configured privately in Render Environment. Never share passwords or password hashes in chat.</p>
+</main>
+<script>
+"use strict";
+(() => {
+  const form=document.getElementById("form");
+  const message=document.getElementById("message");
+  const button=document.getElementById("login");
+  function notice(text){message.textContent=text;message.hidden=false;}
+  fetch("/api/platform/config",{cache:"no-store"}).then(r=>r.json()).then(data=>{
+    if(!data.configured)notice("Admin setup pending: configure PLATFORM_ADMIN_EMAIL and PLATFORM_ADMIN_PASSWORD_HASH in Render Environment.");
+  }).catch(()=>notice("Unable to check admin setup."));
+  form.addEventListener("submit",async event=>{
+    event.preventDefault();
+    button.disabled=true;message.hidden=true;
+    try{
+      const response=await fetch("/api/platform/login",{
+        method:"POST",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          email:document.getElementById("email").value,
+          password:document.getElementById("password").value
+        })
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Login failed");
+      document.getElementById("password").value="";
+      window.location.assign("/admin-dashboard.html");
+    }catch(error){notice(error.message);button.disabled=false;}
+  });
+})();
+</script>
+</body>
+</html>

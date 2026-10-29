@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Super Admin Panel • QR-To-Print</title>
+<style>
+:root{font-family:system-ui,"Segoe UI",Arial,sans-serif;background:#f1f5f7;color:#21323f}
+*{box-sizing:border-box}body{margin:0}
+header{background:#12212c;color:white;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:17px clamp(16px,5vw,55px)}
+.logo{font-size:20px;font-weight:850}.logo b{background:#dfff8c;color:#10252e;padding:8px;border-radius:9px;margin-right:10px}
+.top{display:flex;gap:15px;align-items:center;flex-wrap:wrap}.top span{font-size:12px;color:#c1cdd5}
+button{cursor:pointer;font:inherit;font-weight:750;border:0;border-radius:9px;padding:10px 15px;background:#087d71;color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed}.outline{border:1px solid #cad7df;background:transparent;color:#183541}
+header button{border:1px solid #536371;background:#223543;color:#fff}
+main{max-width:1280px;margin:auto;padding:30px clamp(16px,4vw,50px)}
+.eyebrow{color:#087d71;font-size:11px;font-weight:850;letter-spacing:1.5px;text-transform:uppercase}
+h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
+.sub{color:#60717b;font-size:14px;line-height:1.6;margin:6px 0 20px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:24px 0}
+.stat,.section{background:#fff;border:1px solid #e3e9ed;border-radius:15px;padding:22px;box-shadow:0 6px 26px #173a4410}
+.stat span{display:block;color:#697b85;font-size:12px;font-weight:750}.stat strong{display:block;font-size:32px;margin-top:8px}
+.section{margin:22px 0}.section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.input{padding:11px 12px;border:1px solid #cbd9de;border-radius:9px;min-width:0;font:inherit;font-size:14px}
+#shop-search{width:min(370px,100%)}
+.shop-list{display:grid;gap:15px;margin-top:20px}
+.shop{border:1px solid #dbe5e8;border-radius:13px;padding:20px}
+.shop-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.shop h3{font-size:18px;margin:0 0 5px}.shop p{font-size:13px;color:#687a82;margin:5px 0;overflow-wrap:anywhere}
+.status{font-size:12px;font-weight:800;border-radius:30px;background:#e8edf1;padding:6px 11px;color:#4b6170}
+.status.active{background:#e1f5ec;color:#176444}
+.status.pending{background:#fff1da;color:#955e18}
+.status.suspended,.status.expired{background:#ffe5e2;color:#9b332b}
+.fields{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:14px 0}
+.fields label{font-size:12px;font-weight:750;color:#3b5260;display:grid;gap:5px}
+.fields select,.fields input{padding:9px 12px;border:1px solid #cadbde;border-radius:8px;min-height:39px;max-width:160px}
+.fields label.wide{display:flex;gap:8px;align-items:center}
+.checkbox{accent-color:#087d71}
+.btn-danger{background:#a04036}.btn-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:14px}
+.note{font-size:12px;color:#647882;line-height:1.5}
+.record{padding:12px 0;border-bottom:1px solid #eef0f1;font-size:13px;line-height:1.65}
+#alert{margin:14px 0;padding:13px;border-radius:9px;background:#eaf4ed;color:#28563c;font-size:13px}
+#alert.error{background:#fff0eb;color:#8f3935}
+.empty{font-size:14px;color:#62717a}
+@media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.stat{padding:14px}.stat strong{font-size:25px}.shop{padding:14px}.fields label{width:calc(50% - 10px)}.fields select,.fields input{width:100%}.fields label.wide{width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><b>QR</b> QR-To-Print <small style="color:#c8d8d8;font-size:12px">SUPER ADMIN</small></div>
+  <div class="top"><span id="admin-email">Checking admin...</span><button id="logout" type="button">Logout</button></div>
+</header>
+<main>
+  <div class="eyebrow">MULTI-SHOP PLATFORM MANAGEMENT</div>
+  <h1>Shop Owners & Subscriptions</h1>
+  <p class="sub">नई दुकानें पहले <b>Pending</b> रहती हैं। बिक्री या Trial की पुष्टि के बाद 30, 90 या 365 दिन का एक्सेस दें। प्रत्येक दुकानदार का अपना Dashboard, QR Code, Orders और Rates अलग हैं।</p>
+  <div id="alert" role="status" hidden></div>
+  <div class="stats">
+    <div class="stat"><span>Total registered shops</span><strong id="count-all">—</strong></div>
+    <div class="stat"><span>Active subscriptions</span><strong id="count-active">—</strong></div>
+    <div class="stat"><span>Pending approval</span><strong id="count-pending">—</strong></div>
+  </div>
+  <section class="section">
+    <div class="section-head">
+      <div><h2>Registered Shops</h2><p class="sub" style="margin-bottom:0">Shop owner email दिखता है, पासवर्ड या ग्राहक फाइलें नहीं।</p></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><input id="shop-search" class="input" type="search" placeholder="Search shop name or owner email"><button id="refresh" type="button">Refresh</button></div>
+    </div>
+    <div class="shop-list" id="shops" role="status" aria-live="polite">Loading shops...</div>
+  </section>
+  <section class="section">
+    <div class="section-head"><h2>Subscription activity</h2><button id="history-refresh" class="outline" type="button">Refresh history</button></div>
+    <p class="sub">Recorded manual activations and suspensions. This is not a payment gateway or verified accounting ledger.</p>
+    <div id="history" role="status" aria-live="polite">Loading subscription history...</div>
+  </section>
+  <p class="note">No online payment collection is connected. Only enter a received amount after independently checking actual cash/UPI receipt. Plans currently control subscription dates/access, not separate feature entitlements. Do not onboard real sensitive document uploads while storage, scanning and operational security are still test-only.</p>
+</main>
+<script>
+"use strict";
+(() => {
+  const shopsBox=document.getElementById("shops");
+  const historyBox=document.getElementById("history");
+  const alertBox=document.getElementById("alert");
+  const search=document.getElementById("shop-search");
+  let cachedShops=[];
+  function notify(message,error=false){alertBox.textContent=message;alertBox.classList.toggle("error",error);alertBox.hidden=false;}
+  const rupees=value=>"₹"+Number(value).toLocaleString("en-IN");
+  const date=value=>value?new Date(value).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"Unlimited (legacy)";
+  function element(tag,cls,text){
+    const el=document.createElement(tag);
+    if(cls)el.className=cls;
+    if(text!==undefined)el.textContent=text;
+    return el;
+  }
+  function settingLabel(title,node){
+    const label=element("label",null,title);label.append(node);return label;
+  }
+  async function request(url,body){
+    const options={credentials:"same-origin",cache:"no-store"};
+    if(body!==undefined){
+      options.method="POST";
+      options.headers={"Content-Type":"application/json"};
+      options.body=JSON.stringify(body);
+    }
+    const r=await fetch(url,options);
+    if(r.status===401){window.location.replace("/admin-login.html");throw new Error("Admin login required");}
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||"Request failed");
+    return data;
+  }
+  function optionSelect(choices,selected){
+    const select=document.createElement("select");
+    choices.forEach(entry=>{
+      const o=document.createElement("option");
+      o.value=String(entry[0]);o.textContent=entry[1];select.append(o);
+    });
+    select.value=String(selected);
+    return select;
+  }
+  function renderShops(){
+    shopsBox.replaceChildren();
+    const phrase=search.value.trim().toLowerCase();
+    const filtered=cachedShops.filter(s=>
+      [s.name,s.ownerName,s.ownerEmail,s.id].some(v=>String(v||"").toLowerCase().includes(phrase))
+    );
+    if(!filtered.length){
+      shopsBox.append(element("p","empty","No matching shops registered."));
+      return;
+    }
+    filtered.forEach(shop=>{
+      const active=shop.status==="active" &&
+        (!shop.expiresAt||new Date(shop.expiresAt).getTime()>Date.now());
+      const effective=shop.status==="active"&&!active?"expired":shop.status;
+      const card=element("article","shop");
+      const head=element("div","shop-head");
+      const identification=element("div");
+      identification.append(element("h3",null,shop.name));
+      identification.append(element("p",null,"Shop #"+shop.id+" • Owner: "+(shop.ownerName||"—")+" • "+(shop.ownerEmail||"—")));
+      identification.append(element("p",null,"Plan: "+shop.planCode+" • Expires: "+date(shop.expiresAt)+" • Test orders: "+shop.testOrders+" • Bills: "+shop.bills));
+      head.append(identification,element("span","status "+effective,effective.toUpperCase()));
+      card.append(head);
+
+      const fields=element("div","fields");
+      const plan=optionSelect([["starter","Starter"],["pro","Pro"],["business","Business"]],["starter","pro","business"].includes(shop.planCode)?shop.planCode:"starter");
+      const duration=optionSelect([[30,"30 days"],[90,"90 days"],[365,"365 days"]],30);
+      const amount=document.createElement("input");amount.type="number";amount.min="0";amount.max="100000";amount.step="1";amount.value="0";amount.required=true;
+      const method=optionSelect([["none","No payment / trial"],["cash","Cash received"],["upi","UPI received"]],"none");
+      const proof=document.createElement("input");proof.type="checkbox";proof.className="checkbox";
+      fields.append(settingLabel("Plan",plan),settingLabel("Duration",duration),
+        settingLabel("Amount actually received (₹)",amount),
+        settingLabel("Payment method",method),settingLabel("I confirm actual receipt",proof));
+      card.append(fields);
+
+      const controls=element("div","btn-row");
+      const activate=element("button",null,active?"Renew / Extend plan":"Activate shop");
+      activate.type="button";
+      const suspend=element("button","btn-danger","Suspend shop");suspend.type="button";
+      suspend.disabled=shop.status==="suspended";
+      const detail=element("span","note","Activation is manual. Existing legacy shops have unlimited access until changed.");
+      controls.append(activate,suspend,detail);card.append(controls);
+      activate.addEventListener("click",async()=>{
+        const rupee=Number(amount.value);
+        const methodValue=method.value;
+        if(!Number.isInteger(rupee)||rupee<0||rupee>100000)return notify("Amount must be whole rupees between ₹0 and ₹100000.",true);
+        if(rupee===0&&methodValue!=="none"||
+           rupee>0&&(methodValue==="none"||!proof.checked)){
+          return notify("Use ₹0 + No payment for trial, or confirm actual Cash/UPI receipt before recording payment.",true);
+        }
+        if(!window.confirm("Activate / extend "+shop.name+" on "+plan.value+" for "+duration.value+" days? Amount confirmed received: "+rupees(rupee)+". Existing unlimited legacy access will become time-limited."))return;
+        activate.disabled=true;
+        try{
+          await request("/api/platform/shops/"+encodeURIComponent(shop.id)+"/activate",{
+            planCode:plan.value,durationDays:Number(duration.value),
+            amountReceivedRupees:rupee,paymentMethod:methodValue,confirmedReceipt:proof.checked
+          });
+          notify(shop.name+" subscription updated successfully.");
+          await Promise.all([loadShops(),loadHistory()]);
+        }catch(error){notify(error.message,true);}
+        finally{activate.disabled=false;}
+      });
+      suspend.addEventListener("click",async()=>{
+        if(!window.confirm("Suspend "+shop.name+" now? This blocks shop login, QR customer requests and owner APIs. Existing plan expiry date will be retained."))return;
+        suspend.disabled=true;
+        try{
+          await request("/api/platform/shops/"+encodeURIComponent(shop.id)+"/suspend",{confirmedSuspension:true});
+          notify(shop.name+" suspended.");
+          await Promise.all([loadShops(),loadHistory()]);
+        }catch(error){notify(error.message,true);}
+        finally{suspend.disabled=false;}
+      });
+      shopsBox.append(card);
+    });
+  }
+  async function loadShops(){
+    try{
+      const data=await request("/api/platform/shops");
+      cachedShops=Array.isArray(data.shops)?data.shops:[];
+      const totals=data.totals||{};
+      document.getElementById("count-all").textContent=totals.shops??"—";
+      document.getElementById("count-active").textContent=totals.active??"—";
+      document.getElementById("count-pending").textContent=totals.pending??"—";
+      renderShops();
+    }catch(error){shopsBox.textContent=error.message;notify(error.message,true);}
+  }
+  async function loadHistory(){
+    try{
+      const data=await request("/api/platform/subscriptions");
+      historyBox.replaceChildren();
+      if(!data.events.length){historyBox.textContent="No activations or suspensions yet.";return;}
+      data.events.forEach(event=>{
+        historyBox.append(element("div","record",
+          date(event.createdAt)+" • "+event.shopName+" • "+event.action.toUpperCase()+
+          " • "+event.planCode+
+          (event.durationDays?" • "+event.durationDays+" days":"")+
+          " • Manual receipt: "+rupees(Number(event.receivedPaise)/100)+
+          " ("+event.paymentMethod+")"));
+      });
+    }catch(error){historyBox.textContent=error.message;}
+  }
+  search.addEventListener("input",renderShops);
+  document.getElementById("refresh").addEventListener("click",loadShops);
+  document.getElementById("history-refresh").addEventListener("click",loadHistory);
+  document.getElementById("logout").addEventListener("click",async()=>{
+    try{await request("/api/platform/logout",{});location.href="/admin-login.html";}
+    catch(error){notify(error.message,true);}
+  });
+  request("/api/platform/me").then(data=>{
+    document.getElementById("admin-email").textContent=data.email;
+    return Promise.all([loadShops(),loadHistory()]);
+  }).catch(error=>notify(error.message,true));
+})();
+</script>
+</body></html>
