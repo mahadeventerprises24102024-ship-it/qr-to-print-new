@@ -10,6 +10,13 @@ const {
 } = require("@aws-sdk/client-s3");
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
+
+// Anonymous test uploads require a second explicit owner-controlled opt-in.
+// Having private R2 storage enabled alone must never enable guest submissions.
+function guestTestUploadsEnabled(env = process.env) {
+  return env.ENABLE_GUEST_TEST_UPLOADS === "true" &&
+    storageSettings(env).enabled;
+}
 const allowedTypes = {
   pdf: "application/pdf",
   png: "image/png",
@@ -90,7 +97,7 @@ async function ensureTestUploadTables(pool) {
     CREATE TABLE IF NOT EXISTS test_file_orders (
       id BIGSERIAL PRIMARY KEY,
       shop_id BIGINT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-      customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL,
       storage_key TEXT NOT NULL UNIQUE,
       file_type VARCHAR(8) NOT NULL
         CHECK (file_type IN ('pdf','png','jpeg')),
@@ -104,6 +111,9 @@ async function ensureTestUploadTables(pool) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Existing installations created customer_id as NOT NULL. Permit NULL for
+  // guest sample files while preserving the foreign key on registered accounts.
+  await pool.query("ALTER TABLE test_file_orders ALTER COLUMN customer_id DROP NOT NULL");
   await pool.query(`
     CREATE INDEX IF NOT EXISTS test_file_orders_shop_recent
     ON test_file_orders(shop_id, created_at DESC, id DESC)
@@ -116,6 +126,7 @@ async function ensureTestUploadTables(pool) {
 
 function installTestFileUploads(app, pool, env = process.env) {
   const cfg = storageSettings(env);
+  const guestUploads = guestTestUploadsEnabled(env);
   const storage = cfg.enabled ? new S3Client({
     endpoint: cfg.endpoint,
     region: "auto",
@@ -141,18 +152,25 @@ function installTestFileUploads(app, pool, env = process.env) {
     next();
   }
 
+  function requireCustomerOrGuest(req, res, next) {
+    if (req.session && req.session.userId) return next();
+    if (guestUploads) return next();
+    return res.status(401).json({ error: "Customer login required; guest test uploads are disabled" });
+  }
+
   app.get("/api/test-upload/config", (req, res) => {
     res.set("Cache-Control", "no-store");
     res.json({
       enabled: !!storage,
-      customerLoginRequired: true,
+      customerLoginRequired: !guestUploads,
+      guestTestUploadsEnabled: guestUploads,
       maxFileBytes: MAX_FILE_BYTES,
       testOnly: true
     });
   });
 
   app.post("/api/public/shops/:code/test-file-orders",
-    requireCustomer, uploadLimiter, (req, res) => {
+    requireCustomerOrGuest, uploadLimiter, (req, res) => {
       if (!storage) {
         return res.status(503).json({
           error: "Private test storage is not configured yet"
@@ -221,13 +239,14 @@ function installTestFileUploads(app, pool, env = process.env) {
                file_size_bytes, file_sha256, copies, print_mode)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
              RETURNING id, status, created_at AS "createdAt"`,
-            [shopId, req.session.userId, storedKey, fileType,
+            [shopId, (req.session && req.session.userId) || null, storedKey, fileType,
               req.file.size, checksum, copies, printMode]
           );
 
           return res.status(201).json({
             testOnly: true,
-            message: "Private TEST file stored. Nothing has been printed or charged.",
+            message: "Private TEST file stored. Shop owner review required. No automatic printing or charge.",
+            guest: !(req.session && req.session.userId),
             order: result.rows[0]
           });
         } catch (error) {
@@ -378,5 +397,5 @@ function installTestFileUploads(app, pool, env = process.env) {
 
 module.exports = {
   installTestFileUploads, ensureTestUploadTables,
-  storageSettings, detectSafeFile, MAX_FILE_BYTES
+  storageSettings, guestTestUploadsEnabled, detectSafeFile, MAX_FILE_BYTES
 };
