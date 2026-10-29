@@ -111,24 +111,14 @@ async function ensureTestUploadTables(pool) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-  // Replace the older test-only status constraint with a status that is
-  // explicitly confirmed by the owner after physically checking the output.
-  await pool.query(`
-    DO $ DECLARE rec record;
-    BEGIN
-      FOR rec IN SELECT conname FROM pg_constraint
-        WHERE conrelid = 'test_file_orders'::regclass
-          AND contype = 'c'
-          AND pg_get_constraintdef(oid) LIKE '%status%'
-      LOOP
-        EXECUTE format('ALTER TABLE test_file_orders DROP CONSTRAINT %I', rec.conname);
-      END LOOP;
-    END $
-  `);
+  // PostgreSQL names this column CHECK test_file_orders_status_check
+  // for the previous test-only schema. Replace it atomically. Do not use
+  // anonymous DO blocks here: malformed dollar quoting prevents boot.
   await pool.query(`
     ALTER TABLE test_file_orders
-    ADD CONSTRAINT test_file_orders_status_check
-    CHECK (status IN ('test_only','printed'))
+      DROP CONSTRAINT IF EXISTS test_file_orders_status_check,
+      ADD CONSTRAINT test_file_orders_status_check
+      CHECK (status IN ('test_only','printed'))
   `);
   // Existing installations created customer_id as NOT NULL. Permit NULL for
   // guest sample files while preserving the foreign key on registered accounts.
