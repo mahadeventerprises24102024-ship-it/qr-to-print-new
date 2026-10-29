@@ -127,11 +127,11 @@ function installApprovedTestPrintApis(app, pool, env = process.env) {
           "WHERE o.id=$1 AND f.id=$2 " +
           "AND f.created_at > NOW()-INTERVAL '24 hours' " +
           "AND f.file_size_bytes BETWEEN 8 AND 2097152 " +
-          "AND a.last_seen_at > NOW()-INTERVAL '100 seconds'",
+          "AND a.last_seen_at > NOW()-INTERVAL '100 seconds' AND a.supports_approved_test_print=TRUE",
           [req.session.shopOwnerId, req.params.orderId]
         );
         if (!record.rows.length) return res.status(409).json({
-          error: "File expired, unavailable for your shop, or Windows agent offline"
+          error: "File expired, unavailable, or updated Windows agent not online"
         });
         const file = record.rows[0];
         if (!["pdf","png","jpeg"].includes(file.file_type) ||
