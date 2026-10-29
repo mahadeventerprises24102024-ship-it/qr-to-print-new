@@ -39,7 +39,7 @@
   <main class="main">
     <div class="topbar">
       <div><div class="eyebrow" id="breadcrumb">Shop panel / Overview</div><h1 class="heading" id="page-title">Good to see you.</h1></div>
-      <div class="top-actions"><span class="preview-tag">DEMO PREVIEW</span><a class="btn light" href="/login.html" title="Customer login page">Customer page ↗</a><button class="btn dark" id="shop-logout" type="button">Logout</button></div>
+      <div class="top-actions"><span class="preview-tag">DEMO PREVIEW</span><button class="btn dark" id="shop-logout" type="button">Logout</button></div>
     </div>
     <section class="panel active" id="panel-dashboard">
       <div class="notice"><div class="notice-icon">✳</div><div><strong>You're viewing the new Shop Dashboard design</strong><p>You can now receive test request details (type, size and copies). No document content, payment or real printing is enabled.</p></div><button type="button" class="btn" id="notice-info">What's next?</button></div>
@@ -55,7 +55,7 @@
         <div class="stat"><div class="small">Today's sales</div><div class="num">—</div><div class="more">Payment integration pending</div></div>
       </div>
       <div class="dashboard-grid">
-        <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This QR is unique to your shop. Customers can scan it to see your shop's print page. Customers can send test request details, but files are never uploaded or printed.</p><div class="qr-actions"><a class="btn teal" id="customer-print-link" href="#" aria-disabled="true">Open shop print page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><div><img class="qr-art" id="customer-qr" alt="QR code linking to your shop's customer print page" src="/api/shop/qr.png" width="145" height="145"><p id="qr-status" class="description" hidden>QR image could not load. Use Open shop print page or Copy link.</p></div></section>
+        <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This QR is unique to your shop. Customers can scan it to see your shop's print page. Customers can submit demo details and (if enabled) private test samples without signing in. Printing is never automatic.</p><div class="qr-actions"><a class="btn teal" id="customer-print-link" href="#" aria-disabled="true">Open shop print page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><div><img class="qr-art" id="customer-qr" alt="QR code linking to your shop's customer print page" src="/api/shop/qr.png" width="145" height="145"><p id="qr-status" class="description" hidden>QR image could not load. Use Open shop print page or Copy link.</p></div></section>
         <section class="card"><h2>Quick actions</h2><p class="description">Build your printing workspace step by step.</p><div class="quick-list">
           <button class="quick-row" data-go="printers"><span class="quick-symbol">▣</span><span class="quick-txt"><strong>Set up a printer</strong><span>Device connection coming later</span></span><span class="arrow">›</span></button>
           <button class="quick-row" data-go="orders"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>View print orders</strong><span>Order management is in development</span></span><span class="arrow">›</span></button>
@@ -77,7 +77,7 @@
       <div style="border-top:1px solid var(--line);margin:30px 0 22px"></div>
       <div class="eyebrow">PRIVATE TEST FILES • NOT PRINTED</div>
       <h2 style="margin-top:10px">Private test uploads</h2>
-      <p>Customer-login test files stored in a private bucket. Only this shop owner can download them. Do not open untrusted files on a production computer. Download access ends after 24 hours. Use Review &amp; Print to open your local print dialog only after reviewing a file. Printing is not automatic.</p>
+      <p>Guest / test-customer files stored in a private bucket. Only this shop owner can download them. Do not open untrusted files on a production computer. Download access ends after 24 hours. Use Review &amp; Print to open your local print dialog only after reviewing a file. Printing is not automatic.</p>
       <div class="section-head" style="margin-top:22px;gap:12px;flex-wrap:wrap">
         <span class="pill" id="private-order-summary">Loading private test uploads...</span>
         <button class="btn light" id="refresh-private-orders" type="button">Refresh private files</button>
