@@ -5,6 +5,7 @@
 const { randomBytes, createHash } = require("node:crypto");
 const rateLimit = require("express-rate-limit");
 const { handleCanonTestHeartbeat, canonTestPrintEnabled } = require("./canon-test-print-api");
+const { processAgentApprovedHeartbeat, enabled: ownerPrintEnabled } = require("./approved-test-print");
 
 const heartbeatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -157,13 +158,30 @@ function installAgentApis(app, pool) {
         console.error("Canon test job processing failed:", jobError);
         // Heartbeat stays online even if the optional test print queue is unavailable.
       }
+      let approvedTestJob = null;
+      if ((req.body || {}).supportsOwnerApprovedTestPrint === true) {
+        try {
+          approvedTestJob = await processAgentApprovedHeartbeat(
+            pool, result.rows[0].shop_id,
+            true, (req.body || {}).ownerPrintResult
+          );
+        } catch (error) {
+          if (error.message === "Invalid approved print acknowledgment") {
+            return res.status(400).json({ error: error.message });
+          }
+          console.error("Approved test print heartbeat processing failed:", error);
+          // Do not block agent connection status.
+        }
+      }
       res.set("Cache-Control", "no-store");
       return res.json({
         connected: true,
         previewOnly: true,
         printingEnabled: false,
         canonTestPrintEnabled: canonTestPrintEnabled(),
-        testPrintJob
+        testPrintJob,
+        ownerApprovedTestPrintEnabled: ownerPrintEnabled(),
+        approvedTestJob
       });
     } catch (error) {
       console.error("Agent heartbeat failed:", error);
