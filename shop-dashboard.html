@@ -257,7 +257,13 @@
         });
         if (printResponse.ok) {
           const printData = await printResponse.json();
-          approvalEnabled = printData.enabled === true;
+          const agentResponse = await fetch("/api/shop/agent/status", {
+            credentials: "same-origin", cache: "no-store"
+          });
+          const agentData = agentResponse.ok ? await agentResponse.json() : {};
+          approvalEnabled = printData.enabled === true &&
+            agentData.online === true &&
+            agentData.supportsOwnerApprovedTestPrint === true;
           (Array.isArray(printData.jobs) ? printData.jobs : []).forEach(job => {
             const key = String(job.orderId);
             if (!printJobs.has(key)) printJobs.set(key, job);
@@ -329,7 +335,7 @@
         approve.disabled = !approvalEnabled || Number(order.copies) > 2 ||
           Boolean(approvedJob);
         approve.title = !approvalEnabled
-          ? "Set ENABLE_OWNER_APPROVED_TEST_PRINTS=true in Render first"
+          ? "Enable TEST prints in Render and start the UPDATED Windows Agent"
           : approvedJob ? "This file has already been approved once"
           : Number(order.copies) > 2 ? "Test mode permits at most 2 copies"
           : "Review the file first, then approve ONE test print";
