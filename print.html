@@ -64,20 +64,7 @@
       <p class="footer">QR-To-Print • Demo customer print page</p>
     </section>
     <section class="card">
-      <h2>Print your document</h2>
-      <p class="subtitle">एक टेस्ट फाइल चुनें। केवल उसका प्रकार, आकार और कॉपी की संख्या दुकान के Dashboard में जाएगी। फाइल की सामग्री और नाम नहीं भेजे जाएँगे।</p>
-      <form id="demo-form">
-        <label for="file">Choose a sample file (stays on your device)</label>
-        <div class="upload"><span class="upload-icon">▤</span>PDF, JPG and PNG<br>Up to 10 MB • Demo metadata only</div>
-        <input type="file" id="file" accept=".pdf,.jpg,.jpeg,.png" required>
-        <label for="copies">Copies</label>
-        <select id="copies" required><option value="1">1 Copy</option><option value="2">2 Copies</option><option value="5">5 Copies</option><option value="10">10 Copies</option></select>
-        <button class="btn" type="submit" id="demo-submit" disabled>Send TEST request details →</button>
-      </form>
-      <p id="demo-result" class="response" role="status" aria-live="polite" hidden></p>
-      <div class="info">⚠ ऊपर वाला फॉर्म केवल फाइल की जानकारी भेजता है; फाइल स्वयं नहीं भेजता। यह डेमो है, असली प्रिंट ऑर्डर नहीं।</div>
-      <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
-      <h2>Private file upload • TEST ONLY</h2>
+      <h2>Upload PDF / Photo • TEST ONLY</h2>
       <p class="subtitle">बिना Customer Login के एक छोटी टेस्ट PDF/JPG/PNG अपलोड करें (अधिकतम 2 MB)। यह सुविधा सिर्फ दुकान द्वारा Guest Test Upload सक्षम होने पर उपलब्ध होगी। निजी या असली ग्राहक दस्तावेज़ अभी न भेजें।</p>
       <p id="private-upload-status" class="response" role="status" aria-live="polite">Checking private storage...</p>
       <form id="private-upload-form" hidden>
@@ -98,6 +85,19 @@
         <button id="private-upload-button" class="btn" type="submit">Upload TEST file privately →</button>
       </form>
       <div class="info">The shop owner can access this test file without knowing your identity. No login or payment is required; the shop owner must manually review before printing. Download access ends after 24 hours, and the private bucket has a 1-day expiry policy. Do not upload personal or sensitive documents in test mode.</div>
+      <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
+      <h2>Demo request (file stays on your device)</h2>
+      <p class="subtitle">वैकल्पिक डेमो: फाइल सिर्फ आपके फोन में रहेगी। दुकान को केवल प्रकार, आकार और कॉपी की जानकारी भेजी जाएगी।</p>
+      <form id="demo-form">
+        <label for="file">Choose a sample file (stays on your device)</label>
+        <div class="upload"><span class="upload-icon">▤</span>PDF, JPG and PNG<br>Up to 10 MB • Demo metadata only</div>
+        <input type="file" id="file" accept=".pdf,.jpg,.jpeg,.png" required>
+        <label for="copies">Copies</label>
+        <select id="copies" required><option value="1">1 Copy</option><option value="2">2 Copies</option><option value="5">5 Copies</option><option value="10">10 Copies</option></select>
+        <button class="btn" type="submit" id="demo-submit" disabled>Send TEST request details →</button>
+      </form>
+      <p id="demo-result" class="response" role="status" aria-live="polite" hidden></p>
+      <div class="info">⚠ ऊपर वाला फॉर्म केवल फाइल की जानकारी भेजता है; फाइल स्वयं नहीं भेजता। यह डेमो है, असली प्रिंट ऑर्डर नहीं।</div>
     </section>
   </main>
   <script>
