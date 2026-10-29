@@ -107,9 +107,28 @@ async function ensureTestUploadTables(pool) {
       copies SMALLINT NOT NULL CHECK (copies BETWEEN 1 AND 10),
       print_mode VARCHAR(8) NOT NULL CHECK (print_mode IN ('bw','color')),
       status VARCHAR(16) NOT NULL DEFAULT 'test_only'
-        CHECK (status = 'test_only'),
+        CHECK (status IN ('test_only','printed')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  // Replace the older test-only status constraint with a status that is
+  // explicitly confirmed by the owner after physically checking the output.
+  await pool.query(`
+    DO $ DECLARE rec record;
+    BEGIN
+      FOR rec IN SELECT conname FROM pg_constraint
+        WHERE conrelid = 'test_file_orders'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%status%'
+      LOOP
+        EXECUTE format('ALTER TABLE test_file_orders DROP CONSTRAINT %I', rec.conname);
+      END LOOP;
+    END $
+  `);
+  await pool.query(`
+    ALTER TABLE test_file_orders
+    ADD CONSTRAINT test_file_orders_status_check
+    CHECK (status IN ('test_only','printed'))
   `);
   // Existing installations created customer_id as NOT NULL. Permit NULL for
   // guest sample files while preserving the foreign key on registered accounts.
@@ -307,6 +326,41 @@ function installTestFileUploads(app, pool, env = process.env) {
       res.status(503).json({ error: "Unable to load test file orders" });
     }
   });
+
+  // An owner confirms status only AFTER verifying physical paper output.
+  // A browser print dialog closing is not evidence of successful printing.
+  app.post("/api/shop/test-file-orders/:id/mark-printed",
+    requireShopOwner, async (req, res) => {
+      if (!/^[1-9][0-9]{0,14}$/.test(req.params.id || "")) {
+        return res.status(400).json({ error: "Invalid order id" });
+      }
+      const expectedOrigin = req.protocol + "://" + req.get("host");
+      if (req.get("origin") !== expectedOrigin) {
+        return res.status(403).json({ error: "Request origin not allowed" });
+      }
+      if (!req.body || req.body.confirmedPaperOutput !== true) {
+        return res.status(400).json({ error: "Confirm that the paper was printed" });
+      }
+      try {
+        const result = await pool.query(
+          `UPDATE test_file_orders o SET status = 'printed'
+           FROM shop_owners owner
+           WHERE owner.shop_id = o.shop_id AND owner.id = $1
+             AND o.id = $2 AND o.created_at > NOW() - INTERVAL '24 hours'
+           RETURNING o.id, o.status`,
+          [req.session.shopOwnerId, req.params.id]
+        );
+        if (!result.rows.length) {
+          return res.status(404).json({ error: "Order not found for this shop or file expired" });
+        }
+        res.set("Cache-Control", "no-store");
+        return res.json({ testOnly: true, order: result.rows[0] });
+      } catch (error) {
+        console.error("Mark printed status failed:", error);
+        return res.status(503).json({ error: "Could not update order status" });
+      }
+    }
+  );
 
   app.get("/api/shop/test-file-orders/:id/download",
     requireShopOwner, async (req, res) => {
