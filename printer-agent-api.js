@@ -4,6 +4,7 @@
 // It does not dispatch, download or print customer documents.
 const { randomBytes, createHash } = require("node:crypto");
 const rateLimit = require("express-rate-limit");
+const { handleCanonTestHeartbeat, canonTestPrintEnabled } = require("./canon-test-print-api");
 
 const heartbeatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -89,7 +90,8 @@ function installAgentApis(app, pool) {
         printerCount: agent ? agent.printerCount : 0,
         lastSeenAt: agent ? agent.lastSeenAt : null,
         previewOnly: true,
-        printingEnabled: false
+        printingEnabled: false,
+        canonTestPrintEnabled: canonTestPrintEnabled()
       });
     } catch (error) {
       console.error("Agent status failed:", error);
@@ -142,11 +144,25 @@ function installAgentApis(app, pool) {
       if (!result.rows.length) {
         return res.status(401).json({ error: "Printer agent key revoked or invalid" });
       }
+      let testPrintJob = null;
+      try {
+        testPrintJob = await handleCanonTestHeartbeat(
+          pool, result.rows[0].shop_id, (req.body || {}).testPrintResult
+        );
+      } catch (jobError) {
+        if (jobError.message === "Invalid test print acknowledgment") {
+          return res.status(400).json({ error: jobError.message });
+        }
+        console.error("Canon test job processing failed:", jobError);
+        // Heartbeat stays online even if the optional test print queue is unavailable.
+      }
       res.set("Cache-Control", "no-store");
       return res.json({
         connected: true,
         previewOnly: true,
-        printingEnabled: false
+        printingEnabled: false,
+        canonTestPrintEnabled: canonTestPrintEnabled(),
+        testPrintJob
       });
     } catch (error) {
       console.error("Agent heartbeat failed:", error);
