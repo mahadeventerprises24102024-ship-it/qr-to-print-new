@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Review &amp; Print — QR-To-Print</title>
+<style>
+  :root { color-scheme: light; font-family: system-ui, "Segoe UI", Arial, sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3f7f8; color: #18303c; }
+  .top { background: #101923; color: white; padding: 19px max(18px, calc((100vw - 1000px)/2)); }
+  .top a { color: #d4fff0; }
+  main { margin: 22px auto 45px; padding: 0 18px; max-width: 1000px; }
+  .card { background: white; border: 1px solid #dce7e8; border-radius: 16px; padding: 22px; margin-bottom: 16px; }
+  h1 { font-size: 24px; margin: 5px 0 10px; }
+  h2 { font-size: 18px; margin: 0 0 14px; }
+  p { font-size: 14px; line-height: 1.6; }
+  .help { color: #526878; }
+  .meta { background: #f1f6f3; padding: 12px; border-radius: 10px; line-height: 1.65; font-size: 14px; }
+  button, .btn { cursor: pointer; padding: 12px 16px; font-size: 14px; font-weight: 650; border-radius: 9px; border: 0; background: #087d71; color: #fff; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; margin: 4px 8px 4px 0; }
+  button:disabled { background: #9aadae; cursor: not-allowed; }
+  .btn.secondary { background: #e8f1f3; color: #264a55; }
+  .page-preview { background: #e9eff0; border: 1px solid #dce6e8; border-radius: 10px; min-height: 220px; padding: 20px; display: flex; justify-content: center; align-items: center; }
+  .page-preview img { max-width: 100%; max-height: 63vh; object-fit: contain; background: white; box-shadow: 0 5px 25px #14333b20; }
+  #print-area { display: none; }
+  @media print {
+    @page { size: A4; margin: 8mm; }
+    html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
+    .top, main, .no-print { display: none !important; }
+    #print-area { display: flex !important; width: 100%; height: 270mm; align-items: center; justify-content: center; }
+    #print-area img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+    #print-area.bw img { filter: grayscale(100%); }
+  }
+</style>
+</head>
+<body>
+<header class="top no-print"><strong>QR-To-Print • Shop file review</strong> · <a href="/shop-dashboard.html#orders">Back to Print orders</a></header>
+<main class="no-print">
+  <section class="card">
+    <h1>Review &amp; Print <span id="order-heading"></span></h1>
+    <p id="state" role="status" aria-live="polite">Checking your shop order...</p>
+    <div id="details" class="meta" hidden></div>
+    <p class="help">This page is for small private TEST uploads only (up to 2 MB). No customer document is sent to the Windows agent automatically. Check the file before choosing Print.</p>
+  </section>
+  <section class="card">
+    <h2>File preview</h2>
+    <div class="page-preview" id="preview"><p>Loading your private file...</p></div>
+    <p id="pdf-help" hidden>PDF: click <strong>Open PDF to Print</strong>, then use the PDF viewer's print button or <strong>Ctrl + P</strong>. Select Canon G2010 and choose copies / colour in the print dialog.</p>
+    <div id="actions" hidden>
+      <button id="print-image" type="button" hidden>Print image on Canon G2010</button>
+      <a class="btn" id="open-pdf" target="_blank" rel="noopener noreferrer" hidden>Open PDF to Print</a>
+      <a class="btn secondary" id="download-file">Download private file</a>
+    </div>
+    <p class="help">For photos: your browser opens the Windows print dialog. Choose <strong>Canon G2010 series</strong>, A4, the displayed copy count and colour / black &amp; white setting. For PDFs use the PDF viewer's print dialog. Printing only happens when you confirm it there.</p>
+  </section>
+</main>
+<div id="print-area" aria-hidden="true"></div>
+<script>
+"use strict";
+(() => {
+  const state = document.getElementById("state");
+  const details = document.getElementById("details");
+  const preview = document.getElementById("preview");
+  const actions = document.getElementById("actions");
+  const printArea = document.getElementById("print-area");
+  const imageButton = document.getElementById("print-image");
+  const pdfLink = document.getElementById("open-pdf");
+  const downloadLink = document.getElementById("download-file");
+  let objectURL = null;
+  function status(message) { state.textContent = message; }
+  window.addEventListener("pagehide", () => {
+    if (objectURL) URL.revokeObjectURL(objectURL);
+  });
+
+  async function load() {
+    const id = new URLSearchParams(location.search).get("order");
+    if (!/^[1-9][0-9]{0,14}$/.test(id || "")) {
+      status("Invalid order link. Return to your Print orders.");
+      preview.textContent = "No preview available.";
+      return;
+    }
+    document.getElementById("order-heading").textContent = "#" + id;
+    try {
+      const listResponse = await fetch("/api/shop/test-file-orders", {
+        credentials: "same-origin", cache: "no-store"
+      });
+      const listing = await listResponse.json().catch(() => ({}));
+      if (!listResponse.ok) throw new Error(listing.error || "Shop login required");
+      const order = (Array.isArray(listing.orders) ? listing.orders : [])
+        .find(entry => String(entry.id) === id);
+      if (!order) throw new Error("This order is no longer available for your shop.");
+      const types = { pdf: "application/pdf", png: "image/png", jpeg: "image/jpeg" };
+      const contentType = types[order.fileType];
+      if (!contentType || !Number.isInteger(Number(order.copies)) ||
+          Number(order.copies) < 1 || Number(order.copies) > 10) {
+        throw new Error("Unsupported file or print settings");
+      }
+      details.hidden = false;
+      const mode = order.printMode === "color" ? "Colour" : "Black & white";
+      details.textContent = [
+        "Order #" + id,
+        "File type: " + order.fileType.toUpperCase(),
+        "Copies requested: " + order.copies,
+        "Print mode: " + mode,
+        "Printer: select Canon G2010 in the Windows print dialog"
+      ].join(" • ");
+
+      const endpoint = "/api/shop/test-file-orders/" + encodeURIComponent(id) + "/download";
+      const downloadResponse = await fetch(endpoint, {
+        credentials: "same-origin", cache: "no-store"
+      });
+      if (!downloadResponse.ok) {
+        throw new Error("Private file expired or not available. Try a fresh test upload.");
+      }
+      const bytes = await downloadResponse.arrayBuffer();
+      const expectedSize = Number(order.fileSizeBytes);
+      if (bytes.byteLength < 8 || bytes.byteLength > 2 * 1024 * 1024 ||
+          bytes.byteLength !== expectedSize) {
+        throw new Error("Unexpected private file size; printing was blocked.");
+      }
+      const blob = new Blob([bytes], { type: contentType });
+      objectURL = URL.createObjectURL(blob);
+      const extension = order.fileType === "jpeg" ? "jpg" : order.fileType;
+      downloadLink.href = objectURL;
+      downloadLink.download = "test-order-" + id + "." + extension;
+      actions.hidden = false;
+
+      if (order.fileType === "pdf") {
+        preview.textContent = "PDF is ready. Use Open PDF to Print to review it in your browser.";
+        document.getElementById("pdf-help").hidden = false;
+        pdfLink.href = objectURL;
+        pdfLink.hidden = false;
+      } else {
+        const img = new Image();
+        img.alt = "Uploaded test image; review carefully before printing";
+        img.addEventListener("load", () => {
+          preview.replaceChildren(img);
+          const printImg = document.createElement("img");
+          printImg.src = objectURL;
+          printImg.alt = "Print preview";
+          printArea.replaceChildren(printImg);
+          printArea.classList.toggle("bw", order.printMode !== "color");
+          imageButton.hidden = false;
+          status("File ready. Review the image, then click Print to open the print dialog.");
+        }, { once: true });
+        img.addEventListener("error", () => {
+          status("Could not display image; printing is disabled.");
+          preview.textContent = "Image preview failed.";
+          actions.hidden = true;
+        }, { once: true });
+        img.src = objectURL;
+        return;
+      }
+      status("PDF ready. Open and review in the PDF viewer before printing.");
+    } catch (error) {
+      status(error.message || "Unable to load this private test order");
+      preview.textContent = "File preview unavailable.";
+      actions.hidden = true;
+    }
+  }
+
+  imageButton.addEventListener("click", () => {
+    if (!objectURL || !printArea.querySelector("img")) return;
+    if (!window.confirm(
+      "Have you checked this photo? Continue to Windows Print dialog and select Canon G2010. " +
+      "Check copies and colour there. This action does not auto-print."
+    )) return;
+    window.print();
+  });
+  load();
+})();
+</script>
+</body>
+</html>
