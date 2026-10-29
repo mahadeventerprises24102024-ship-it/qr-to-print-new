@@ -143,7 +143,8 @@ async function heartbeat(secret, printerCount, testPrintResult = null) {
       "Content-Type": "application/json",
       Accept: "application/json"
     },
-    body: JSON.stringify({ printerCount, ...(testPrintResult ? { testPrintResult } : {}) }),
+    body: JSON.stringify({ printerCount, supportsCanonTestPrint: true,
+      ...(testPrintResult ? { testPrintResult } : {}) }),
     signal: AbortSignal.timeout(12_000)
   });
 
