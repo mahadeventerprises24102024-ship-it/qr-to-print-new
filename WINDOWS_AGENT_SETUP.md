@@ -18,13 +18,13 @@ This feature is a **printer-PC connection test only**. It does **not** send cust
 5. In a Windows browser, visit the repository: `https://github.com/mahadeventerprises24102024-ship-it/qr-to-print-new`.
 6. Click **Code → Download ZIP**, then extract the ZIP to a local folder.
 7. In File Explorer, open the extracted project folder containing `windows-print-agent.js`. Right-click an empty area → **Open in Terminal**, or open PowerShell and navigate there.
-8. Run this command:
+8. First, click **Copy pairing key** in the shop Dashboard. With that key still in the Windows clipboard, open the project folder in PowerShell or CMD and run:
 
    ```powershell
    node windows-print-agent.js
    ```
 
-   The tool will prompt **Paste shop pairing key (hidden)**. Paste the copied secret and press Enter. It stays in program memory and is never written to a file.
+   **No paste is needed.** The new agent automatically checks the Windows clipboard for the copied key. If a correct key is found, it starts connecting. If not, it displays the older hidden-key prompt; copy the key again, close that prompt with Ctrl+C, and rerun the script. The key is not written to a file or shown on the screen.
 
 9. The tool will try to count printers using Windows `Get-Printer`. It sends a small authenticated heartbeat every 30 seconds. PowerShell stays open while it runs.
 10. Back in the Shop Dashboard → **Printers**, click **Refresh status**. You should see **Online (test heartbeat)**, the number of installed Windows printers, and the last heartbeat time.
@@ -46,7 +46,8 @@ This feature is a **printer-PC connection test only**. It does **not** send cust
 - Each shop can have one active agent pairing key; rotating or revoking it disconnects the previous one.
 - No printer model names, file contents, documents, IP addresses inside the heartbeat payload, or customer data are transmitted by the Windows script. Render web logs and access logs can still contain standard request metadata.
 - **Printer count is informational only**; it does not mean any printer is configured to accept jobs.
-- Pairing key is never written to disk by this agent; after closing the terminal, reenter the same key or generate a replacement if it was lost.
+- The pairing key is never written to disk by the agent. Windows clipboard history or clipboard sync could retain a copied key; after starting the agent, clear your Windows clipboard by copying harmless text or using Windows clipboard controls.
+- If you close the terminal, copy the pairing key again only if you saved it securely outside the terminal. Otherwise generate a new key in Shop Dashboard to invalidate the lost one.
 
 ## Production work remaining
 
