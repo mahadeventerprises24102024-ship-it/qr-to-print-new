@@ -12,6 +12,13 @@ function loadAgent(clipboardText, opts = {}) {
   const moduleObject = { exports: {} };
   const calls = [];
   const fakeRequire = name => {
+    if (name === "./windows-approved-test-print") {
+      return {
+        validJob: () => false,
+        sumatraPath: () => null,
+        printOneApprovedTestFile: async () => "failed"
+      };
+    }
     if (name === "node:child_process") {
       return {
         spawnSync(command, args) {
