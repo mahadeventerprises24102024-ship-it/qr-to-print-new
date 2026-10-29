@@ -13,6 +13,7 @@ const { installTestFileUploads, ensureTestUploadTables } = require("./private-te
 const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
 const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
 const { installShopBilling, ensureShopBillingTables } = require("./shop-billing");
+const { installPlatformAdmin, ensurePlatformTables, shopApiGate, shopPageGate, publicShopGate } = require("./platform-admin");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -271,6 +272,11 @@ app.post("/api/logout", (req, res) => {
   });
 });
 
+// Subscription checks apply to existing sessions and public shop QR routes.
+app.use("/api/shop", shopApiGate(pool));
+app.use("/api/public/shops/:code", publicShopGate(pool));
+installPlatformAdmin(app, pool);
+
 // Shop endpoints and owners use their own session identity.
 installShopAuth(app, pool);
 installDemoOrderApis(app, pool);
@@ -298,7 +304,7 @@ app.get("/dashboard.html", (req, res) => {
   return res.sendFile(path.join(__dirname, "dashboard.html"));
 });
 // Private review page: only authenticated shop owners may open uploaded samples.
-app.get("/shop-print-preview.html", (req, res) => {
+app.get("/shop-print-preview.html", shopPageGate(pool), (req, res) => {
   res.set("Cache-Control", "private, no-store");
   res.set("Referrer-Policy", "no-referrer");
   res.set("X-Frame-Options", "DENY");
@@ -312,7 +318,7 @@ app.get("/shop-print-preview.html", (req, res) => {
   return res.sendFile(path.join(__dirname, "shop-print-preview.html"));
 });
 // Printable basic bill is shop-only; not an official tax invoice.
-app.get("/shop-bill.html", (req, res) => {
+app.get("/shop-bill.html", shopPageGate(pool), (req, res) => {
   res.set("Cache-Control", "private, no-store");
   res.set("Referrer-Policy", "no-referrer");
   res.set("X-Frame-Options", "DENY");
@@ -325,7 +331,26 @@ app.get("/shop-bill.html", (req, res) => {
   }
   return res.sendFile(path.join(__dirname, "shop-bill.html"));
 });
-app.get("/shop-dashboard.html", (req, res) => {
+// Admin access is separate from all shop and customer roles.
+app.get("/admin-login.html", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(__dirname, "admin-login.html"));
+});
+app.get("/admin-dashboard.html", (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  res.set("Referrer-Policy", "no-referrer");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Content-Security-Policy",
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+    "connect-src 'self'; img-src 'none'; object-src 'none'; " +
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  const config = require("./platform-admin").adminConfig();
+  if (!config.configured || req.session?.platformAdminEmail !== config.email) {
+    return res.redirect("/admin-login.html");
+  }
+  return res.sendFile(path.join(__dirname, "admin-dashboard.html"));
+});
+app.get("/shop-dashboard.html", shopPageGate(pool), (req, res) => {
   res.set("Cache-Control", "no-store");
   if (!req.session || !req.session.shopOwnerId) {
     return res.redirect("/shop-login.html");
@@ -345,6 +370,7 @@ async function start() {
   `);
 
   await ensureShopTables(pool);
+  await ensurePlatformTables(pool);
   await ensureDemoOrderTables(pool);
   await ensureTestUploadTables(pool);
   await ensureShopBillingTables(pool);
