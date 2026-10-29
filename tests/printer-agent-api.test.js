@@ -17,6 +17,10 @@ function makeHarness() {
     require(name) {
       if (name === "node:crypto") return nodeCrypto;
       if (name === "express-rate-limit") return () => (req, res, next) => next();
+      if (name === "./canon-test-print-api") return {
+        canonTestPrintEnabled: () => false,
+        handleCanonTestHeartbeat: async () => null
+      };
       throw new Error("Unexpected dependency: " + name);
     },
     console,
