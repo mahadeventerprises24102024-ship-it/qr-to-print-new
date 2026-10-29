@@ -230,7 +230,9 @@ test("guest test upload inserts NULL customer ID when explicitly enabled", async
   handlers[0](request,response(),()=>{authorized=true;});
   assert.equal(authorized,true);
   const reply=response();
-  await handlers[2](request,reply);
+  handlers[2](request,reply);
+  // multer invokes its async callback without returning a promise to the caller.
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(reply.statusCode,201);
   assert.equal(reply.body.guest,true);
   assert.equal(reply.body.order.id,13);
