@@ -303,7 +303,7 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
         upiEnabled:c.upiEnabled,gatewayEnabled:c.gatewayEnabled,
         gatewayMode:c.gatewayEnabled?c.mode:null,
         upiPayeeName:c.upiEnabled?c.payeeName:null,
-        gatewayKeyId:c.gatewayEnabled?c.keyId:null,
+        gatewayMerchantId:c.gatewayEnabled?c.mid:null,
         requests:requests.rows.map(formatRequest)
       });
     }catch(error){
@@ -531,6 +531,6 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
     }
   });
 }
-module.exports={paymentConfig,quote,upiUrl,secureMatch,
-  ensureSubscriptionPaymentTables,settleCapturedGateway,
+module.exports={paymentConfig,quote,upiUrl,parsePaytmAmount,
+  ensureSubscriptionPaymentTables,settleSuccessfulPaytm,verifyPaytmOrder,
   installPaymentWebhook,installSubscriptionPayments};
