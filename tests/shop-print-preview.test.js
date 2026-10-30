@@ -30,8 +30,8 @@ test("dashboard provides review action only from private test file order cards",
   assert.match(markup, /review\.rel = "noopener noreferrer"/);
   assert.match(markup, /controls\.append\(review,download\)/);
   assert.match(markup, /controls\.append\(remove\)/);
-  assert.match(markup, /decision:"accepted"/);
-  assert.match(markup, /decision:"rejected"/);
+  assert.match(markup, /for\(const decision of \["accepted","rejected"\]\)/);
+  assert.match(markup, /body:JSON\.stringify\(\{decision\}\)/);
   assert.ok(!dashboard.includes("/api/agent/print-customer"));
 });
 
