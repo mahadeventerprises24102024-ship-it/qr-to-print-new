@@ -94,7 +94,7 @@
         <p id="private-estimate" class="response" role="status" aria-live="polite">Checking prices...</p>
         <button id="private-upload-button" class="btn" type="submit">Upload TEST file privately →</button>
       </form>
-      <div class="info">The shop owner can access this test file without knowing your identity. No login or payment is required; the shop owner must manually review before printing. Download access ends after 24 hours, and the private bucket has a 1-day expiry policy. Do not upload personal or sensitive documents in test mode.</div>
+      <div class="info">After a successful private TEST upload, your shop owner will see the file in their secured <strong>Quick Print Panel</strong> within about 10 seconds while the panel is open. They must review and accept it before manually printing on their own printer. No automatic printing or payment occurs. Download access ends after 24 hours; the private bucket needs a 1-day expiry lifecycle. Do not upload personal or sensitive documents.</div>
       <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
       <h2>Demo request (file stays on your device)</h2>
       <p class="subtitle">वैकल्पिक डेमो: फाइल सिर्फ आपके फोन में रहेगी। दुकान को केवल प्रकार, आकार और कॉपी की जानकारी भेजी जाएगी।</p>
@@ -287,7 +287,7 @@
           if(!response.ok) {
             throw new Error(result.error || "Private test upload failed");
           }
-          privateNotice("TEST #"+result.order.id+" stored privately. Its Tracking Code is shown below. Shop must accept it before any manual printing.");
+          privateNotice("TEST #"+result.order.id+" stored privately. Your shop will see a Review & Print option in its Quick Print Panel soon. Tracking Code is shown below; shop approval is required.");
           showTracking("test-file-orders",result.order.id,result.trackingToken);
           privateForm.reset();
         }catch(error){

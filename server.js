@@ -319,6 +319,21 @@ app.get("/shop-printer-check.html", shopPageGate(pool), (req, res) => {
   }
   return res.sendFile(path.join(__dirname, "shop-printer-check.html"));
 });
+// Owner-only quick print inbox: uploaded safe TEST orders + local device printing.
+// No customer-upload route or anonymous access can serve this page.
+app.get("/shop-print-panel.html", shopPageGate(pool), (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  res.set("Referrer-Policy", "no-referrer");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Content-Security-Policy",
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+    "connect-src 'self'; img-src blob:; object-src 'none'; " +
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  if (!req.session || !req.session.shopOwnerId) {
+    return res.redirect("/shop-login.html");
+  }
+  return res.sendFile(path.join(__dirname, "shop-print-panel.html"));
+});
 // Private review page: only authenticated shop owners may open uploaded samples.
 app.get("/shop-print-preview.html", shopPageGate(pool), (req, res) => {
   res.set("Cache-Control", "private, no-store");

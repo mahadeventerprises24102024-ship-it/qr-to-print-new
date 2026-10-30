@@ -39,7 +39,7 @@
   <main class="main">
     <div class="topbar">
       <div><div class="eyebrow" id="breadcrumb">Shop panel / Overview</div><h1 class="heading" id="page-title">Good to see you.</h1></div>
-      <div class="top-actions"><span class="preview-tag">DEMO PREVIEW</span><button class="btn dark" id="shop-logout" type="button">Logout</button></div>
+      <div class="top-actions"><a class="btn teal" href="/shop-print-panel.html" id="open-quick-print" target="_blank" rel="noopener noreferrer">▤ Quick Print Panel</a><span class="preview-tag">DEMO PREVIEW</span><button class="btn dark" id="shop-logout" type="button">Logout</button></div>
     </div>
     <section class="panel active" id="panel-dashboard">
       <div class="notice"><div class="notice-icon">✳</div><div><strong>You're viewing the new Shop Dashboard design</strong><p>You can now receive test request details (type, size and copies). No document content, payment or real printing is enabled.</p></div><button type="button" class="btn" id="notice-info">What's next?</button></div>
@@ -50,15 +50,15 @@
       </div>
       <div class="stats">
         <div class="stat"><div class="small">Test requests</div><div class="num" id="demo-count">—</div><div class="more">Demo only • no files received</div></div>
-        <div class="stat"><div class="small">Waiting</div><div class="num">—</div><div class="more">Queue integration pending</div></div>
-        <div class="stat"><div class="small">Printed</div><div class="num">—</div><div class="more">Printer reporting pending</div></div>
+        <div class="stat"><div class="small">Incoming TEST files</div><div class="num"><a href="/shop-print-panel.html" title="Open incoming TEST print files">Open</a></div><div class="more">Quick Print Panel checks new orders</div></div>
+        <div class="stat"><div class="small">Manual TEST printing</div><div class="num"><a href="/shop-print-panel.html" title="Open manual test print">Print</a></div><div class="more">Shop PC · choose your printer</div></div>
         <div class="stat"><div class="small">Today's sales</div><div class="num">—</div><div class="more">Payment integration pending</div></div>
       </div>
       <div class="dashboard-grid">
         <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This QR is unique to your shop. Customers can scan it to see your shop's print page. Customers can submit demo details and (if enabled) private test samples without signing in. Printing is never automatic.</p><div class="qr-actions"><a class="btn teal" id="customer-print-link" href="#" aria-disabled="true">Open shop print page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><div><img class="qr-art" id="customer-qr" alt="QR code linking to your shop's customer print page" src="/api/shop/qr.png" width="145" height="145"><p id="qr-status" class="description" hidden>QR image could not load. Use Open shop print page or Copy link.</p></div></section>
         <section class="card"><h2>Quick actions</h2><p class="description">Build your printing workspace step by step.</p><div class="quick-list">
           <button class="quick-row" data-go="printers"><span class="quick-symbol">▣</span><span class="quick-txt"><strong>Set up a printer</strong><span>Device connection coming later</span></span><span class="arrow">›</span></button>
-          <button class="quick-row" data-go="orders"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>View print orders</strong><span>Review test orders and update status</span></span><span class="arrow">›</span></button>
+          <a class="quick-row" href="/shop-print-panel.html" target="_blank" rel="noopener noreferrer"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>Open Quick Print Panel</strong><span>Incoming TEST file orders · print from your own printer</span></span><span class="arrow">›</span></a>
           <button class="quick-row" data-go="wallet"><span class="quick-symbol">₹</span><span class="quick-txt"><strong>Pricing & Bills</strong><span>Set print rates and view simple test bills</span></span><span class="arrow">›</span></button>
         </div></section>
       </div>
@@ -69,6 +69,8 @@
       <div class="content-icon">▤</div>
       <h2>Customer Order Inbox • TEST</h2>
       <p>Customer demo requests arrive here for review. The file stays on the customer device. Mark them Reviewed or Close after checking metadata; these statuses never mean printed.</p>
+      <p style="max-width:none"><a class="btn teal" href="/shop-print-panel.html" target="_blank" rel="noopener noreferrer">▤ Open Quick Print Panel — Auto-refresh incoming TEST files</a></p>
+      <p style="max-width:none">ग्राहक की Private TEST file Upload होने पर Quick Print Panel में नया Order दिखता है। दुकानदार <strong>Review → Accept → Print</strong> करेगा। अगर R2 storage सेट नहीं है तो इसी पैनल से Shop PC की local TEST file चुनकर प्रिंट करें।</p>
       <div class="section-head" style="margin-top:24px;gap:12px;flex-wrap:wrap">
         <span id="demo-summary" class="pill">Loading test requests...</span>
         <button class="btn light" type="button" id="refresh-demo-orders">Refresh orders</button>
