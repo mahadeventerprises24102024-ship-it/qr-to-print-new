@@ -41,12 +41,13 @@
     <h1>Review &amp; Print <span id="order-heading"></span></h1>
     <p id="state" role="status" aria-live="polite">Checking your shop order...</p>
     <div id="details" class="meta" hidden></div>
-    <p class="help">This page is for small private TEST uploads only (up to 2 MB). No customer document is sent to the Windows agent automatically. Check the file before choosing Print.</p>
+    <p class="help">Only non-sensitive TEST uploads up to 2 MB are allowed. This page prints manually through the browser on <strong>your shop computer</strong>, using any compatible installed printer (Canon, HP, Epson, Brother, etc.). The Windows Agent never receives the document.</p>
+    <p id="printer-reminder" class="help" role="status">Choose your own installed printer in the native Print dialog. No automatic printer selection is possible from this page.</p>
   </section>
   <section class="card">
     <h2>File preview</h2>
     <div class="page-preview" id="preview"><p>Loading your private file...</p></div>
-    <p id="pdf-help" hidden>PDF: click <strong>Open PDF to Print</strong>, then use the PDF viewer's print button or <strong>Ctrl + P</strong>. Select Canon G2010 and choose copies / colour in the print dialog.</p>
+    <p id="pdf-help" hidden>PDF: after Accepting the TEST order, click <strong>Open PDF to Print</strong>, review the file in the PDF viewer, then press <strong>Ctrl + P</strong>. Select your shop’s own installed printer and the correct copies, paper size and colour in the native print dialog. A PDF opened for REVIEW ONLY must not be printed until accepted.</p>
     <div id="actions" hidden>
       <button id="accept-order" type="button" hidden>Accept TEST order for printing</button>
       <button id="print-image" type="button" hidden>Review &amp; Print image</button>
@@ -54,7 +55,7 @@
       <a class="btn secondary" id="download-file">Download private file</a>
       <button id="mark-printed" type="button" style="background:#285667" hidden>Mark Printed (after checking paper)</button>
     </div>
-    <p class="help">For photos: your browser opens the Windows print dialog. Choose <strong>Canon G2010 series</strong>, A4, the displayed copy count and colour / black &amp; white setting. For PDFs use the PDF viewer's print dialog. Printing only happens when you confirm it there. Afterwards, inspect the paper and choose Mark Printed.</p>
+    <p class="help">For photos, click <strong>Review &amp; Print image</strong> after accepting the TEST order. In the native print dialog, choose <strong>your own installed shop printer</strong> (USB/Wi-Fi/network), correct paper size, copies and colour. PDFs must be printed from the PDF viewer. Physical printing only occurs after you confirm the native dialog. Inspect all printed pages, then choose Mark Printed.</p>
   </section>
 </main>
 <div id="print-area" aria-hidden="true"></div>
@@ -72,6 +73,21 @@
   const downloadLink = document.getElementById("download-file");
   const markPrinted = document.getElementById("mark-printed");
   let currentOrderId = null;
+  async function loadPrinterReminder(){
+    const note=document.getElementById("printer-reminder");
+    try{
+      const response=await fetch("/api/shop/agent/status",{
+        credentials:"same-origin",cache:"no-store"
+      });
+      if(!response.ok)return;
+      const data=await response.json().catch(()=>({}));
+      if(typeof data.preferredPrinterName==="string"&&data.preferredPrinterName){
+        note.textContent="Your shop's saved preference: "+data.preferredPrinterName+
+          ". Check that this printer is installed on THIS computer, then select it manually in the Print dialog. The website cannot automatically select a printer.";
+      }
+    }catch{/* Manual printing works even if the optional printer agent is offline. */}
+  }
+  loadPrinterReminder();
   let objectURL = null;
   function status(message) { state.textContent = message; }
   window.addEventListener("pagehide", () => {
@@ -114,7 +130,7 @@
         "File type: " + order.fileType.toUpperCase(),
         "Copies requested: " + order.copies,
         "Print mode: " + mode,
-        "Printer: select Canon G2010 in the Windows print dialog"
+        "Printer: manually select your own installed printer in the native print dialog"
       ].join(" • ");
 
       const endpoint = "/api/shop/test-file-orders/" + encodeURIComponent(id) + "/download";
@@ -199,15 +215,15 @@
   imageButton.addEventListener("click", () => {
     if (!objectURL || !printArea.querySelector("img")) return;
     if (!window.confirm(
-      "Have you checked this photo? Continue to Windows Print dialog and select Canon G2010. " +
-      "Check copies and colour there. This action does not auto-print."
+      "Have you checked this TEST image? Continue to the native Print dialog and choose your OWN locally installed shop printer. " +
+      "Confirm the copies, paper size and colour. This does not automatically print."
     )) return;
     window.print();
   });
 
   markPrinted.addEventListener("click", async () => {
     if (!currentOrderId || !objectURL || markPrinted.disabled) return;
-    if (!window.confirm("Did you physically check that the correct pages came out of Canon G2010? Only click OK after successful printing.")) return;
+    if (!window.confirm("Did you physically check that all the expected pages came out of your own shop printer? Only click OK after successful paper printing.")) return;
     markPrinted.disabled = true;
     try {
       const response = await fetch("/api/shop/test-file-orders/" + encodeURIComponent(currentOrderId) + "/mark-printed", {
