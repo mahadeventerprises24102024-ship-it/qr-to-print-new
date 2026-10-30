@@ -133,11 +133,11 @@ test("private test decision is tenant-scoped; rejected file cannot be printed",a
   let sql,params;
   const {app,map}=routes();
   mod.installTestFileUploads(app,{query:async(q,args)=>{sql=q;params=args;return {rows:[{id:23,status:"accepted"}]};}}, {});
-  const path="/api/shop/test-file-orders/:id/decision";
-  const handler=map["POST "+path].at(-1);
+  const routePath="/api/shop/test-file-orders/:id/decision";
+  const handler=map["POST "+routePath].at(-1);
   const denied=response();
   let bypassed=false;
-  map["POST "+path][0]({session:{},params:{id:"23"},body:{decision:"accepted"}},
+  map["POST "+routePath][0]({session:{},params:{id:"23"},body:{decision:"accepted"}},
     denied,()=>{bypassed=true;});
   assert.equal(denied.statusCode,401);
   assert.equal(bypassed,false);
