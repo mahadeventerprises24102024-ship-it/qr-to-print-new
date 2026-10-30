@@ -9,7 +9,7 @@ const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
 const { installShopAuth, ensureShopTables } = require("./shop-auth");
 const { installDemoOrderApis, ensureDemoOrderTables } = require("./demo-print-orders");
-const { installTestFileUploads, ensureTestUploadTables } = require("./private-test-uploads");
+const { installTestFileUploads, ensureTestUploadTables, purgeExpiredTestFiles } = require("./private-test-uploads");
 const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
 const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
 const { installShopBilling, ensureShopBillingTables } = require("./shop-billing");
@@ -435,6 +435,25 @@ async function start() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);
+    // Purge expired SAMPLE uploads every 15 minutes while the instance is
+    // running; a private R2 bucket 1-day lifecycle is still required.
+    let cleanupRunning=false;
+    async function cleanupExpiredSampleFiles(){
+      if(cleanupRunning)return;
+      cleanupRunning=true;
+      try{
+        const result=await purgeExpiredTestFiles(pool);
+        if(result.purged||result.failed){
+          console.log("Expired sample files:",JSON.stringify(result));
+        }
+      }catch(error){
+        console.error("Expired SAMPLE file cleanup unavailable:",error);
+      }finally{
+        cleanupRunning=false;
+      }
+    }
+    setTimeout(cleanupExpiredSampleFiles,5000).unref();
+    setInterval(cleanupExpiredSampleFiles,15*60*1000).unref();
   });
 }
 
