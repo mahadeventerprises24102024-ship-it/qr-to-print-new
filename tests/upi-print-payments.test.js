@@ -60,17 +60,19 @@ test("UPI recipient VPA/payee validation and monetary amount belong to server",(
   assert.equal(m.publicPayment(payment).automaticallyVerified,false);
   assert.equal(m.publicPayment(payment).automaticPrinting,false);
 });
-test("UPI database maintains separate per-shop payees and unique order, reference and UTR",async()=>{
+test("UPI database maintains separate per-shop payees, unique order and reference without customer UTR",async()=>{
   const {module:m}=harness();
   const sql=[];
   await m.ensureUpiPrintTables({query:async q=>{sql.push(q);return {rows:[]};}});
-  assert.equal(sql.length,4);
+  assert.equal(sql.length,5);
   assert.match(sql[0],/shop_upi_payment_accounts/);
   assert.match(sql[0],/shop_id BIGINT PRIMARY KEY/);
   assert.match(sql[1],/shop_upi_test_payments/);
   assert.match(sql[1],/order_id BIGINT NOT NULL UNIQUE/);
   assert.match(sql[1],/payment_reference VARCHAR\(30\) NOT NULL UNIQUE/);
-  assert.match(sql[2],/customer_utr\) WHERE customer_utr IS NOT NULL/);
+  assert.doesNotMatch(sql[1],/customer_utr/);
+  assert.match(sql[2],/DROP INDEX IF EXISTS upi_test_utr_unique/);
+  assert.match(sql[3],/DROP COLUMN IF EXISTS customer_utr/);
 });
 test("UPI recipient update only via logged-in shop owner with explicit recipient confirmation",async()=>{
   const h=harness();
@@ -148,7 +150,7 @@ test("private customer QR only after valid tracking token and exact shop, no for
   assert.match(queries[0].q,/s\.public_code=\$1 AND o\.id=\$2 AND o\.tracking_token_hash=\$3/);
   assert.deepEqual(Array.from(queries[0].args),[code,"27",h.module.hashToken(token)]);
 });
-test("customer submits UTR only as a claim and cannot mark Paid",async()=>{
+test("customer I Paid notification requires private code, never UTR or automatic Paid",async()=>{
   const h=harness();
   const calls=[];
   h.module.installUpiPrintPayments(h.app,{query:async(q,args)=>{
@@ -157,18 +159,20 @@ test("customer submits UTR only as a claim and cannot mark Paid",async()=>{
   }});
   const bad=res();
   await h.run("POST /api/public/shops/:code/test-file-orders/:id/upi/claim")({
-    ...guest,body:{trackingToken:token,utr:"bad"}
+    ...guest,body:{trackingToken:"invalid"}
   },bad);
   assert.equal(bad.statusCode,400);
   const okay=res();
   await h.run("POST /api/public/shops/:code/test-file-orders/:id/upi/claim")({
-    ...guest,body:{trackingToken:token,utr:"123456789012"}
+    ...guest,body:{trackingToken:token}
   },okay);
   assert.equal(okay.statusCode,200);
   assert.equal(okay.body.payment.status,"customer_claimed");
   assert.equal(okay.body.payment.automaticallyVerified,false);
   assert.match(calls[1].q,/status='customer_claimed'/);
   assert.match(calls[1].q,/status IN \('awaiting_payment','rejected'\)/);
+  assert.equal(calls[1].args.length,1);
+  assert.doesNotMatch(calls[1].q,/customer_utr/);
   assert.doesNotMatch(calls[1].q,/paid_manual/);
 });
 test("shop owner can mark paid only with explicit bank receipt and matching exact amount",async()=>{
@@ -188,6 +192,7 @@ test("shop owner can mark paid only with explicit bank receipt and matching exac
   assert.equal(okay.statusCode,200);
   assert.equal(okay.body.payment.status,"paid_manual");
   assert.equal(okay.body.automaticPrinting,false);
+  assert.equal(okay.body.printDialogUrl,"/shop-print-preview.html?order=27&autoPrint=1");
   assert.match(calls[0].q,/o.shop_id=p.shop_id/);
   assert.match(calls[0].q,/p.amount_paise=\$3/);
   assert.match(calls[0].q,/p.status='customer_claimed'/);
@@ -203,13 +208,79 @@ test("UI contains customer QR and owner verification, and no automatic printing 
     assert.ok(script);new vm.Script(script[1]);
   }
   assert.match(page,/id="upi-payment-qr"/);
-  assert.match(page,/id="upi-payment-utr"/);
+  assert.doesNotMatch(page,/id="upi-payment-utr"/);
+  assert.match(page,/मैंने पेमेंट कर दिया/);
+  assert.match(page,/id="dummy-card-front"/);
+  assert.match(page,/id="dummy-card-back"/);
+  assert.match(page,/createDummyCardTestPage/);
   assert.match(page,/असली UPI QR/);
   assert.match(owner,/id="shop-upi-vpa"/);
   assert.match(owner,/id="shop-upi-claims"/);
   assert.match(owner,/Payment Received/);
+  assert.match(owner,/autoPrint=1/);
+  assert.match(preview,/authorizeAutoPrintDialog/);
+  assert.match(preview,/window.print\(\)/);
   assert.match(preview,/id="upi-quote"/);
   assert.match(server,/installUpiPrintPayments\(app, pool\)/);
   assert.match(server,/await ensureUpiPrintTables\(pool\)/);
   assert.doesNotMatch(src,/Out-Printer|windows-print-agent\.js|printCanonFixedTestPage/);
+  assert.doesNotMatch(src,/utrPattern|customer_utr=\$|p\.customer_utr/);
+});
+
+
+test("verified-payment TEST print-dialog preflight never allows unpaid, other-shop, rejected or expired files",async()=>{
+  const h=harness();const calls=[];
+  h.module.installUpiPrintPayments(h.app,{query:async(q,args)=>{calls.push({q,args});return {rows:[{id:27}]};}});
+  const denied=res();
+  const handler=h.routes["GET /api/shop/upi-payment/orders/:id/print-ready"];
+  handler[0]({session:{}},denied,()=>{throw Error("unauthorized")});
+  assert.equal(denied.statusCode,401);
+  const okay=res();
+  await h.run("GET /api/shop/upi-payment/orders/:id/print-ready")({...auth,params:{id:"27"}},okay);
+  assert.equal(okay.statusCode,200);
+  assert.equal(okay.body.ready,true);
+  assert.equal(okay.body.openPrintDialogOnly,true);
+  assert.equal(okay.body.automaticPrinting,false);
+  assert.match(calls[0].q,/p.status='paid_manual'/);
+  assert.match(calls[0].q,/o.status='accepted'/);
+  assert.match(calls[0].q,/owner.id=\$1 AND o.id=\$2/);
+  assert.match(calls[0].q,/NOW\(\)-INTERVAL '24 hours'/);
+  assert.deepEqual(Array.from(calls[0].args),[42,"27"]);
+  const h2=harness();
+  h2.module.installUpiPrintPayments(h2.app,{query:async()=>({rows:[]})});
+  const unpaid=res();
+  await h2.run("GET /api/shop/upi-payment/orders/:id/print-ready")({...auth,params:{id:"27"}},unpaid);
+  assert.equal(unpaid.statusCode,409);
+});
+
+test("DUMMY front/back card quote charges shop Aadhaar B&W per-copy rate and rejects multiple page count",async()=>{
+  const h=harness();
+  const calls=[];
+  h.module.installUpiPrintPayments(h.app,{query:async(q,args)=>{
+    calls.push({q,args});
+    if(q.includes("SELECT o.id,o.shop_id"))return {rows:[{
+      id:27,shop_id:3,copies:2,print_mode:"bw",
+      document_kind:"dummy_card_front_back",
+      bw_paise:300,color_paise:1000,aadhaar_bw_paise:500,
+      vpa:"owner@bank",payee_name:"Sample Store"
+    }]};
+    return {rows:[{
+      order_id:27,amount_paise:1000,pages_per_copy:1,
+      payment_reference:payment.payment_reference,status:"awaiting_payment"
+    }]};
+  }});
+  const tooMany=res();
+  await h.run("POST /api/shop/test-file-orders/:id/upi/quote")({
+    ...auth,params:{id:"27"},body:{pagesPerCopy:2}
+  },tooMany);
+  assert.equal(tooMany.statusCode,400);
+  const fine=res();
+  await h.run("POST /api/shop/test-file-orders/:id/upi/quote")({
+    ...auth,params:{id:"27"},body:{pagesPerCopy:1}
+  },fine);
+  assert.equal(fine.statusCode,201);
+  assert.equal(fine.body.payment.amountRupees,"10.00");
+  assert.match(calls[0].q,/o.document_kind/);
+  assert.match(calls[0].q,/aadhaar_bw_paise/);
+  assert.equal(calls.at(-1).args[6],1000);
 });

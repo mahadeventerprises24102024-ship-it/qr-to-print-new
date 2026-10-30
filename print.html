@@ -74,8 +74,32 @@
       <p class="subtitle">बिना Customer Login के एक छोटी टेस्ट PDF/JPG/PNG अपलोड करें (अधिकतम 2 MB)। यह सुविधा सिर्फ दुकान द्वारा Guest Test Upload सक्षम होने पर उपलब्ध होगी। निजी या असली ग्राहक दस्तावेज़ अभी न भेजें।</p>
       <p id="private-upload-status" class="response" role="status" aria-live="polite">Checking private storage...</p>
       <form id="private-upload-form" hidden>
-        <label for="private-file">Non-sensitive test file (max 2 MB)</label>
-        <input id="private-file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg" required>
+        <label for="private-kind">किस प्रकार का Print?</label>
+        <select id="private-kind" name="documentKind" aria-describedby="aadhaar-dummy-warning">
+          <option value="regular_test">PDF / Photo • TEST</option>
+          <option value="dummy_card_front_back">Aadhaar Front + Back Layout • DUMMY TEST ONLY</option>
+        </select>
+        <div id="regular-test-file">
+          <label for="private-file">Non-sensitive test file (max 2 MB)</label>
+          <input id="private-file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg" required>
+        </div>
+        <section id="dummy-card-test-files" hidden style="background:#effaf3;border:1px solid #cce8d4;border-radius:13px;padding:16px;margin:14px 0">
+          <strong>Aadhaar-style Front / Back — 2 Upload Boxes</strong>
+          <p id="aadhaar-dummy-warning" class="subtitle"><strong>सिर्फ DUMMY / SAMPLE कार्ड</strong> की फोटो चुनें। असली Aadhaar Card, Aadhaar Number, QR, पता या किसी की निजी पहचान अभी Upload न करें। दोनों फोटो इस डिवाइस पर एक TEST print page में जुड़ती हैं।</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">
+            <div style="border:2px dashed #bddbc8;padding:13px;border-radius:12px;background:white">
+              <label for="dummy-card-front"><strong>1. Front (सामने)</strong></label>
+              <input id="dummy-card-front" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" disabled>
+              <img id="dummy-front-preview" alt="Sample card front preview, only visible on this device" hidden style="max-width:100%;max-height:150px;object-fit:contain;margin-top:12px">
+            </div>
+            <div style="border:2px dashed #bddbc8;padding:13px;border-radius:12px;background:white">
+              <label for="dummy-card-back"><strong>2. Back (पीछे)</strong></label>
+              <input id="dummy-card-back" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" disabled>
+              <img id="dummy-back-preview" alt="Sample card back preview, only visible on this device" hidden style="max-width:100%;max-height:150px;object-fit:contain;margin-top:12px">
+            </div>
+          </div>
+          <p class="subtitle">दोनों तरफ की डमी फोटो एक A4 TEST पेज पर साथ-साथ लगेंगी। असली Aadhaar Upload अभी उपलब्ध नहीं है।</p>
+        </section>
         <label for="private-copies">Copies</label>
         <select id="private-copies" name="copies">
           <option value="1">1 Copy</option>
@@ -85,7 +109,7 @@
         </select>
         <label for="private-pages-estimate">Pages per copy for price estimate (not uploaded)</label>
         <input type="number" id="private-pages-estimate" min="1" max="200" step="1" value="1">
-        <p class="subtitle" style="margin:8px 0 2px">For PDFs, count all pages. The shop owner checks actual pages before creating a final bill.</p>
+        <p class="subtitle" style="margin:8px 0 2px">Regular PDFs: count all pages. DUMMY front/back card: one combined TEST sheet, with card-style B&amp;W estimate. Shop owner checks actual page count before a quote.</p>
         <label for="private-mode">Print mode (preview only)</label>
         <select id="private-mode" name="printMode">
           <option value="bw">Black &amp; White</option>
@@ -126,16 +150,14 @@
       <p id="track-status" class="response" aria-live="polite" role="status" hidden></p>
       <section id="upi-test-actions" hidden style="margin-top:20px;padding:18px;border:1px solid #b1d9bf;background:#f0fbf3;border-radius:13px">
         <h3 style="margin:0 0 8px">UPI QR Payment · TEST files</h3>
-        <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। <strong>यह असली UPI QR है; पैसे वास्तव में कट सकते हैं।</strong> सिर्फ सुरक्षित TEST फाइलें उपयोग करें। पेमेंट के बाद UTR दें। <strong>दुकानदार बैंक में पैसा देखकर पेमेंट Verify करेगा। UTR खुद पेमेंट का प्रमाण नहीं है।</strong> कोई Automatic Printing नहीं है।</p>
+        <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। <strong>यह असली UPI QR है; पैसे वास्तव में कट सकते हैं।</strong> सिर्फ सुरक्षित TEST फाइलें उपयोग करें। पेमेंट के बाद केवल <strong>मैंने पेमेंट कर दिया</strong> दबाएँ। <strong>दुकानदार बैंक में पैसा देखकर ही Payment Received करेगा।</strong> उसके बाद दुकान के PC पर Print Dialog खुलेगा, लेकिन Print की अंतिम पुष्टि दुकानदार करेगा।</p>
         <button id="upi-payment-check" class="btn" type="button">Show UPI QR / Check Payment</button>
         <div id="upi-payment-details" hidden style="margin-top:14px">
           <img id="upi-payment-qr" alt="UPI QR with shop payee and requested TEST amount" style="max-width:270px;width:100%;background:white;border-radius:9px;border:1px solid #b9dcc7;padding:8px">
           <p id="upi-payment-summary" class="subtitle"></p>
           <a id="upi-payment-open" class="btn" href="#" style="max-width:310px;text-decoration:none">Open UPI App</a>
           <form id="upi-claim-form" style="margin-top:14px">
-            <label for="upi-payment-utr">UPI Transaction Reference / UTR (12–22 digits)</label>
-            <input id="upi-payment-utr" inputmode="numeric" pattern="[0-9]{12,22}" maxlength="22" required autocomplete="off" placeholder="Only after paying">
-            <button id="upi-claim-submit" class="btn" type="submit">Send UTR to Shop for Verification</button>
+            <button id="upi-claim-submit" class="btn" type="submit">मैंने पेमेंट कर दिया — दुकान को बताएँ</button>
           </form>
         </div>
         <p id="upi-payment-message" role="status" aria-live="polite" class="response">अपना TEST Order ID और Private Tracking Code डालें।</p>
@@ -162,6 +184,87 @@
       const privateForm=document.getElementById("private-upload-form");
       const privateMessage=document.getElementById("private-upload-status");
       const privateButton=document.getElementById("private-upload-button");
+      const privateKind=document.getElementById("private-kind");
+      const normalFileBox=document.getElementById("regular-test-file");
+      const normalFileInput=document.getElementById("private-file");
+      const dummyBox=document.getElementById("dummy-card-test-files");
+      const frontInput=document.getElementById("dummy-card-front");
+      const backInput=document.getElementById("dummy-card-back");
+      const frontPreview=document.getElementById("dummy-front-preview");
+      const backPreview=document.getElementById("dummy-back-preview");
+      let dummyPreviewUrls=[];
+      function clearDummyPreviews(){
+        for(const url of dummyPreviewUrls)URL.revokeObjectURL(url);
+        dummyPreviewUrls=[];
+        frontPreview.hidden=true;backPreview.hidden=true;
+        frontPreview.removeAttribute("src");backPreview.removeAttribute("src");
+      }
+      function updateDummyKind(){
+        const isDummy=privateKind.value==="dummy_card_front_back";
+        normalFileBox.hidden=isDummy;
+        normalFileInput.disabled=isDummy;normalFileInput.required=!isDummy;
+        dummyBox.hidden=!isDummy;
+        frontInput.disabled=!isDummy;frontInput.required=isDummy;
+        backInput.disabled=!isDummy;backInput.required=isDummy;
+        document.getElementById("private-pages-estimate").value="1";
+        document.getElementById("private-pages-estimate").disabled=isDummy;
+        document.getElementById("private-mode").value=isDummy?"bw":document.getElementById("private-mode").value;
+        clearDummyPreviews();
+        updatePriceEstimate();
+      }
+      function showDummyPreview(input,img){
+        if(!input.files.length){img.hidden=true;return;}
+        const file=input.files[0];
+        if(file.size>2097152 || file.size<8 || !["image/jpeg","image/png"].includes(file.type)){
+          img.hidden=true;
+          privateNotice("Choose small PNG/JPG dummy TEST card photos (max 2 MB per side).",true);
+          return;
+        }
+        const url=URL.createObjectURL(file);
+        dummyPreviewUrls.push(url);
+        img.src=url;img.hidden=false;
+      }
+      frontInput.addEventListener("change",()=>{clearDummyPreviews();showDummyPreview(frontInput,frontPreview);showDummyPreview(backInput,backPreview);});
+      backInput.addEventListener("change",()=>{clearDummyPreviews();showDummyPreview(frontInput,frontPreview);showDummyPreview(backInput,backPreview);});
+      privateKind.addEventListener("change",updateDummyKind);
+      window.addEventListener("pagehide",clearDummyPreviews);
+      async function createDummyCardTestPage(front,back){
+        if(!front||!back||front.size>2097152||back.size>2097152||
+           front.size<8||back.size<8||
+           !["image/jpeg","image/png"].includes(front.type)||
+           !["image/jpeg","image/png"].includes(back.type))throw new Error("Select two small JPG/PNG DUMMY card samples (each up to 2 MB)");
+        const bitmaps=await Promise.all([createImageBitmap(front),createImageBitmap(back)]);
+        try{
+          if(bitmaps.some(bitmap=>bitmap.width<10||bitmap.height<10||
+             bitmap.width>4000||bitmap.height>4000))throw new Error("DUMMY card images must be 10–4000 pixels on each side");
+          const canvas=document.createElement("canvas");
+          canvas.width=1000;canvas.height=1414;
+          const ctx=canvas.getContext("2d",{alpha:false});
+          if(!ctx)throw new Error("Canvas not available for TEST card layout");
+          ctx.fillStyle="white";ctx.fillRect(0,0,canvas.width,canvas.height);
+          ctx.fillStyle="#333";ctx.font="bold 23px Arial";
+          ctx.fillText("DUMMY TEST CARD - NOT A REAL ID",94,230);
+          const boxes=[
+            {x:72,y:290,img:bitmaps[0],title:"FRONT SAMPLE"},
+            {x:518,y:290,img:bitmaps[1],title:"BACK SAMPLE"}
+          ];
+          for(const part of boxes){
+            ctx.strokeStyle="#6e7c79";ctx.lineWidth=2;
+            ctx.strokeRect(part.x,part.y,410,259);
+            const scale=Math.min(410/part.img.width,259/part.img.height);
+            const w=part.img.width*scale,h=part.img.height*scale;
+            ctx.drawImage(part.img,part.x+(410-w)/2,part.y+(259-h)/2,w,h);
+            ctx.fillStyle="#333";ctx.font="19px Arial";
+            ctx.fillText(part.title,part.x,part.y+290);
+          }
+          const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));
+          if(!blob||blob.size<8||blob.size>2097152)
+            throw new Error("Combined TEST page is too big. Choose smaller sample images.");
+          return new File([blob],"dummy-card-front-back.png",{type:"image/png"});
+        }finally{
+          bitmaps.forEach(bitmap=>bitmap.close());
+        }
+      }
       const trackForm=document.getElementById("track-form");
       const trackMessage=document.getElementById("track-status");
       const trackSubmit=document.getElementById("track-submit");
@@ -204,14 +307,14 @@
               " • Reference: "+p.reference+". कृपया UPI ऐप में नाम और रकम चेक करें।";
             upiDetails.hidden=false;
             upiMessage.textContent=p.status==="rejected"?
-              "Previous UTR rejected. Check bank/payment first; do not pay twice. If the payment was successful, speak to the shop.":
-              "UPI QR ready. After actual payment submit your UTR. A submitted UTR is NOT a verified payment.";
+              "दुकानदार ने पिछली पेमेंट सूचना Reject की थी। पहले बैंक से जाँचें; दोबारा पेमेंट न करें।":
+              "UPI QR तैयार है। असली पेमेंट के बाद मैंने पेमेंट कर दिया दबाएँ। दुकानदार बैंक में पैसा Verify करेगा।";
           }else{
             upiDetails.hidden=true;
             upiMessage.textContent="UPI TEST Order #"+p.orderId+" • ₹"+p.amountRupees+
               " • "+(p.status==="paid_manual"?
               "Payment Received — shop owner manually verified bank credit.":
-              "UTR sent; waiting for shop owner bank verification.")+
+              "ग्राहक ने पेमेंट करने की सूचना दी है; दुकानदार की बैंक जाँच बाकी है।")+
               " No automatic printing.";
           }
         }catch(error){upiDetails.hidden=true;upiMessage.textContent=error.message;}
@@ -220,11 +323,7 @@
       document.getElementById("upi-claim-form").addEventListener("submit",async(event)=>{
         event.preventDefault();
         const button=document.getElementById("upi-claim-submit");
-        const utr=document.getElementById("upi-payment-utr").value.trim();
-        if(!/^[0-9]{12,22}$/.test(utr)){
-          upiMessage.textContent="Enter a valid numeric UTR (12–22 digits).";return;
-        }
-        if(!window.confirm("Have you really paid? UTR केवल दुकानदार को जाँच के लिए भेजा जाएगा; भुगतान तुरंत Confirm नहीं होगा।"))return;
+        if(!window.confirm("क्या आपने अपनी UPI App में सच में भुगतान पूरा कर दिया है? सिर्फ सूचना भेजी जाएगी; दुकान मालिक अपने बैंक में पैसा जाँचकर ही Confirm करेगा।"))return;
         button.disabled=true;
         try{
           const {id,trackingToken}=paytmInputs();
@@ -232,11 +331,11 @@
             encodeURIComponent(id)+"/upi/claim",{
             method:"POST",credentials:"same-origin",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({trackingToken,utr})
+            body:JSON.stringify({trackingToken})
           });
           const data=await response.json().catch(()=>({}));
-          if(!response.ok)throw new Error(data.error||"Could not submit UTR");
-          upiMessage.textContent="UTR sent to shop. Payment NOT yet confirmed. Shop owner will verify their bank credit.";
+          if(!response.ok)throw new Error(data.error||"Could not notify shop about payment");
+          upiMessage.textContent="दुकानदार को पेमेंट की सूचना भेज दी है। अभी Payment Confirmed नहीं है; दुकानदार अपने बैंक में पैसा जाँचेगा।";
           upiDetails.hidden=true;
         }catch(error){upiMessage.textContent=error.message;}
         finally{button.disabled=false;}
@@ -361,7 +460,8 @@
 
       function updatePriceEstimate(){
         const estimate=document.getElementById("private-estimate");
-        const pages=Number(document.getElementById("private-pages-estimate").value);
+        const pages=privateKind.value==="dummy_card_front_back"?1:
+          Number(document.getElementById("private-pages-estimate").value);
         const copies=Number(document.getElementById("private-copies").value);
         if(!publicRates){
           estimate.textContent="Prices temporarily unavailable. Please confirm with the shop owner.";
@@ -372,10 +472,13 @@
           return;
         }
         const mode=document.getElementById("private-mode").value;
-        const rate=mode==="color"?publicRates.color:publicRates.bw;
-        estimate.textContent="Estimated total: "+money(pages*copies*rate)+
-          " ("+pages+" page(s) × "+copies+" copies × "+money(rate)+
-          "). Final bill only after the shop owner checks the pages. No payment now.";
+        const dummy=privateKind.value==="dummy_card_front_back";
+        const rate=dummy&&mode==="bw"?publicRates.aadhaarBw:
+          (mode==="color"?publicRates.color:publicRates.bw);
+        estimate.textContent="Estimated total: "+money((dummy?copies:pages*copies)*rate)+
+          (dummy?" (one DUMMY front/back test card layout × "+copies+" copies × "+money(rate)+")":
+          " ("+pages+" page(s) × "+copies+" copies × "+money(rate)+")")+
+          ". Shop owner will check the final TEST price.";
       }
       document.getElementById("private-pages-estimate").addEventListener("input",updatePriceEstimate);
       document.getElementById("private-copies").addEventListener("change",updatePriceEstimate);
@@ -410,6 +513,10 @@
       }
 
       async function preparePrivateUpload(shopCode) {
+        // Show the category selector and FRONT/BACK DUMMY TEST pickers even
+        // before private storage is configured. Fail CLOSED on actual submit.
+        privateForm.hidden=false;
+        privateButton.disabled=true;
         try {
           const configResponse=await fetch("/api/test-upload/config",{
             credentials:"same-origin",cache:"no-store"
@@ -424,8 +531,8 @@
             privateNotice("Guest TEST uploads are not enabled by this shop yet. You can still send the demo request above.");
             return;
           }
-          privateNotice("Guest TEST upload ready — no login. Only disposable PDF/JPG/PNG samples up to 2 MB; no automatic printing.");
-          privateForm.hidden=false;
+          privateNotice("Guest TEST upload ready — no login. Only disposable PDF/JPG/PNG and DUMMY card samples up to 2 MB; real Aadhaar not allowed.");
+          privateButton.disabled=false;
         } catch(error) {
           privateNotice(error.message,true);
         }
@@ -434,15 +541,21 @@
       privateForm.addEventListener("submit",async(event)=>{
         event.preventDefault();
         if(!verifiedCode || privateButton.disabled) return;
-        const file=document.getElementById("private-file").files[0];
-        if(!file || !file.size || file.size>2097152) {
-          privateNotice("Select a small PDF, PNG or JPG test file (up to 2 MB).",true);
-          return;
-        }
-        const data=new FormData(privateForm);
+        const isDummy=privateKind.value==="dummy_card_front_back";
         privateButton.disabled=true;
-        privateNotice("Sending private test file...");
+        privateNotice(isDummy?"Combining DUMMY card Front + Back into one TEST print sheet...":"Preparing private TEST upload...");
         try {
+          const file=isDummy?
+            await createDummyCardTestPage(frontInput.files[0],backInput.files[0]):
+            normalFileInput.files[0];
+          if(!file||!file.size||file.size>2097152)
+            throw new Error("Choose a safe PDF/JPG/PNG TEST file under 2 MB");
+          const data=new FormData(privateForm);
+          if(isDummy){
+            data.set("file",file);
+            data.set("documentKind","dummy_card_front_back");
+          }
+          privateNotice("Sending private TEST file...");
           const response=await fetch(
             "/api/public/shops/"+verifiedCode+"/test-file-orders",{
               method:"POST",credentials:"same-origin",body:data
@@ -455,6 +568,7 @@
           privateNotice("TEST #"+result.order.id+" stored privately. Your shop will see a Review & Print option in its Quick Print Panel soon. Tracking Code is shown below; shop approval is required.");
           showTracking("test-file-orders",result.order.id,result.trackingToken);
           privateForm.reset();
+          updateDummyKind();
         }catch(error){
           privateNotice(error.message,true);
         }finally{
