@@ -126,16 +126,14 @@
       <p id="track-status" class="response" aria-live="polite" role="status" hidden></p>
       <section id="upi-test-actions" hidden style="margin-top:20px;padding:18px;border:1px solid #b1d9bf;background:#f0fbf3;border-radius:13px">
         <h3 style="margin:0 0 8px">UPI QR Payment · TEST files</h3>
-        <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। <strong>यह असली UPI QR है; पैसे वास्तव में कट सकते हैं।</strong> सिर्फ सुरक्षित TEST फाइलें उपयोग करें। पेमेंट के बाद UTR दें। <strong>दुकानदार बैंक में पैसा देखकर पेमेंट Verify करेगा। UTR खुद पेमेंट का प्रमाण नहीं है।</strong> कोई Automatic Printing नहीं है।</p>
+        <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। <strong>यह असली UPI QR है; पैसे वास्तव में कट सकते हैं।</strong> सिर्फ सुरक्षित TEST फाइलें उपयोग करें। पेमेंट के बाद केवल <strong>मैंने पेमेंट कर दिया</strong> दबाएँ। <strong>दुकानदार बैंक में पैसा देखकर ही Payment Received करेगा।</strong> उसके बाद दुकान के PC पर Print Dialog खुलेगा, लेकिन Print की अंतिम पुष्टि दुकानदार करेगा।</p>
         <button id="upi-payment-check" class="btn" type="button">Show UPI QR / Check Payment</button>
         <div id="upi-payment-details" hidden style="margin-top:14px">
           <img id="upi-payment-qr" alt="UPI QR with shop payee and requested TEST amount" style="max-width:270px;width:100%;background:white;border-radius:9px;border:1px solid #b9dcc7;padding:8px">
           <p id="upi-payment-summary" class="subtitle"></p>
           <a id="upi-payment-open" class="btn" href="#" style="max-width:310px;text-decoration:none">Open UPI App</a>
           <form id="upi-claim-form" style="margin-top:14px">
-            <label for="upi-payment-utr">UPI Transaction Reference / UTR (12–22 digits)</label>
-            <input id="upi-payment-utr" inputmode="numeric" pattern="[0-9]{12,22}" maxlength="22" required autocomplete="off" placeholder="Only after paying">
-            <button id="upi-claim-submit" class="btn" type="submit">Send UTR to Shop for Verification</button>
+            <button id="upi-claim-submit" class="btn" type="submit">मैंने पेमेंट कर दिया — दुकान को बताएँ</button>
           </form>
         </div>
         <p id="upi-payment-message" role="status" aria-live="polite" class="response">अपना TEST Order ID और Private Tracking Code डालें।</p>
@@ -204,14 +202,14 @@
               " • Reference: "+p.reference+". कृपया UPI ऐप में नाम और रकम चेक करें।";
             upiDetails.hidden=false;
             upiMessage.textContent=p.status==="rejected"?
-              "Previous UTR rejected. Check bank/payment first; do not pay twice. If the payment was successful, speak to the shop.":
-              "UPI QR ready. After actual payment submit your UTR. A submitted UTR is NOT a verified payment.";
+              "दुकानदार ने पिछली पेमेंट सूचना Reject की थी। पहले बैंक से जाँचें; दोबारा पेमेंट न करें।":
+              "UPI QR तैयार है। असली पेमेंट के बाद मैंने पेमेंट कर दिया दबाएँ। दुकानदार बैंक में पैसा Verify करेगा।";
           }else{
             upiDetails.hidden=true;
             upiMessage.textContent="UPI TEST Order #"+p.orderId+" • ₹"+p.amountRupees+
               " • "+(p.status==="paid_manual"?
               "Payment Received — shop owner manually verified bank credit.":
-              "UTR sent; waiting for shop owner bank verification.")+
+              "ग्राहक ने पेमेंट करने की सूचना दी है; दुकानदार की बैंक जाँच बाकी है।")+
               " No automatic printing.";
           }
         }catch(error){upiDetails.hidden=true;upiMessage.textContent=error.message;}
@@ -220,11 +218,7 @@
       document.getElementById("upi-claim-form").addEventListener("submit",async(event)=>{
         event.preventDefault();
         const button=document.getElementById("upi-claim-submit");
-        const utr=document.getElementById("upi-payment-utr").value.trim();
-        if(!/^[0-9]{12,22}$/.test(utr)){
-          upiMessage.textContent="Enter a valid numeric UTR (12–22 digits).";return;
-        }
-        if(!window.confirm("Have you really paid? UTR केवल दुकानदार को जाँच के लिए भेजा जाएगा; भुगतान तुरंत Confirm नहीं होगा।"))return;
+        if(!window.confirm("क्या आपने अपनी UPI App में सच में भुगतान पूरा कर दिया है? सिर्फ सूचना भेजी जाएगी; दुकान मालिक अपने बैंक में पैसा जाँचकर ही Confirm करेगा।"))return;
         button.disabled=true;
         try{
           const {id,trackingToken}=paytmInputs();
@@ -232,11 +226,11 @@
             encodeURIComponent(id)+"/upi/claim",{
             method:"POST",credentials:"same-origin",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({trackingToken,utr})
+            body:JSON.stringify({trackingToken})
           });
           const data=await response.json().catch(()=>({}));
-          if(!response.ok)throw new Error(data.error||"Could not submit UTR");
-          upiMessage.textContent="UTR sent to shop. Payment NOT yet confirmed. Shop owner will verify their bank credit.";
+          if(!response.ok)throw new Error(data.error||"Could not notify shop about payment");
+          upiMessage.textContent="दुकानदार को पेमेंट की सूचना भेज दी है। अभी Payment Confirmed नहीं है; दुकानदार अपने बैंक में पैसा जाँचेगा।";
           upiDetails.hidden=true;
         }catch(error){upiMessage.textContent=error.message;}
         finally{button.disabled=false;}
