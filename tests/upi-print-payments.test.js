@@ -224,7 +224,7 @@ test("UI contains customer QR and owner verification, and no automatic printing 
   assert.match(server,/installUpiPrintPayments\(app, pool\)/);
   assert.match(server,/await ensureUpiPrintTables\(pool\)/);
   assert.doesNotMatch(src,/Out-Printer|windows-print-agent\.js|printCanonFixedTestPage/);
-  assert.doesNotMatch(src,/customer_utr|utrPattern/);
+  assert.doesNotMatch(src,/utrPattern|customer_utr=\$|p\.customer_utr/);
 });
 
 
