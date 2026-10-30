@@ -28,7 +28,10 @@ test("dashboard provides review action only from private test file order cards",
   const markup = dashboard.slice(start, end);
   assert.match(markup, /review\.href = "\/shop-print-preview\.html\?order="/);
   assert.match(markup, /review\.rel = "noopener noreferrer"/);
-  assert.match(markup, /controls\.append\(review, download, remove\)/);
+  assert.match(markup, /controls\.append\(review,download\)/);
+  assert.match(markup, /controls\.append\(remove\)/);
+  assert.match(markup, /decision:"accepted"/);
+  assert.match(markup, /decision:"rejected"/);
   assert.ok(!dashboard.includes("/api/agent/print-customer"));
 });
 
@@ -61,9 +64,9 @@ test("private dashboard displays server-supplied printed state, not hardcoded un
   const end = dashboard.indexOf('document.getElementById("refresh-private-orders")');
   assert.ok(start >= 0 && end > start);
   const markup = dashboard.slice(start, end);
-  assert.match(markup, /order\.status === "printed"/);
-  assert.match(markup, /Printed \(owner confirmed\)/);
-  assert.match(markup, /Private, awaiting print/);
+  assert.match(markup, /printed:"PRINTED • owner confirmed physical paper"/);
+  assert.match(markup, /test_only:"NEW • awaiting owner decision"/);
+  assert.match(markup, /statusLabel\[order\.status\]/);
   assert.ok(!markup.includes('desc.textContent = "Private, not printed'));
   assert.ok(!dashboard.includes("PRIVATE TEST FILES • NOT PRINTED"));
 });
