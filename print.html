@@ -513,6 +513,10 @@
       }
 
       async function preparePrivateUpload(shopCode) {
+        // Show the category selector and FRONT/BACK DUMMY TEST pickers even
+        // before private storage is configured. Fail CLOSED on actual submit.
+        privateForm.hidden=false;
+        privateButton.disabled=true;
         try {
           const configResponse=await fetch("/api/test-upload/config",{
             credentials:"same-origin",cache:"no-store"
@@ -527,8 +531,8 @@
             privateNotice("Guest TEST uploads are not enabled by this shop yet. You can still send the demo request above.");
             return;
           }
-          privateNotice("Guest TEST upload ready — no login. Only disposable PDF/JPG/PNG samples up to 2 MB; no automatic printing.");
-          privateForm.hidden=false;
+          privateNotice("Guest TEST upload ready — no login. Only disposable PDF/JPG/PNG and DUMMY card samples up to 2 MB; real Aadhaar not allowed.");
+          privateButton.disabled=false;
         } catch(error) {
           privateNotice(error.message,true);
         }
