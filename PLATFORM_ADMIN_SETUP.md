@@ -62,11 +62,50 @@ Plan names remain feature-access labels; they do not unlock separate feature tie
 - Activate/renew/suspend controls
 - Manual Cash/UPI amount confirmed received and subscription event history
 
+## Shop Owner Payment via UPI QR (manual bank verification only)
+
+UPI checkout: **https://qr-to-print-new.onrender.com/subscription-payment.html**
+
+Newly registered shops are **pending**, so the checkout has a **billing-only login** using their shop-owner email/password. This session does **not** grant access to the shop dashboard. Existing active shops can use it to renew.
+
+The platform itself calculates the payment amount from the subscription plan, never from untrusted customer-entered prices:
+
+| Plan | 30 days | 90 days | 365 days |
+| --- | ---: | ---: | ---: |
+| Starter | ₹49 | ₹147 | ₹588 |
+| Pro | ₹99 | ₹297 | ₹1,188 |
+| Business | ₹199 | ₹597 | ₹2,388 |
+
+**Demo (10 free printed pages)** and **Pay Per Page (₹0.15 per page)** remain available by manual Super Admin selection. No payment checkout is needed for free Demo. Pay Per Page usage is still recorded manually under the Admin Panel.
+
+### Set up your own receiving UPI details on Render
+
+Log in to your own Render Dashboard → **QR-To-Print Web Service → Environment** and set:
+
+- **UPI_PAYMENT_VPA**: The **actual receiving UPI ID** from your bank or UPI app (e.g. a valid ID of the form *yourid@bank*, placeholder only).
+- **UPI_PAYMENT_NAME**: The correct payee/beneficiary name shown by the receiving bank or UPI app.
+
+Save these Environment changes and allow Render to redeploy. **Do not assume your bank account, phone number, or WhatsApp number is a UPI ID.** Double-check the payee and destination by scanning with your own UPI app before you collect any real money. No credentials or beneficiary IDs are hardcoded in GitHub.
+
+The Super Admin dashboard shows whether UPI is configured. Without both valid settings, new UPI payment QR generation remains unavailable.
+
+### Flow and security
+
+1. Owner opens **subscription-payment.html**, signs into their billing-only session and chooses Starter, Pro or Business, plus 30/90/365 days.
+2. The server saves a shop-scoped **pending** payment request with the exact amount and a snapshot of the configured receiving UPI ID/payee name, then generates the QR image.
+3. The owner scans with a UPI app and verifies the **merchant name, receiving UPI ID and amount** on their own payment screen before sending funds.
+4. After successful payment, the owner enters the UPI transaction reference / UTR. The request becomes **submitted**. This is only an assertion, **not** bank verification. A QR scan, reference or screenshot alone is **not** proof that funds were received.
+5. In **Super Admin → Shop Subscription Payments**, independently check the **actual credited funds, exact amount, recipient and UTR** from your own bank account/UPI app. Only when you have confirmed receipt, click **Verify bank receipt & Activate**. Otherwise reject the request. Both actions require separate confirmation.
+6. Manual approval records the received amount, adds a subscription event and activates/extends the selected plan in **one database transaction**. A row lock prevents approving the same request twice. Existing shops and their print orders are not mixed.
+7. Owners can view request statuses **pending / submitted / paid / rejected** in their billing page, and reopen an existing pending QR.
+
+**IMPORTANT:** This is a manual UPI QR payment workflow, **not** an automatic online payment gateway. It does **not** verify UPI transactions, debit accounts, or process refunds automatically. No Paytm or Razorpay gateway is included in this change; an automated payment gateway can be implemented later when you request it.
+
 ## Safety and launch limitations
 
 - Current shop accounts are grandfathered as active legacy accounts; new registration is pending.
 - No auto-deletion on suspension; existing test files retain the one-day private R2 expiry policy.
 - Shop/session and shop-specific QR requests are checked against active subscription state.
 - A separate admin session is required. Shop-owner/customer accounts have no admin privileges.
-- No online charging, subscription webhook, verified payment gateway, password reset, email verification, true printer page-count hardware enforcement, real customer print-job automation, malware scanning, full accounting, GST invoicing or refund system is implemented.
+- No automatic charging or UPI verification, payment gateway integration, refund processing, password reset, email verification, true printer page-count hardware enforcement, real customer print-job automation, malware scanning, full accounting, GST invoicing or refund system is implemented.
 - Real commercial selling requires further security/privacy reviews, operational monitoring, backups, recovery, tax/compliance and real customer printing protections. **Do not upload real Aadhaar or any sensitive ID/document into the current disposable test system.**
