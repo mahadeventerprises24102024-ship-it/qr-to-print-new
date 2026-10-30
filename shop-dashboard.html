@@ -110,7 +110,7 @@
         <p class="description">Manual test opens the browser's print dialog. It does not use the Windows Agent or remote printing.</p>
       </section>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin:22px 0">
-        <button class="btn teal" type="button" id="pair-agent">Generate printer PC pairing key</button>
+        <button class="btn teal" type="button" id="pair-agent">Generate secure Windows pairing key</button>
         <button class="btn light" type="button" id="refresh-agent">Refresh status</button>
         <button class="btn ghost" type="button" id="revoke-agent">Revoke connection</button>
       </div>
@@ -132,13 +132,21 @@
         <button type="button" class="btn light" id="copy-agent-key" style="margin-top:10px">Copy pairing key</button>
         <p class="description">The key will be hidden after copying or 90 seconds. Regenerating it disconnects an earlier pairing.</p>
       </section>
-      <div class="info-list">
-        <div class="info-item"><strong>1.</strong><span>On your Windows printer PC, install the correct printer driver and Node.js 20+ (for optional discovery).</span></div>
-        <div class="info-item"><strong>2.</strong><span>Download this project's GitHub ZIP, extract it, then open PowerShell in that folder.</span></div>
-        <div class="info-item"><strong>3.</strong><span>Run: <code>node windows-print-agent.js</code></span></div>
-        <div class="info-item"><strong>4.</strong><span>Copy the pairing key before running the agent. The updated agent reads Windows Clipboard automatically; refresh status.</span></div>
-      </div>
-      <p class="description" style="margin-top:18px">Windows Agent is optional for printer discovery. Manual browser printing works without it, using the printer selected locally. Keep your pairing key secret and never include it in screenshots.</p>
+      <section style="border:1px solid #b9dfce;background:#f4fbf7;border-radius:13px;padding:17px;margin-top:22px">
+        <div class="eyebrow">WINDOWS AUTO-CONNECT • ONE-TIME SETUP</div>
+        <h3 style="margin:10px 0">Start Printer Agent automatically after Windows Login</h3>
+        <p>एक बार अपने दुकान के Windows कंप्यूटर में Install करें। अगली बार उसी Windows अकाउंट में Login करते ही Agent खुद शुरू होगा और इंटरनेट उपलब्ध होने पर आपकी दुकान से जुड़ जाएगा। <strong>बिना Windows Login किए नहीं चलेगा।</strong> Client documents की Automatic Printing अभी OFF है।</p>
+        <a class="btn teal" href="https://github.com/mahadeventerprises24102024-ship-it/qr-to-print-new/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">Download Windows Agent Installer (GitHub ZIP)</a>
+        <div class="info-list">
+          <div class="info-item"><strong>1. Windows PC</strong><span>Printer का driver और <strong>Node.js 20+</strong> install करें। Installer normal Windows account से चलाएँ, Administrator से नहीं।</span></div>
+          <div class="info-item"><strong>2. New pairing key</strong><span>ऊपर <strong>Generate secure Windows pairing key</strong> → <strong>Copy pairing key</strong> दबाएँ। Key सिर्फ अपने PC पर रखें।</span></div>
+          <div class="info-item"><strong>3. One-time install</strong><span>GitHub ZIP Download → Extract All → <strong>Install-QR-To-Print-Agent.cmd</strong> पर double-click करें। Key Clipboard से सुरक्षित सेव होगी।</span></div>
+          <div class="info-item"><strong>4. Test online</strong><span>Install के बाद <strong>Refresh status</strong> दबाएँ। Windows PC में Login होते ही Agent फिर चालू होगा।</span></div>
+        </div>
+        <p class="description" style="margin-top:15px"><strong>Security:</strong> Key Windows user-specific encrypted form में लोकल PC पर रहती है, GitHub/Task arguments में नहीं। दूसरे PC या Windows account पर अलग Setup करें। बंद करने के लिए ZIP में <code>Uninstall-QR-To-Print-Agent.cmd</code> चलाकर यहाँ <strong>Revoke connection</strong> भी दबाएँ।</p>
+        <p class="description"><a href="https://github.com/mahadeventerprises24102024-ship-it/qr-to-print-new/blob/main/WINDOWS_AGENT_AUTOSTART.md" target="_blank" rel="noopener noreferrer" style="text-decoration:underline">Detailed Auto-Start Setup Guide</a> · अगर Windows की सुरक्षा नीति Task Scheduler को रोकती है, तो Agent Install नहीं होगा; PC administrator से अनुमति लें।</p>
+      </section>
+      <p class="description" style="margin-top:18px">Manual browser printing किसी भी compatible local printer पर Windows Agent के बिना भी काम करती है। Agent केवल Printer Discovery/heartbeat और अलग से मंजूर किए गए Canon fixed test के लिए है। ग्राहक की फाइल को Agent ऑटोमैटिक Print नहीं करता।</p>
     </div></section>
     <section class="panel" id="panel-wallet"><div class="card content-panel">
       <div class="eyebrow">MAHADEV ENTERPRISES • PRINT PRICING</div>
@@ -763,7 +771,7 @@
       document.getElementById("agent-pairing-key").value = data.token;
       document.getElementById("agent-key-box").hidden = false;
       agentKeyTimer = setTimeout(clearAgentKey, 90000);
-      showToast("Pairing key ready. Copy it and paste only into the Windows Agent.");
+      showToast("Pairing key ready. Copy it, then double-click the Windows Auto-Start Installer on your shop PC.");
       await loadAgentStatus();
     } catch(error) { showToast(error.message); }
     finally { button.disabled = false; }
@@ -775,7 +783,7 @@
     try {
       await navigator.clipboard.writeText(token);
       clearAgentKey();
-      showToast("Key copied. Paste it into your Windows Agent only.");
+      showToast("Key copied. Run Install-QR-To-Print-Agent.cmd on the same Windows PC.");
     } catch(error) {
       showToast("Clipboard unavailable. Select and copy the key manually.");
     }
