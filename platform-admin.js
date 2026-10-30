@@ -3,12 +3,13 @@
 const bcrypt = require("bcryptjs");
 const { createHash } = require("node:crypto");
 const rateLimit = require("express-rate-limit");
-const PLANS = Object.freeze(["starter", "pro", "business", "per_page"]);
+const PLANS = Object.freeze(["starter", "pro", "business", "per_page", "demo"]);
 const PLAN_PRICES = Object.freeze({
   starter: Object.freeze({ label: "Starter", monthlyPaise: 4900, perPagePaise: 0 }),
   pro: Object.freeze({ label: "Pro", monthlyPaise: 9900, perPagePaise: 0 }),
   business: Object.freeze({ label: "Business", monthlyPaise: 19900, perPagePaise: 0 }),
-  per_page: Object.freeze({ label: "Pay Per Page", monthlyPaise: 0, perPagePaise: 15 })
+  per_page: Object.freeze({ label: "Pay Per Page", monthlyPaise: 0, perPagePaise: 15 }),
+  demo: Object.freeze({ label: "Demo • 10 free printed pages", monthlyPaise: 0, perPagePaise: 0, freePages: 10 })
 });
 const DURATION_MONTHS = Object.freeze({ 30: 1, 90: 3, 365: 12 });
 function planQuote(planCode, durationDays, pageCount = 0) {
@@ -23,6 +24,7 @@ function planQuote(planCode, durationDays, pageCount = 0) {
     periodMonths: DURATION_MONTHS[durationDays],
     upfrontPaise: plan.monthlyPaise * DURATION_MONTHS[durationDays],
     usagePaise: plan.perPagePaise * pageCount,
+    includedDemoPages: plan.freePages || 0,
     pages: pageCount
   };
 }
@@ -83,6 +85,8 @@ async function ensurePlatformTables(pool) {
     ")"
   ].join(" "));
   await pool.query("CREATE INDEX IF NOT EXISTS platform_page_usage_shop ON platform_page_usage_events(shop_id, created_at DESC, id DESC)");
+  await pool.query(["CREATE TABLE IF NOT EXISTS platform_demo_page_events (","id BIGSERIAL PRIMARY KEY,","shop_id BIGINT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,","pages SMALLINT NOT NULL CHECK (pages BETWEEN 1 AND 10),","recorded_by_email VARCHAR(254) NOT NULL,","created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",")"].join(" "));
+  await pool.query("CREATE INDEX IF NOT EXISTS platform_demo_page_shop ON platform_demo_page_events(shop_id, created_at DESC)");
 }
 const activeStatusSQL = [
   "SELECT s.subscription_status, s.subscription_expires_at FROM shop_owners o",
@@ -151,10 +155,10 @@ function installPlatformAdmin(app,pool,env=process.env) {
     return res.json({
       plans: Object.entries(PLAN_PRICES).map(([code,price])=>({
         code, label: price.label, monthlyPaise: price.monthlyPaise,
-        perPagePaise: price.perPagePaise
+        perPagePaise: price.perPagePaise, freePages: price.freePages || 0
       })),
       durationMonths: DURATION_MONTHS,
-      note: "30/90/365-day access terms are priced as 1/3/12 nominal months. No online charge is made. Pay Per Page billing requires manually verified page entries."
+      note: "Starter/Pro/Business are priced for 1/3/12 nominal months. Pay Per Page is ₹0.15 per manually confirmed page. Demo is one-time, 30 days and 10 confirmed printed pages. No automatic printer usage detection or charging."
     });
   });
   app.get("/api/platform/config",(req,res)=>{
@@ -249,6 +253,7 @@ function installPlatformAdmin(app,pool,env=process.env) {
     }
     const {planCode,durationDays,amountReceivedRupees,paymentMethod,confirmedReceipt}=req.body||{};
     if(!PLANS.includes(planCode)||![30,90,365].includes(durationDays)||
+      (planCode==="demo" && (durationDays!==30 || amountReceivedRupees!==0 || paymentMethod!=="none")) ||
       !Number.isInteger(amountReceivedRupees)||amountReceivedRupees<0||amountReceivedRupees>100000||
       !["none","cash","upi"].includes(paymentMethod)||
       (amountReceivedRupees===0 && paymentMethod!=="none")||
@@ -261,6 +266,12 @@ function installPlatformAdmin(app,pool,env=process.env) {
     try {
       client=await pool.connect();
       await client.query("BEGIN");
+      if(planCode==="demo") {
+        const locked=await client.query("SELECT id FROM shops WHERE id=$1 FOR UPDATE",[req.params.id]);
+        if(!locked.rows.length){await client.query("ROLLBACK");return res.status(404).json({error:"Shop not found"});}
+        const prior=await client.query("SELECT id FROM shop_subscription_events WHERE shop_id=$1 AND action='activate' AND plan_code='demo' LIMIT 1",[req.params.id]);
+        if(prior.rows.length){await client.query("ROLLBACK");return res.status(409).json({error:"One-time Demo already used by this shop"});}
+      }
       const update=await client.query([
         "UPDATE shops SET subscription_status='active',plan_code=$2,",
         "subscription_started_at=COALESCE(subscription_started_at,NOW()),",
