@@ -236,10 +236,12 @@ test("guest test upload inserts NULL customer ID when explicitly enabled", async
   assert.equal(reply.statusCode,201);
   assert.equal(reply.body.guest,true);
   assert.equal(reply.body.order.id,13);
+  assert.match(reply.body.trackingToken,/^[a-f0-9]{48}$/);
   assert.equal(insertValues[0],42);
   assert.equal(insertValues[1],null);
   assert.ok(insertValues[2].startsWith("test-uploads/42/"));
   assert.equal(insertValues[3],"jpeg");
+  assert.match(insertValues[8],/^[a-f0-9]{64}$/);
 });
 
 test("existing database schema migration accepts a null customer id",async()=>{
@@ -297,6 +299,7 @@ test("owner-confirmed print status endpoint requires session, origin and paper c
   assert.equal(values[1],"9");
   assert.ok(sql.includes("owner.id = $1"));
   assert.ok(sql.includes("o.id = $2"));
+  assert.ok(sql.includes("o.status = 'accepted'"),"Only accepted TEST orders can be marked printed");
 });
 
 test("print preview only marks printed after explicit physical paper confirmation", () => {
@@ -321,7 +324,7 @@ test("Render startup migration uses valid repeatable ALTER TABLE instead of malf
     sql.includes("DROP CONSTRAINT IF EXISTS test_file_orders_status_check"));
   assert.ok(migration, "must replace the old status check constraint");
   assert.match(migration, /ADD CONSTRAINT test_file_orders_status_check/);
-  assert.match(migration, /CHECK \(status IN \('test_only','printed'\)\)/);
+  assert.match(migration, /CHECK \(status IN \('test_only','accepted','rejected','printed'\)\)/);
   assert.ok(!statements.some(sql => /\bDO\s+\$/.test(sql)),
     "a malformed dollar-quoted block must not block Render startup");
 });

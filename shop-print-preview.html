@@ -48,7 +48,8 @@
     <div class="page-preview" id="preview"><p>Loading your private file...</p></div>
     <p id="pdf-help" hidden>PDF: click <strong>Open PDF to Print</strong>, then use the PDF viewer's print button or <strong>Ctrl + P</strong>. Select Canon G2010 and choose copies / colour in the print dialog.</p>
     <div id="actions" hidden>
-      <button id="print-image" type="button" hidden>Approve &amp; Print image</button>
+      <button id="accept-order" type="button" hidden>Accept TEST order for printing</button>
+      <button id="print-image" type="button" hidden>Review &amp; Print image</button>
       <a class="btn" id="open-pdf" target="_blank" rel="noopener noreferrer" hidden>Open PDF to Print</a>
       <a class="btn secondary" id="download-file">Download private file</a>
       <button id="mark-printed" type="button" style="background:#285667" hidden>Mark Printed (after checking paper)</button>
@@ -66,6 +67,7 @@
   const actions = document.getElementById("actions");
   const printArea = document.getElementById("print-area");
   const imageButton = document.getElementById("print-image");
+  const acceptButton = document.getElementById("accept-order");
   const pdfLink = document.getElementById("open-pdf");
   const downloadLink = document.getElementById("download-file");
   const markPrinted = document.getElementById("mark-printed");
@@ -94,6 +96,11 @@
       const order = (Array.isArray(listing.orders) ? listing.orders : [])
         .find(entry => String(entry.id) === id);
       if (!order) throw new Error("This order is no longer available for your shop.");
+      if(order.status==="rejected"){
+        throw new Error("This TEST order was rejected and cannot be printed.");
+      }
+      const canPrint=order.status==="accepted";
+      acceptButton.hidden=order.status!=="test_only";
       const types = { pdf: "application/pdf", png: "image/png", jpeg: "image/jpeg" };
       const contentType = types[order.fileType];
       if (!contentType || !Number.isInteger(Number(order.copies)) ||
@@ -129,13 +136,17 @@
       downloadLink.href = objectURL;
       downloadLink.download = "test-order-" + id + "." + extension;
       actions.hidden = false;
-      markPrinted.hidden = order.status === "printed";
+      markPrinted.hidden = !canPrint;
+      if(order.status==="test_only"){
+        status("Review this safe TEST sample. Accept the order before printing.");
+      }
       if (order.status === "printed") status("Order marked Printed by shop owner.");
 
       if (order.fileType === "pdf") {
         preview.textContent = "PDF is ready. Use Open PDF to Print to review it in your browser.";
         document.getElementById("pdf-help").hidden = false;
         pdfLink.href = objectURL;
+        pdfLink.textContent=canPrint?"Open PDF to Print":"Open PDF for REVIEW ONLY";
         pdfLink.hidden = false;
       } else {
         const img = new Image();
@@ -147,8 +158,9 @@
           printImg.alt = "Print preview";
           printArea.replaceChildren(printImg);
           printArea.classList.toggle("bw", order.printMode !== "color");
-          imageButton.hidden = false;
-          status("File ready. Review the image, then click Print to open the print dialog.");
+          imageButton.hidden = !canPrint;
+          status(canPrint?"Accepted TEST image: review and open the print dialog manually.":
+            "Pending shop decision. Review the image; Accept before printing.");
         }, { once: true });
         img.addEventListener("error", () => {
           status("Could not display image; printing is disabled.");
@@ -158,13 +170,31 @@
         img.src = objectURL;
         return;
       }
-      status("PDF ready. Open and review in the PDF viewer before printing.");
+      status(canPrint?"Accepted TEST PDF: review before printing.":
+        "Pending shop decision. Open PDF only for review; Accept before printing.");
     } catch (error) {
       status(error.message || "Unable to load this private test order");
       preview.textContent = "File preview unavailable.";
       actions.hidden = true;
     }
   }
+
+  acceptButton.addEventListener("click",async()=>{
+    if(!currentOrderId||acceptButton.disabled)return;
+    if(!window.confirm("Accept this non-sensitive TEST file? Physical printing still needs manual review."))return;
+    acceptButton.disabled=true;
+    try{
+      const response=await fetch("/api/shop/test-file-orders/"+
+        encodeURIComponent(currentOrderId)+"/decision",{
+        method:"POST",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({decision:"accepted"})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Could not accept test order");
+      location.reload();
+    }catch(error){status(error.message);acceptButton.disabled=false;}
+  });
 
   imageButton.addEventListener("click", () => {
     if (!objectURL || !printArea.querySelector("img")) return;
