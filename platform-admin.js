@@ -125,14 +125,25 @@ function publicShopGate(pool) {
   return async(req,res,next)=>{
     if(!/^[a-f0-9]{32}$/.test(req.params.code||"")) return res.status(400).json({error:"Invalid shop code"});
     try {
-      const found=await pool.query(
-        "SELECT subscription_status, subscription_expires_at FROM shops WHERE public_code=$1",
-        [req.params.code]
-      );
+      const found=await pool.query([
+        "SELECT s.subscription_status, s.subscription_expires_at, s.plan_code,",
+        '(SELECT COALESCE(SUM(pages),0)::int FROM platform_demo_page_events d WHERE d.shop_id=s.id) AS "demoPagesUsed"',
+        "FROM shops s WHERE s.public_code=$1"
+      ].join(" "),[req.params.code]);
       if(!found.rows.length)return res.status(404).json({error:"Shop not found"});
       if(!subscriptionActive(found.rows[0]))return res.status(403).json({
         error:"This shop QR is not active. Contact the shop owner."
       });
+      // Prevent new guest requests once the Demo's manually confirmed
+      // printed-page quota is exhausted. Existing shop records remain visible
+      // to the logged-in owner. This is not printer-hardware enforcement.
+      if(found.rows[0].plan_code==="demo" &&
+         Number(found.rows[0].demoPagesUsed||0)>=10){
+        return res.status(403).json({
+          code:"DEMO_QUOTA_EXHAUSTED",
+          error:"10-page free Demo completed. Ask the shop owner to activate a paid plan."
+        });
+      }
       next();
     }catch(error){
       console.error("Public shop subscription gate failed:",error);
