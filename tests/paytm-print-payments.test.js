@@ -49,7 +49,7 @@ function makeHarness(signatureValid=true,doFetch=async()=>{throw Error("unexpect
       if(name==="paytmchecksum")return Paytm;
       throw Error("unknown dependency "+name);
     },
-    URL,Buffer,console,AbortSignal
+    URL,Buffer,console,AbortSignal,fetch:doFetch
   },{filename:"paytm-print-payments.js"});
   const routes={};
   const app={
