@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="QR-To-Print: one secure sign-in page for Super Admin, Shopkeeper and Customer.">
+  <title>3-in-1 Login | QR-To-Print</title>
+  <style>
+    :root{--ink:#182e29;--muted:#61746d;--green:#087b63;--lime:#ddf591;--line:#deebe3;--paper:#f3f8f4;--white:#fff}
+    *{box-sizing:border-box}
+    body{margin:0;color:var(--ink);background:var(--paper);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;line-height:1.55}
+    a{color:var(--green);text-underline-offset:3px}
+    .header{background:#fff;border-bottom:1px solid var(--line)}
+    .head-wrap{max-width:1090px;margin:auto;padding:18px 22px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+    .brand{display:flex;gap:10px;align-items:center;text-decoration:none;color:var(--ink);font-weight:850;font-size:19px}
+    .mark{width:37px;height:37px;border-radius:11px;display:grid;place-items:center;background:var(--lime);color:#1b5339;font-size:12px}
+    .back{font-size:13px;font-weight:700}
+    .layout{max-width:1090px;margin:0 auto;padding:66px 22px 80px;display:grid;grid-template-columns:.92fr 1.08fr;gap:62px;align-items:start}
+    .eyebrow{font-size:11px;color:var(--green);font-weight:850;letter-spacing:2px;text-transform:uppercase}
+    h1{font-size:clamp(34px,4.6vw,57px);line-height:1.12;letter-spacing:-1.8px;margin:17px 0}
+    h1 span{color:var(--green)}
+    .intro>p{color:var(--muted);font-size:15px;max-width:440px}
+    .features{margin-top:30px;display:grid;gap:17px}
+    .feature{display:flex;gap:13px;align-items:flex-start;font-size:13px;color:var(--muted)}
+    .feature b{color:var(--ink);display:block;font-size:14px}
+    .glyph{display:grid;place-items:center;flex:none;width:36px;height:36px;background:#dcefe4;border-radius:11px;color:var(--green);font-size:17px}
+    .card{background:white;border:1px solid var(--line);border-radius:22px;padding:29px;box-shadow:0 20px 65px #163a2a13}
+    .card h2{font-size:24px;letter-spacing:-.6px;margin:0 0 5px}
+    .sub{color:var(--muted);font-size:13px;margin:0 0 21px}
+    .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;background:#f0f5f1;padding:6px;border-radius:12px;margin-bottom:27px}
+    .tab{border:0;border-radius:9px;background:transparent;color:#59746a;padding:13px 6px;font-size:13px;font-weight:800;cursor:pointer;min-height:47px}
+    .tab[aria-selected="true"]{background:white;color:#06765c;box-shadow:0 3px 12px #1c372b17}
+    .tab:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #419d83;outline-offset:2px}
+    .panel h3{font-size:20px;margin:0 0 4px}
+    .panel p{font-size:12px;color:var(--muted);margin:0 0 20px;line-height:1.65}
+    .panel label{display:block;font-size:12px;font-weight:750;margin:15px 0 7px}
+    .panel input{width:100%;padding:13px 14px;font:inherit;font-size:14px;border:1px solid #d4e3db;border-radius:10px;background:#fff;color:var(--ink)}
+    .submit{display:block;border:0;background:var(--green);color:white;border-radius:10px;padding:14px 18px;width:100%;font:750 14px inherit;font-size:14px;font-weight:800;cursor:pointer;margin-top:23px}
+    .submit:disabled{opacity:.6;cursor:wait}
+    .message{font-size:12px;color:#235c44;border:1px solid #d1e8d9;background:#eaf7ee;padding:12px;border-radius:10px;margin:15px 0 0;overflow-wrap:anywhere}
+    .message.error{color:#992f25;border-color:#f0c6c1;background:#fff0ec}
+    .footlinks{font-size:13px;margin:20px 0 0;display:flex;gap:12px;flex-wrap:wrap}
+    .notice{margin-top:23px;padding:13px 15px;border:1px solid #ecdca9;border-radius:11px;background:#fff9e8;color:#705c2e;font-size:12px;line-height:1.6}
+    [hidden]{display:none!important}
+    @media(max-width:800px){.layout{grid-template-columns:1fr;gap:28px;padding:39px 20px 55px}.intro h1{font-size:39px}.card{max-width:590px;width:100%}}
+    @media(max-width:440px){.head-wrap{padding:15px 18px}.card{padding:21px}.tab{font-size:11px;padding:12px 3px}.layout{padding:27px 14px 45px}.intro h1{font-size:34px}}
+  </style>
+</head>
+<body>
+  <header class="header"><div class="head-wrap">
+    <a class="brand" href="/"><span class="mark">QR</span>QR-To-Print</a>
+    <a class="back" href="/">← Home</a>
+  </div></header>
+  <main class="layout">
+    <section class="intro">
+      <span class="eyebrow">One website · Three secure logins</span>
+      <h1>एक वेबसाइट.<br><span>तीन अलग Login.</span></h1>
+      <p>Super Admin, दुकानदार और ग्राहक — सभी एक ही जगह से अपने अकाउंट में प्रवेश करें। Login के बाद हर यूज़र को सिर्फ उसके अपने अधिकार मिलेंगे।</p>
+      <div class="features">
+        <div class="feature"><span class="glyph">✦</span><div><b>Super Admin</b>सभी दुकानों की Approval, Subscription और Platform Management।</div></div>
+        <div class="feature"><span class="glyph">▣</span><div><b>Shopkeeper</b>अपनी दुकान का QR, Print Orders, UPI Verification और Dashboard।</div></div>
+        <div class="feature"><span class="glyph">◉</span><div><b>Customer</b>अपना अकाउंट और Dashboard; Print Request के लिए दुकान का QR इस्तेमाल करें।</div></div>
+      </div>
+    </section>
+    <section class="card" aria-label="Choose login role">
+      <h2>Welcome Back</h2>
+      <p class="sub">अपना Login प्रकार चुनिए और Email/Password भरिए।</p>
+      <div class="tabs" role="tablist" aria-label="Login account type">
+        <button type="button" id="tab-admin" class="tab" role="tab" aria-controls="panel-admin" aria-selected="false" data-role="admin">Super Admin</button>
+        <button type="button" id="tab-shop" class="tab" role="tab" aria-controls="panel-shop" aria-selected="true" data-role="shop">Shopkeeper</button>
+        <button type="button" id="tab-customer" class="tab" role="tab" aria-controls="panel-customer" aria-selected="false" data-role="customer">Customer</button>
+      </div>
+      <section id="panel-admin" class="panel" role="tabpanel" aria-labelledby="tab-admin" hidden>
+        <h3>Super Admin Login</h3>
+        <p>यह लॉगिन केवल Platform Owner के लिए है। Admin credentials Render के सुरक्षित Environment में सेट होते हैं।</p>
+        <form id="form-admin" data-role="admin">
+          <label for="admin-email">Admin Email</label>
+          <input id="admin-email" name="email" type="email" maxlength="254" autocomplete="username" required>
+          <label for="admin-password">Password</label>
+          <input id="admin-password" name="password" type="password" autocomplete="current-password" required>
+          <button class="submit" type="submit">Open Super Admin Panel →</button>
+        </form>
+        <p id="message-admin" class="message" role="status" aria-live="polite" hidden></p>
+      </section>
+      <section id="panel-shop" class="panel" role="tabpanel" aria-labelledby="tab-shop">
+        <h3>Shopkeeper Login</h3>
+        <p>दुकानदार अपने Shop Account से Login करके उसी दुकान का Dashboard खोल सकते हैं।</p>
+        <form id="form-shop" data-role="shop">
+          <label for="shop-email">Shop Owner Email</label>
+          <input id="shop-email" name="email" type="email" maxlength="254" autocomplete="username" required>
+          <label for="shop-password">Password</label>
+          <input id="shop-password" name="password" type="password" autocomplete="current-password" required>
+          <button class="submit" type="submit">Open Shop Dashboard →</button>
+        </form>
+        <p id="message-shop" class="message" role="status" aria-live="polite" hidden></p>
+        <div class="footlinks"><a href="/shop-login.html">New Shop? Register</a><a href="/subscription-payment.html">Subscription / Renew</a></div>
+      </section>
+      <section id="panel-customer" class="panel" role="tabpanel" aria-labelledby="tab-customer" hidden>
+        <h3>Customer Login</h3>
+        <p>ग्राहक अपना अकाउंट खोल सकते हैं। TEST Print के लिए संबंधित Shop का QR Code स्कैन करें।</p>
+        <form id="form-customer" data-role="customer">
+          <label for="customer-email">Customer Email</label>
+          <input id="customer-email" name="email" type="email" maxlength="254" autocomplete="username" required>
+          <label for="customer-password">Password</label>
+          <input id="customer-password" name="password" type="password" autocomplete="current-password" required>
+          <button class="submit" type="submit">Open Customer Dashboard →</button>
+        </form>
+        <p id="message-customer" class="message" role="status" aria-live="polite" hidden></p>
+        <div class="footlinks"><a href="/login.html">New Customer? Register</a></div>
+      </section>
+      <div class="notice">TEST MODE: Aadhaar जैसे असली पहचान दस्तावेज़ अपलोड न करें। किसी का पासवर्ड या OTP साझा न करें। सिर्फ सही भूमिका के अकाउंट से Login करें।</div>
+    </section>
+  </main>
+  <script>
+  "use strict";
+  (() => {
+    const roles = {
+      admin:{ endpoint:"/api/platform/login", target:"/admin-dashboard.html" },
+      shop:{ endpoint:"/api/shop/login", target:"/shop-dashboard.html" },
+      customer:{ endpoint:"/api/login", target:"/dashboard.html" }
+    };
+    const tabs = Array.from(document.querySelectorAll('[role="tab"][data-role]'));
+    function chooseRole(role, focus=false) {
+      if (!Object.prototype.hasOwnProperty.call(roles,role)) role="shop";
+      for(const key of Object.keys(roles)){
+        const tab=document.getElementById("tab-"+key);
+        const panel=document.getElementById("panel-"+key);
+        const active=key===role;
+        tab.setAttribute("aria-selected",String(active));
+        tab.tabIndex=active?0:-1;
+        panel.hidden=!active;
+      }
+      if(focus)document.getElementById("tab-"+role).focus();
+    }
+    tabs.forEach((tab,index)=>{
+      tab.addEventListener("click",()=>chooseRole(tab.dataset.role));
+      tab.addEventListener("keydown",event=>{
+        if(!["ArrowRight","ArrowLeft","Home","End"].includes(event.key))return;
+        event.preventDefault();
+        let next=index;
+        if(event.key==="ArrowRight")next=(index+1)%tabs.length;
+        else if(event.key==="ArrowLeft")next=(index+tabs.length-1)%tabs.length;
+        else if(event.key==="Home")next=0;
+        else next=tabs.length-1;
+        chooseRole(tabs[next].dataset.role,true);
+      });
+    });
+    const fromQuery=new URLSearchParams(location.search).get("role");
+    chooseRole(fromQuery || "shop");
+    for(const role of Object.keys(roles)){
+      const form=document.getElementById("form-"+role);
+      const message=document.getElementById("message-"+role);
+      form.addEventListener("submit",async event=>{
+        event.preventDefault();
+        const button=form.querySelector('button[type="submit"]');
+        const email=form.querySelector('input[name="email"]').value.trim();
+        const password=form.querySelector('input[name="password"]').value;
+        button.disabled=true;
+        message.hidden=true;
+        try{
+          const response=await fetch(roles[role].endpoint,{
+            method:"POST",
+            credentials:"same-origin",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({email,password})
+          });
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error || "Login failed. Check your email and password.");
+          form.querySelector('input[name="password"]').value="";
+          window.location.assign(roles[role].target);
+        }catch(error){
+          message.textContent=error.message || "Login failed. Please try again.";
+          message.classList.add("error");
+          message.hidden=false;
+          button.disabled=false;
+        }
+      });
+    }
+  })();
+  </script>
+</body>
+</html>
