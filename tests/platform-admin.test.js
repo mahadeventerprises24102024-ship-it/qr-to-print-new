@@ -6,7 +6,7 @@ const path=require("node:path");
 const vm=require("node:vm");
 const bcrypt=require("bcryptjs");
 const {
-  adminConfig,credentialVersion,subscriptionActive,ensurePlatformTables,
+  PLAN_PRICES,planQuote,adminConfig,credentialVersion,subscriptionActive,ensurePlatformTables,
   shopApiGate,shopPageGate,publicShopGate,installPlatformAdmin
 }=require("../platform-admin");
 
@@ -55,11 +55,13 @@ test("pending, suspended, expired denied; legacy active shops grandfathered",()=
 test("migration is backward compatible and records subscription audit",async()=>{
   const statements=[];
   await ensurePlatformTables({query:async sql=>{statements.push(sql);return {rows:[]};}});
-  assert.equal(statements.length,6);
+  assert.equal(statements.length,10);
   assert.match(statements[0],/DEFAULT 'active'/);
   assert.match(statements[1],/DEFAULT 'legacy'/);
   assert.match(statements[4],/CREATE TABLE IF NOT EXISTS shop_subscription_events/);
   assert.match(statements[4],/received_paise/);
+  assert.match(statements[6],/platform_page_usage_events/);
+  assert.match(statements[8],/platform_demo_page_events/);
 });
 test("shop-owner API sessions require active plan on every request",async()=>{
   let state={subscription_status:"active",subscription_expires_at:null};
@@ -97,7 +99,7 @@ test("shop dashboard blocks suspended owners even with old sessions",async()=>{
 test("public QR for pending shop cannot access uploads, demo orders or prices",async()=>{
   let rows=[{subscription_status:"pending",subscription_expires_at:null}];
   const gate=publicShopGate({query:async(sql,params)=>{
-    assert.match(sql,/WHERE public_code=\$1/);
+    assert.match(sql,/WHERE s\.public_code=\$1/);
     assert.deepEqual(params,["a".repeat(32)]);
     return {rows};
   }});
@@ -109,6 +111,13 @@ test("public QR for pending shop cannot access uploads, demo orders or prices",a
   rows=[{subscription_status:"active",subscription_expires_at:null}];
   await gate({params:{code:"a".repeat(32)}},response(),()=>{called=true;});
   assert.equal(called,true);
+  rows=[{subscription_status:"active",subscription_expires_at:null,plan_code:"demo",demoPagesUsed:10}];
+  called=false;
+  const exhausted=response();
+  await gate({params:{code:"a".repeat(32)}},exhausted,()=>{called=true;});
+  assert.equal(exhausted.statusCode,403);
+  assert.equal(exhausted.body.code,"DEMO_QUOTA_EXHAUSTED");
+  assert.equal(called,false);
   const invalid=response();
   await gate({params:{code:"invalid"}},invalid,()=>{});
   assert.equal(invalid.statusCode,400);
@@ -230,4 +239,156 @@ test("admin HTML pages and shop login script parse; registration must be pending
   assert.match(shopAuth,/INSERT INTO shops\(name, public_code, subscription_status, plan_code\)/);
   assert.match(shopAuth,/'pending'/);
   assert.match(shopAuth,/account\.subscription_status !== "active"/);
+});
+
+
+test("plan catalog prices monthly Starter 49, Pro 99, Business 199, per page 15p and Demo 10 prints",async()=>{
+  assert.equal(PLAN_PRICES.starter.monthlyPaise,4900);
+  assert.equal(PLAN_PRICES.pro.monthlyPaise,9900);
+  assert.equal(PLAN_PRICES.business.monthlyPaise,19900);
+  assert.equal(PLAN_PRICES.per_page.perPagePaise,15);
+  assert.equal(PLAN_PRICES.demo.freePages,10);
+  assert.equal(planQuote("starter",30).upfrontPaise,4900);
+  assert.equal(planQuote("pro",90).upfrontPaise,29700);
+  assert.equal(planQuote("business",365).upfrontPaise,238800);
+  assert.equal(planQuote("per_page",30,100).usagePaise,1500);
+  assert.equal(planQuote("demo",30).includedDemoPages,10);
+  assert.equal(planQuote("demo",30).upfrontPaise,0);
+  assert.throws(()=>planQuote("demo",31));
+  const routes=makeApp({query:async()=>({rows:[]})},auth);
+  const denied=response();
+  routes["GET /api/platform/plans"][0]({session:{}},denied,()=>{throw Error("must not be anonymous");});
+  assert.equal(denied.statusCode,401);
+  let nextCalled=false;
+  routes["GET /api/platform/plans"][0](sessionReq(),response(),()=>{nextCalled=true;});
+  assert.equal(nextCalled,true);
+  const plans=response();
+  routes["GET /api/platform/plans"][1](sessionReq(),plans);
+  assert.equal(plans.body.plans.length,5);
+  assert.equal(plans.body.plans.find(p=>p.code==="demo").freePages,10);
+});
+
+test("Demo activation requires exactly 30 days and zero actual payment",async()=>{
+  const routes=makeApp({connect:async()=>{throw Error("invalid activation must not query");}},auth);
+  const handler=routes["POST /api/platform/shops/:id/activate"][1];
+  for(const body of [
+    {planCode:"demo",durationDays:90,amountReceivedRupees:0,paymentMethod:"none"},
+    {planCode:"demo",durationDays:30,amountReceivedRupees:10,paymentMethod:"cash",confirmedReceipt:true}
+  ]){
+    const r=response();
+    await handler(sessionReq(body),r);
+    assert.equal(r.statusCode,400);
+  }
+});
+
+test("one-time Demo activation checks prior grants under transaction lock",async()=>{
+  let alreadyUsed=false;
+  const statements=[];
+  const client={
+    async query(sql,params){
+      statements.push({sql,params});
+      if(sql.includes("SELECT id FROM shops WHERE id=$1 FOR UPDATE"))return {rows:[{id:3}]};
+      if(sql.includes("FROM shop_subscription_events WHERE shop_id"))return {rows:alreadyUsed?[{id:7}]:[]};
+      if(sql.includes("UPDATE shops"))return {rows:[{id:3,name:"Demo Shop",status:"active",planCode:"demo"}]};
+      return {rows:[]};
+    },
+    release(){}
+  };
+  const routes=makeApp({connect:async()=>client},auth);
+  const handler=routes["POST /api/platform/shops/:id/activate"][1];
+  const approved=response();
+  await handler(sessionReq({planCode:"demo",durationDays:30,amountReceivedRupees:0,paymentMethod:"none"}),approved);
+  assert.equal(approved.statusCode,200);
+  assert.equal(approved.body.shop.planCode,"demo");
+  assert.ok(statements.some(x=>x.sql.includes("FOR UPDATE")));
+  assert.ok(statements.some(x=>x.sql.includes("shop_subscription_events")));
+  alreadyUsed=true;
+  statements.length=0;
+  const repeated=response();
+  await handler(sessionReq({planCode:"demo",durationDays:30,amountReceivedRupees:0,paymentMethod:"none"}),repeated);
+  assert.equal(repeated.statusCode,409);
+  assert.ok(statements.some(x=>x.sql==="ROLLBACK"));
+  assert.ok(!statements.some(x=>x.sql.includes("UPDATE shops")));
+});
+
+test("Demo usage atomically enforces 10 confirmed free pages and shop plan",async()=>{
+  let used=7,active=true,inserted=0,releaseCount=0;
+  const queries=[];
+  const client={
+    async query(sql,params){
+      queries.push({sql,params});
+      if(sql.includes("SELECT id FROM shops WHERE id=$1 AND plan_code='demo'")){
+        assert.match(sql,/FOR UPDATE/);
+        return {rows:active?[{id:3}]:[]};
+      }
+      if(sql.includes('SELECT COALESCE(SUM(pages),0)::int AS "pagesUsed"')){
+        return {rows:[{pagesUsed:used}]};
+      }
+      if(sql.includes("INSERT INTO platform_demo_page_events")){
+        inserted++;
+        used+=params[1];
+        return {rows:[{id:inserted,shopId:3,pages:params[1]}]};
+      }
+      return {rows:[]};
+    },release(){releaseCount++;}
+  };
+  const routes=makeApp({connect:async()=>client},auth);
+  const middleware=routes["POST /api/platform/shops/:id/demo-usage"][0];
+  const unauthorized=response();
+  middleware({session:{shopOwnerId:3}},unauthorized,()=>{throw Error("shop owner must not record platform pages");});
+  assert.equal(unauthorized.statusCode,401);
+  const handler=routes["POST /api/platform/shops/:id/demo-usage"][1];
+  const bad=response();
+  await handler(sessionReq({pages:3,confirmedPrintedPages:false}),bad);
+  assert.equal(bad.statusCode,400);
+  const moreThanRemaining=response();
+  await handler(sessionReq({pages:4,confirmedPrintedPages:true}),moreThanRemaining);
+  assert.equal(moreThanRemaining.statusCode,409);
+  assert.ok(queries.some(x=>x.sql==="ROLLBACK"));
+  assert.equal(inserted,0);
+  const justEnough=response();
+  await handler(sessionReq({pages:3,confirmedPrintedPages:true}),justEnough);
+  assert.equal(justEnough.statusCode,201);
+  assert.equal(justEnough.body.pagesUsed,10);
+  assert.equal(justEnough.body.pagesRemaining,0);
+  assert.equal(inserted,1);
+  const fullyUsed=response();
+  await handler(sessionReq({pages:1,confirmedPrintedPages:true}),fullyUsed);
+  assert.equal(fullyUsed.statusCode,409);
+  active=false;
+  const inactive=response();
+  await handler(sessionReq({pages:1,confirmedPrintedPages:true}),inactive);
+  assert.equal(inactive.statusCode,409);
+  assert.equal(releaseCount,4);
+});
+
+test("shop plan usage is scoped to the signed-in shop owner",async()=>{
+  const params=[];
+  const routes=makeApp({query:async(sql,p)=>{
+    assert.match(sql,/o\.id=\$1/);
+    params.push(p);
+    return {rows:[{planCode:"demo",expiresAt:"2026-11-29",demoPagesUsed:7,perPageRecordedPages:0}]};
+  }},auth);
+  const handler=routes["GET /api/shop/plan-usage"][0];
+  const denied=response();
+  await handler({session:{}},denied);
+  assert.equal(denied.statusCode,401);
+  const r=response();
+  await handler({session:{shopOwnerId:42}},r);
+  assert.deepEqual(params,[[42]]);
+  assert.equal(r.body.demoPagesRemaining,3);
+  assert.equal(r.body.demoPagesUsed,7);
+});
+
+test("admin UI includes five subscription choices and manual Demo usage tracking",()=>{
+  const html=fs.readFileSync(path.resolve(__dirname,"..","admin-dashboard.html"),"utf8");
+  assert.match(html,/Demo — 10 free prints/);
+  assert.match(html,/Starter — ₹49/);
+  assert.match(html,/Pro — ₹99/);
+  assert.match(html,/Business — ₹199/);
+  assert.match(html,/Pay Per Page — ₹0\.15/);
+  assert.match(html,/Record Demo printed pages/);
+  assert.match(html,/demoPagesUsed/);
+  assert.match(html,/loadPlanPrices\(\)/);
+  assert.match(html,/loadUsage\(\)/);
 });

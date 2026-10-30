@@ -42,6 +42,13 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
 #alert{margin:14px 0;padding:13px;border-radius:9px;background:#eaf4ed;color:#28563c;font-size:13px}
 #alert.error{background:#fff0eb;color:#8f3935}
 .empty{font-size:14px;color:#62717a}
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:15px 0}
+.plan-card{border:1px solid #dce9e7;background:#f6fbf9;border-radius:12px;padding:15px}
+.plan-card strong{display:block;font-size:16px;margin-top:6px}
+.plan-card small{color:#60717b;font-size:12px}
+.quote{font-size:13px;color:#076d5f;font-weight:800;display:block;margin:10px 0}
+.quota{font-weight:800;color:#087d71}
+.usage-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
 @media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.stat{padding:14px}.stat strong{font-size:25px}.shop{padding:14px}.fields label{width:calc(50% - 10px)}.fields select,.fields input{width:100%}.fields label.wide{width:100%}}
 </style>
 </head>
@@ -55,6 +62,12 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   <h1>Shop Owners & Subscriptions</h1>
   <p class="sub">नई दुकानें पहले <b>Pending</b> रहती हैं। बिक्री या Trial की पुष्टि के बाद 30, 90 या 365 दिन का एक्सेस दें। प्रत्येक दुकानदार का अपना Dashboard, QR Code, Orders और Rates अलग हैं।</p>
   <div id="alert" role="status" hidden></div>
+  <section class="section" aria-label="Published subscription price list">
+    <div class="eyebrow">SUBSCRIPTION PLANS</div>
+    <h2 style="margin-top:8px">Shop Owner Plans &amp; Pricing</h2>
+    <div class="plan-grid" id="plan-price-list">Loading plan prices...</div>
+    <p class="note">Monthly plans: 30 / 90 / 365 days = 1 / 3 / 12 monthly charges. Pay Per Page: 15 paise per manually confirmed printed page. Demo: one-time, first 10 confirmed printed pages free within 30 days. These plans have the same feature access for now. Payments are not automatic.</p>
+  </section>
   <div class="stats">
     <div class="stat"><span>Total registered shops</span><strong id="count-all">—</strong></div>
     <div class="stat"><span>Active subscriptions</span><strong id="count-active">—</strong></div>
@@ -66,6 +79,11 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
       <div style="display:flex;gap:10px;flex-wrap:wrap"><input id="shop-search" class="input" type="search" placeholder="Search shop name or owner email"><button id="refresh" type="button">Refresh</button></div>
     </div>
     <div class="shop-list" id="shops" role="status" aria-live="polite">Loading shops...</div>
+  </section>
+  <section class="section">
+    <div class="section-head"><h2>Recorded print-page usage</h2><button id="usage-refresh" class="outline" type="button">Refresh page usage</button></div>
+    <p class="sub">Pay Per Page charges and Demo quota are based on manually verified entries, not automatic Canon printer reports.</p>
+    <div id="usage-history" role="status" aria-live="polite">Loading usage...</div>
   </section>
   <section class="section">
     <div class="section-head"><h2>Subscription activity</h2><button id="history-refresh" class="outline" type="button">Refresh history</button></div>
@@ -82,6 +100,39 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   const alertBox=document.getElementById("alert");
   const search=document.getElementById("shop-search");
   let cachedShops=[];
+  let planCatalog={
+    starter:{label:"Starter",monthlyPaise:4900,perPagePaise:0,freePages:0},
+    pro:{label:"Pro",monthlyPaise:9900,perPagePaise:0,freePages:0},
+    business:{label:"Business",monthlyPaise:19900,perPagePaise:0,freePages:0},
+    per_page:{label:"Pay Per Page",monthlyPaise:0,perPagePaise:15,freePages:0},
+    demo:{label:"Demo • 10 Free Prints",monthlyPaise:0,perPagePaise:0,freePages:10}
+  };
+  const monthsByDuration={30:1,90:3,365:12};
+  function planPrice(code,days){
+    const item=planCatalog[code]||planCatalog.starter;
+    if(item.freePages)return "FREE • 10 prints total • 30 days";
+    if(item.perPagePaise)return "₹0.15 per manually confirmed page • no fixed monthly fee";
+    return rupees((item.monthlyPaise*monthsByDuration[days])/100)+" for "+days+" days";
+  }
+  async function loadPlanPrices(){
+    try{
+      const data=await request("/api/platform/plans");
+      if(Array.isArray(data.plans)){
+        planCatalog=Object.fromEntries(data.plans.map(p=>[p.code,p]));
+      }
+      const list=document.getElementById("plan-price-list");
+      list.replaceChildren();
+      Object.entries(planCatalog).forEach(([key,plan])=>{
+        const card=element("div","plan-card");
+        card.append(element("div","eyebrow",plan.label));
+        card.append(element("strong",null,planPrice(key,30)));
+        if(plan.freePages)card.append(element("small",null,"One-time 10-page Demo • No charge"));
+        else if(plan.perPagePaise)card.append(element("small",null,"100 pages = ₹15 • 1,000 pages = ₹150"));
+        else card.append(element("small",null,"90 days: "+planPrice(key,90)+" • 365 days: "+planPrice(key,365)));
+        list.append(card);
+      });
+    }catch(error){notify("Could not load plan catalogue: "+error.message,true);}
+  }
   function notify(message,error=false){alertBox.textContent=message;alertBox.classList.toggle("error",error);alertBox.hidden=false;}
   const rupees=value=>"₹"+Number(value).toLocaleString("en-IN");
   const date=value=>value?new Date(value).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"Unlimited (legacy)";
@@ -136,11 +187,23 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
       identification.append(element("h3",null,shop.name));
       identification.append(element("p",null,"Shop #"+shop.id+" • Owner: "+(shop.ownerName||"—")+" • "+(shop.ownerEmail||"—")));
       identification.append(element("p",null,"Plan: "+shop.planCode+" • Expires: "+date(shop.expiresAt)+" • Test orders: "+shop.testOrders+" • Bills: "+shop.bills));
+      if(shop.planCode==="demo"){
+        const used=Number(shop.demoPagesUsed||0);
+        identification.append(element("p","quota","Demo: "+used+" / 10 confirmed printed pages • "+Math.max(0,10-used)+" remaining"));
+      }else if(shop.planCode==="per_page"){
+        identification.append(element("p","quota","Recorded usage: "+Number(shop.payPerPagePages||0)+" pages • ₹0.15/page"));
+      }
       head.append(identification,element("span","status "+effective,effective.toUpperCase()));
       card.append(head);
 
       const fields=element("div","fields");
-      const plan=optionSelect([["starter","Starter"],["pro","Pro"],["business","Business"]],["starter","pro","business"].includes(shop.planCode)?shop.planCode:"starter");
+      const plan=optionSelect([
+        ["starter","Starter — ₹49 / month"],
+        ["pro","Pro — ₹99 / month"],
+        ["business","Business — ₹199 / month"],
+        ["per_page","Pay Per Page — ₹0.15 / page"],
+        ["demo","Demo — 10 free prints"]
+      ],["starter","pro","business","per_page","demo"].includes(shop.planCode)?shop.planCode:"starter");
       const duration=optionSelect([[30,"30 days"],[90,"90 days"],[365,"365 days"]],30);
       const amount=document.createElement("input");amount.type="number";amount.min="0";amount.max="100000";amount.step="1";amount.value="0";amount.required=true;
       const method=optionSelect([["none","No payment / trial"],["cash","Cash received"],["upi","UPI received"]],"none");
@@ -149,6 +212,18 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
         settingLabel("Amount actually received (₹)",amount),
         settingLabel("Payment method",method),settingLabel("I confirm actual receipt",proof));
       card.append(fields);
+      const quote=element("div","quote");
+      const updateQuote=()=>{
+        const demo=plan.value==="demo";
+        duration.value=demo?"30":duration.value;
+        duration.disabled=demo;
+        quote.textContent="Plan price: "+planPrice(plan.value,Number(duration.value))+
+          " • Amount received entered separately (₹0 for trial or not yet paid).";
+      };
+      plan.addEventListener("change",updateQuote);
+      duration.addEventListener("change",updateQuote);
+      updateQuote();
+      card.append(quote);
 
       const controls=element("div","btn-row");
       const activate=element("button",null,active?"Renew / Extend plan":"Activate shop");
@@ -165,7 +240,7 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
            rupee>0&&(methodValue==="none"||!proof.checked)){
           return notify("Use ₹0 + No payment for trial, or confirm actual Cash/UPI receipt before recording payment.",true);
         }
-        if(!window.confirm("Activate / extend "+shop.name+" on "+plan.value+" for "+duration.value+" days? Amount confirmed received: "+rupees(rupee)+". Existing unlimited legacy access will become time-limited."))return;
+        if(!window.confirm("Activate / extend "+shop.name+" on "+plan.value+" for "+duration.value+" days? Plan price: "+planPrice(plan.value,Number(duration.value))+". Actual amount received: "+rupees(rupee)+". Existing unlimited legacy access becomes time-limited."))return;
         activate.disabled=true;
         try{
           await request("/api/platform/shops/"+encodeURIComponent(shop.id)+"/activate",{
@@ -187,6 +262,44 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
         }catch(error){notify(error.message,true);}
         finally{suspend.disabled=false;}
       });
+      if(shop.planCode==="demo" && active && Number(shop.demoPagesUsed||0)<10){
+        const usage=element("div","usage-row");
+        const remaining=Math.max(0,10-Number(shop.demoPagesUsed||0));
+        const pages=document.createElement("input");pages.type="number";pages.min="1";pages.max=String(remaining);pages.step="1";pages.value="1";pages.className="input";pages.style.width="110px";
+        const add=element("button",null,"Record Demo printed pages");add.type="button";
+        usage.append(element("span","note","Demo used: "+shop.demoPagesUsed+" / 10. Confirm physical pages."),pages,add);
+        add.addEventListener("click",async()=>{
+          const count=Number(pages.value);
+          if(!Number.isInteger(count)||count<1||count>remaining)return notify("Only "+remaining+" demo pages remain.",true);
+          if(!window.confirm("Did you verify "+count+" actual printed pages for "+shop.name+"? This uses "+count+" of the 10 free demo pages."))return;
+          add.disabled=true;
+          try{
+            const result=await request("/api/platform/shops/"+encodeURIComponent(shop.id)+"/demo-usage",{pages:count,confirmedPrintedPages:true});
+            notify(shop.name+": Demo has "+result.pagesRemaining+" free printed pages remaining.");
+            await Promise.all([loadShops(),loadUsage()]);
+          }catch(error){notify(error.message,true);}finally{add.disabled=false;}
+        });
+        card.append(usage);
+      }else if(shop.planCode==="demo" && Number(shop.demoPagesUsed||0)>=10){
+        card.append(element("p","quota","Demo quota complete: 10 / 10. Activate a paid plan for further usage."));
+      }else if(shop.planCode==="per_page" && active){
+        const usage=element("div","usage-row");
+        const pages=document.createElement("input");pages.type="number";pages.min="1";pages.max="100000";pages.step="1";pages.value="1";pages.className="input";pages.style.width="110px";
+        const add=element("button",null,"Record confirmed pages • 15 paise each");add.type="button";
+        usage.append(element("span","note","Manually verified printed pages:"),pages,add);
+        add.addEventListener("click",async()=>{
+          const count=Number(pages.value);
+          if(!Number.isInteger(count)||count<1||count>100000)return notify("Enter 1–100000 printed pages.",true);
+          if(!window.confirm("Did you verify "+count+" actual printed pages for "+shop.name+"? Manual charge: "+rupees(count*0.15)+". This does NOT collect payment."))return;
+          add.disabled=true;
+          try{
+            await request("/api/platform/shops/"+encodeURIComponent(shop.id)+"/page-usage",{pages:count,confirmedPrintedPages:true});
+            notify("Usage recorded for "+shop.name+". Payment is still pending.");
+            await Promise.all([loadShops(),loadUsage()]);
+          }catch(error){notify(error.message,true);}finally{add.disabled=false;}
+        });
+        card.append(usage);
+      }
       shopsBox.append(card);
     });
   }
@@ -201,6 +314,59 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
       renderShops();
     }catch(error){shopsBox.textContent=error.message;notify(error.message,true);}
   }
+  async function loadUsage(){
+    const history=document.getElementById("usage-history");
+    history.textContent="Loading manually recorded print pages...";
+    try{
+      const [perPage,demo]=await Promise.all([
+        request("/api/platform/page-usage"),request("/api/platform/demo-usage")
+      ]);
+      history.replaceChildren();
+      const totals=perPage.totals||{};
+      history.append(element("p","note","Pay Per Page total: "+Number(totals.pages||0)+
+        " pages • Recorded charge: "+rupees(Number(totals.totalPaise||0)/100)+
+        " • Unpaid: "+rupees(Number(totals.unpaidPaise||0)/100)));
+      const events=[
+        ...(Array.isArray(perPage.entries)?perPage.entries.map(e=>({...e,type:"per_page"})):[]),
+        ...(Array.isArray(demo.events)?demo.events.map(e=>({...e,type:"demo"})):[])
+      ];
+      events.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+      if(!events.length){history.append(element("p","empty","No confirmed print-page usage recorded yet."));return;}
+      events.slice(0,50).forEach(e=>{
+        const item=element("div","record");
+        if(e.type==="demo"){
+          item.textContent=date(e.createdAt)+" • "+e.shopName+
+            " • Demo: "+e.pages+" free printed pages confirmed (₹0)";
+        }else{
+          item.textContent=date(e.createdAt)+" • "+e.shopName+
+            " • Pay Per Page: "+e.pages+" pages × ₹0.15 = "+
+            rupees(Number(e.chargePaise)/100)+" • "+e.paymentStatus;
+          if(e.paymentStatus==="unpaid"){
+            const received=element("button","outline","Record received payment");
+            received.style.marginLeft="12px";
+            const method=optionSelect([["cash","Cash"],["upi","UPI"]],"cash");
+            method.style.marginLeft="8px";
+            method.className="input";
+            received.addEventListener("click",async()=>{
+              if(!window.confirm("Have you actually received "+rupees(Number(e.chargePaise)/100)+
+                " by "+method.value.toUpperCase()+" for this usage charge?"))return;
+              received.disabled=true;
+              try{
+                await request("/api/platform/page-usage/"+encodeURIComponent(e.id)+"/mark-paid",{
+                  paymentMethod:method.value,confirmedReceipt:true
+                });
+                notify("Manual payment receipt recorded.");
+                await loadUsage();
+              }catch(error){notify(error.message,true);received.disabled=false;}
+            });
+            item.append(method,received);
+          }
+        }
+        history.append(item);
+      });
+    }catch(error){history.textContent=error.message;}
+  }
+  document.getElementById("usage-refresh").addEventListener("click",loadUsage);
   async function loadHistory(){
     try{
       const data=await request("/api/platform/subscriptions");
@@ -225,7 +391,7 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   });
   request("/api/platform/me").then(data=>{
     document.getElementById("admin-email").textContent=data.email;
-    return Promise.all([loadShops(),loadHistory()]);
+    return Promise.all([loadPlanPrices(),loadShops(),loadHistory(),loadUsage()]);
   }).catch(error=>notify(error.message,true));
 })();
 </script>
