@@ -6,7 +6,9 @@
  * This script reports installed printer names and may print a fixed Canon diagnostic page only after
  * an explicit authenticated shop-owner click. It NEVER downloads or prints customer documents.
  * Requires Node.js 20+, Windows PowerShell and a shop-issued pairing key.
- * The secret key remains in memory only and is not written to disk.
+ * The pairing key stays in RAM during the session. Optional auto-start stores
+ * only a Windows DPAPI-encrypted copy bound to the current Windows user.
+ * This agent never downloads or prints customer documents.
  */
 const { spawnSync } = require("node:child_process");
 
@@ -98,6 +100,31 @@ function readClipboardKey() {
   if (result.error || result.status !== 0) return null;
   const token = (result.stdout || "").trim();
   return TOKEN_PATTERN.test(token) ? token : null;
+}
+
+// A scheduled task cannot show a pairing prompt. Windows DPAPI decrypts the
+// encrypted pairing secret only for the same Windows user that installed it.
+// The secret is returned over a child process pipe directly into this process,
+// never in command-line arguments, environment variables or console logs.
+function readSavedKey() {
+  if (process.platform !== "win32") return null;
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    "$secretFile = Join-Path $env:LOCALAPPDATA 'QR-To-Print-Agent\\pairing-key.dpapi'",
+    "if (-not (Test-Path -LiteralPath $secretFile -PathType Leaf)) { exit 2 }",
+    "$secure = Get-Content -LiteralPath $secretFile -Raw -ErrorAction Stop | ConvertTo-SecureString -ErrorAction Stop",
+    "$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)",
+    "try { [Console]::Out.Write([Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)) }",
+    "finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }"
+  ].join("\n");
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile", "-NonInteractive", "-Command", command
+  ], {
+    timeout: 10000, windowsHide: true, encoding: "utf8", maxBuffer: 512
+  });
+  if (result.error || result.status !== 0) return null;
+  const secret = (result.stdout || "").trim();
+  return TOKEN_PATTERN.test(secret) ? secret : null;
 }
 
 function hiddenPrompt() {
@@ -212,14 +239,24 @@ async function heartbeat(secret, printerCount, testPrintResult = null, printerNa
 async function run() {
   console.log("\nQR-To-Print Windows Agent — shop-owned printer discovery preview");
   console.log("Customer documents are never downloaded or printed. Owner-requested fixed Canon test page only.");
-  console.log("Keep the pairing key private. Press Ctrl+C to stop.\n");
+  console.log("Customer automatic printing OFF. Press Ctrl+C to stop when running manually.\n");
 
   if (process.platform !== "win32") {
     throw new Error("Run this script on your Windows print-shop PC");
   }
 
-  const secret = readClipboardKey() || await hiddenPrompt();
-  console.log("Pairing key accepted from clipboard or hidden input.");
+  // Auto-start NEVER reads clipboard or prompts: a revoked/missing stored
+  // pairing key must fail closed, without connecting to another shop's token.
+  const autoStart = process.argv.includes("--auto-start");
+  const saved = readSavedKey();
+  const secret = saved ||
+    (autoStart ? null : readClipboardKey()) ||
+    (autoStart ? null : await hiddenPrompt());
+  if (!secret) {
+    throw new Error("No saved Windows pairing key. Open Shop Dashboard, copy a new key, and run the local auto-start installer.");
+  }
+  console.log(saved ? "Windows user-protected pairing key loaded." :
+    "Pairing key accepted from clipboard or hidden input.");
   if (!TOKEN_PATTERN.test(secret)) {
     throw new Error("Pairing key format is invalid. Generate a new one in Shop Dashboard");
   }
@@ -266,4 +303,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { countWindowsPrinters, listWindowsPrinters, validPrinterName, heartbeat, readClipboardKey, printCanonFixedTestPage };
+module.exports = { countWindowsPrinters, listWindowsPrinters, validPrinterName, heartbeat, readClipboardKey, readSavedKey, printCanonFixedTestPage };
