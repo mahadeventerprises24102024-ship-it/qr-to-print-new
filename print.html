@@ -99,6 +99,8 @@
             </div>
           </div>
           <p class="subtitle">दोनों तरफ की डमी फोटो एक A4 TEST पेज पर साथ-साथ लगेंगी। असली Aadhaar Upload अभी उपलब्ध नहीं है।</p>
+          <button type="button" id="dummy-a4-print" class="btn" disabled>🖨 A4 Preview / Print — DUMMY TEST</button>
+          <p id="dummy-a4-status" class="subtitle" role="status" aria-live="polite" style="margin:10px 0 0">दोनों DUMMY फोटो चुनें, फिर बिना Upload या Payment के एक A4 पेज का Print Preview खोलें।</p>
         </section>
         <label for="private-copies">Copies</label>
         <select id="private-copies" name="copies">
@@ -192,6 +194,12 @@
       const backInput=document.getElementById("dummy-card-back");
       const frontPreview=document.getElementById("dummy-front-preview");
       const backPreview=document.getElementById("dummy-back-preview");
+      const dummyA4Print=document.getElementById("dummy-a4-print");
+      const dummyA4Status=document.getElementById("dummy-a4-status");
+      function refreshDummyPrintButton(){
+        dummyA4Print.disabled=privateKind.value!=="dummy_card_front_back"||
+          !frontInput.files.length||!backInput.files.length;
+      }
       let dummyPreviewUrls=[];
       function clearDummyPreviews(){
         for(const url of dummyPreviewUrls)URL.revokeObjectURL(url);
@@ -210,6 +218,8 @@
         document.getElementById("private-pages-estimate").disabled=isDummy;
         document.getElementById("private-mode").value=isDummy?"bw":document.getElementById("private-mode").value;
         clearDummyPreviews();
+        if(isDummy){showDummyPreview(frontInput,frontPreview);showDummyPreview(backInput,backPreview);}
+        refreshDummyPrintButton();
         updatePriceEstimate();
       }
       function showDummyPreview(input,img){
@@ -224,11 +234,17 @@
         dummyPreviewUrls.push(url);
         img.src=url;img.hidden=false;
       }
-      frontInput.addEventListener("change",()=>{clearDummyPreviews();showDummyPreview(frontInput,frontPreview);showDummyPreview(backInput,backPreview);});
-      backInput.addEventListener("change",()=>{clearDummyPreviews();showDummyPreview(frontInput,frontPreview);showDummyPreview(backInput,backPreview);});
+      function refreshDummyPreviews(){
+        clearDummyPreviews();
+        showDummyPreview(frontInput,frontPreview);
+        showDummyPreview(backInput,backPreview);
+        refreshDummyPrintButton();
+      }
+      frontInput.addEventListener("change",refreshDummyPreviews);
+      backInput.addEventListener("change",refreshDummyPreviews);
       privateKind.addEventListener("change",updateDummyKind);
       window.addEventListener("pagehide",clearDummyPreviews);
-      async function createDummyCardTestPage(front,back){
+      async function createDummyCardTestPage(front,back,maxOutputBytes=2097152){
         if(!front||!back||front.size>2097152||back.size>2097152||
            front.size<8||back.size<8||
            !["image/jpeg","image/png"].includes(front.type)||
@@ -248,6 +264,8 @@
             {x:72,y:290,img:bitmaps[0],title:"FRONT SAMPLE"},
             {x:518,y:290,img:bitmaps[1],title:"BACK SAMPLE"}
           ];
+          const imageMode=document.getElementById("private-mode").value;
+          ctx.filter=imageMode==="bw"?"grayscale(1)":"none";
           for(const part of boxes){
             ctx.strokeStyle="#6e7c79";ctx.lineWidth=2;
             ctx.strokeRect(part.x,part.y,410,259);
@@ -257,14 +275,75 @@
             ctx.fillStyle="#333";ctx.font="19px Arial";
             ctx.fillText(part.title,part.x,part.y+290);
           }
+          ctx.filter="none";
           const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));
-          if(!blob||blob.size<8||blob.size>2097152)
+          if(!blob||blob.size<8||blob.size>maxOutputBytes)
             throw new Error("Combined TEST page is too big. Choose smaller sample images.");
           return new File([blob],"dummy-card-front-back.png",{type:"image/png"});
         }finally{
           bitmaps.forEach(bitmap=>bitmap.close());
         }
       }
+      // Local-only DUMMY print test: nothing is uploaded or sent to the shop.
+      // Opening the preview synchronously avoids popup blockers after async canvas work.
+      dummyA4Print.addEventListener("click",async()=>{
+        if(dummyA4Print.disabled)return;
+        const previewWindow=window.open("","_blank");
+        if(!previewWindow){
+          dummyA4Status.textContent="Print Preview ब्लॉक हो गया। Browser में Pop-ups allow करके फिर कोशिश करें।";
+          return;
+        }
+        dummyA4Print.disabled=true;
+        dummyA4Status.textContent="A4 DUMMY Print Preview तैयार हो रहा है…";
+        try{
+          const pageFile=await createDummyCardTestPage(
+            frontInput.files[0],backInput.files[0],15*1024*1024
+          );
+          if(previewWindow.closed)throw new Error("Preview window बंद हो गई। फिर से कोशिश करें।");
+          const previewUrl=URL.createObjectURL(pageFile);
+          previewWindow.addEventListener("pagehide",()=>URL.revokeObjectURL(previewUrl),{once:true});
+          const doc=previewWindow.document;
+          doc.open();
+          doc.write(`<!doctype html><html lang="hi"><head><meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>QR-To-Print • DUMMY A4 Print Test</title>
+            <style>
+              *{box-sizing:border-box}
+              body{margin:0;background:#eef3ee;color:#193a2b;font:15px Arial,sans-serif}
+              .tools{padding:12px 18px;text-align:center}
+              .tools button{padding:12px 20px;border:0;border-radius:9px;background:#087d68;color:white;font-weight:bold;cursor:pointer}
+              #a4-paper{display:block;width:100%;max-width:620px;height:auto;margin:0 auto 30px;background:white;box-shadow:0 5px 25px #0002}
+              @page{size:A4 portrait;margin:0}
+              @media print{
+                html,body{margin:0;padding:0;width:210mm;height:297mm;background:white}
+                .tools{display:none}
+                #a4-paper{display:block;width:210mm;height:297mm;max-width:none;margin:0;box-shadow:none}
+              }
+            </style></head><body>
+            <div class="tools"><strong>DUMMY Front + Back — A4 Preview</strong>
+            <p>सिर्फ Sample फोटो • Printer में A4 Portrait चुनें। Copies प्रिंट डायलॉग में चुनें।</p>
+            <button id="print-now" type="button">🖨 Print this A4 page</button></div>
+            <img id="a4-paper" alt="One A4 test page with dummy front and back side by side">
+            </body></html>`);
+          doc.close();
+          doc.getElementById("print-now").addEventListener("click",()=>previewWindow.print());
+          const pageImage=doc.getElementById("a4-paper");
+          pageImage.addEventListener("load",()=>{
+            dummyA4Status.textContent="A4 Preview खुल गया। Print Dialog में अपना Printer और A4 Portrait चुनें।";
+            previewWindow.focus();
+            previewWindow.print();
+          },{once:true});
+          pageImage.addEventListener("error",()=>{
+            dummyA4Status.textContent="Preview image नहीं खुली। फिर प्रयास करें।";
+          },{once:true});
+          pageImage.src=previewUrl;
+        }catch(error){
+          if(!previewWindow.closed)previewWindow.close();
+          dummyA4Status.textContent="A4 Preview नहीं बना: "+error.message;
+        }finally{
+          refreshDummyPrintButton();
+        }
+      });
       const trackForm=document.getElementById("track-form");
       const trackMessage=document.getElementById("track-status");
       const trackSubmit=document.getElementById("track-submit");
