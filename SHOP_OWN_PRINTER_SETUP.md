@@ -30,6 +30,20 @@ The existing `windows-print-agent.js` now reports installed **printer names** as
 
 The optional **Canon G2010-only** remote fixed diagnostic remains separately available only if `ENABLE_CANON_TEST_PRINT=true`. Its job is a constant test page, *not customer documents*. All other printers use the browser-based test described in A. No other Render variables or paid service are required for **local diagnostic printing**.
 
+## C. Start Windows Agent automatically after sign-in (NEW)
+
+You no longer need to run the Node script manually after every Windows login:
+
+1. On the PC connected to your shop printer, install Node.js 20+ and open your own Shop Dashboard > Printers.
+2. Click Generate secure Windows pairing key and Copy pairing key.
+3. Download the GitHub ZIP, extract it, then double-click **Install-QR-To-Print-Agent.cmd** (normal Windows user, **not** Run as Administrator).
+4. The setup encrypts the key under the same Windows user with DPAPI and registers a least-privileged Windows Task Scheduler logon trigger.
+5. After setup and at future **Windows sign-ins**, the Agent starts itself, retries the HTTPS heartbeat after internet interruptions and displays this shop's detected printer names in Dashboard > Printers.
+
+Full installation, error handling, security boundary, and one-click removal instructions: **WINDOWS_AGENT_AUTOSTART.md**.
+
+**Important:** This feature starts at **Windows user login, not before login**. It still does not download/print customer files automatically. Shop owner confirmation remains required.
+
 ## Security model and limitations
 
 - Printer names are obtained using a fixed PowerShell `Get-Printer` command, capped at 30 names, each at most 100 characters; no printer name is executed or interpreted as PowerShell.
