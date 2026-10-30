@@ -41,8 +41,8 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 
-// Raw signed Razorpay webhooks must run before JSON body parsing or browser
-// Origin checks. Signature verification happens inside this handler.
+// Signed Paytm form callbacks must run before browser Origin checks or JSON parsing.
+// The handler checks the checksum and Paytm Transaction Status API.
 installPaymentWebhook(app,pool);
 
 app.use(express.json({ limit: "20kb" }));
