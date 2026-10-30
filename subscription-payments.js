@@ -155,7 +155,8 @@ async function settleSuccessfulPaytm(pool,transaction){
       await client.query("COMMIT");
       return {status:p.status};
     }
-    if(p.status!=="pending"||!["test","live"].includes(p.gateway_mode)){
+    if(p.status!=="pending"||!["test","live"].includes(p.gateway_mode)||
+       p.gateway_mode!==transaction.gatewayMode){
       await client.query("ROLLBACK");
       return {status:"not_pending"};
     }
@@ -202,7 +203,8 @@ async function verifyPaytmOrder(pool,config,orderId,fetchImpl=fetch){
   const amount=parsePaytmAmount(String(data.txnAmount||""));
   if(amount===null)return {status:"mismatch"};
   return settleSuccessfulPaytm(pool,{
-    orderId,txnId:data.txnId,currency:"INR",status:"TXN_SUCCESS",amountPaise:amount
+    orderId,txnId:data.txnId,currency:"INR",status:"TXN_SUCCESS",
+    amountPaise:amount,gatewayMode:config.mode
   });
 }
 // Only signed Paytm callbacks are accepted. Every callback is independently
@@ -478,6 +480,31 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
     }catch(error){
       console.error("Admin payment history failed:",error);
       return res.status(503).json({error:"Could not load payment requests"});
+    }
+  });
+  app.post("/api/platform/payment-requests/:id/check-paytm",requireAdmin,async(req,res)=>{
+    if(!validId(req.params.id))return res.status(400).json({error:"Invalid request"});
+    const c=paymentConfig(env);
+    if(!c.gatewayEnabled)return res.status(503).json({error:"Paytm not configured"});
+    try{
+      const found=await pool.query([
+        "SELECT paytm_order_id,status FROM platform_payment_requests",
+        "WHERE id=$1 AND kind='paytm'"
+      ].join(" "),[req.params.id]);
+      if(!found.rows.length)return res.status(404).json({error:"Paytm order not found"});
+      const row=found.rows[0];
+      if(row.status==="paid"||row.status==="test_paid"){
+        return res.json({status:row.status,alreadyConfirmed:true});
+      }
+      if(row.status!=="pending"||!/^QRPT[0-9]{1,18}$/.test(row.paytm_order_id||"")){
+        return res.status(409).json({error:"Paytm order not pending"});
+      }
+      const result=await verifyPaytmOrder(pool,c,row.paytm_order_id,fetchImpl);
+      res.set("Cache-Control","no-store");
+      return res.json({status:result.status,activated:result.status==="paid"});
+    }catch(error){
+      console.error("Admin Paytm status check failed:",error);
+      return res.status(503).json({error:"Paytm transaction verification unavailable"});
     }
   });
   app.post("/api/platform/payment-requests/:id/approve",requireAdmin,async(req,res)=>{
