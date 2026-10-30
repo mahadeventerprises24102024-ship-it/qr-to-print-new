@@ -62,11 +62,44 @@ Plan names remain feature-access labels; they do not unlock separate feature tie
 - Activate/renew/suspend controls
 - Manual Cash/UPI amount confirmed received and subscription event history
 
+## Shop-owner Subscription Payments: UPI QR + Paytm
+
+Checkout: **https://qr-to-print-new.onrender.com/subscription-payment.html**. Pending shops can sign in with their owner email/password to a **billing-only session**, which does not grant shop-dashboard access. Active owners may renew the same way.
+
+**Checkout prices:** Starter ₹49/₹147/₹588, Pro ₹99/₹297/₹1188, Business ₹199/₹597/₹2388 for 30/90/365 days. These are one-time plan purchases, not automatic monthly debits. Demo (10 free pages) and Pay Per Page (₹0.15 per page) remain manually administered.
+
+### UPI QR (manual receipt)
+
+In Render → Web Service → Environment set two values:
+- **UPI_PAYMENT_VPA**: your own verified UPI ID. Example merchant@bank is a placeholder, not an account to use.
+- **UPI_PAYMENT_NAME**: your registered beneficiary/payee name.
+
+The owner selects a plan, receives a QR for the server-calculated amount, pays from a UPI app, and submits a UTR. A UTR alone is **NOT payment verification**. Super Admin must independently verify the amount received in their own bank/UPI account, then choose **Verify bank receipt & Activate**. Reject unverified claims. No automatic UPI payment confirmation or debit is performed.
+
+### Paytm Payment Gateway (server-confirmed payment)
+
+Use your own Paytm PG merchant account and get staging/live credentials through the [Paytm Merchant Dashboard](https://dashboard.paytmpayments.com/next/apikeys). Configure on Render **only**, never in GitHub/chat:
+- **PAYTM_MID**: merchant ID for test/live environment
+- **PAYTM_MERCHANT_KEY**: secret merchant key, server-side only
+- **PAYTM_ENV**: test (default) or live (only after merchant account activation)
+- **PAYTM_WEBSITE_NAME**: WEBSTAGING in test; your Paytm-issued website name (often DEFAULT) in live
+- **PUBLIC_BASE_URL**: https://qr-to-print-new.onrender.com (or your public HTTPS origin)
+
+Paytm checkout:
+1. Creates a pending payment order with a server-calculated price, with a unique order ID.
+2. Calls Paytm **Initiate Transaction API** with a checksum signature created by the official paytmchecksum package.
+3. Opens Paytm JS Checkout using MID + transaction token, never your Merchant Key.
+4. Uses a signed Paytm callback at **/api/payments/paytm/callback**, plus shop-owner/Admin **Check Paytm Status** buttons to reconcile.
+5. Independently calls Paytm **Transaction Status API**, validates the signed response, order ID, merchant, exact INR amount and test/live mode.
+6. For **verified Live TXN_SUCCESS only**, marks the payment as paid and activates/extends the subscription in one database transaction. Repeat checks cannot extend a plan twice. TEST payments are recorded as test_paid, with **no live activation**.
+
+No payment is collected by the site until you configure real UPI details or your own Paytm merchant credentials. The two methods are not interchangeable: QR needs manual review, whereas Paytm uses gateway verification. Fees, GST/taxes, refunds, chargebacks, disputes, password resets and merchant onboarding remain independent setup tasks. Always test with staging credentials before enabling live.
+
 ## Safety and launch limitations
 
 - Current shop accounts are grandfathered as active legacy accounts; new registration is pending.
 - No auto-deletion on suspension; existing test files retain the one-day private R2 expiry policy.
 - Shop/session and shop-specific QR requests are checked against active subscription state.
 - A separate admin session is required. Shop-owner/customer accounts have no admin privileges.
-- No online charging, subscription webhook, verified payment gateway, password reset, email verification, true printer page-count hardware enforcement, real customer print-job automation, malware scanning, full accounting, GST invoicing or refund system is implemented.
+- Paytm payment gateway requires independent merchant onboarding and staging/live verification; UPI QR still requires manual receipt checks. No recurring autopay, automatic UPI verification, refund/reconciliation automation, password reset, email verification, true printer page-count hardware enforcement, live print-job automation, malware scanning, full accounting or GST invoicing is implemented.
 - Real commercial selling requires further security/privacy reviews, operational monitoring, backups, recovery, tax/compliance and real customer printing protections. **Do not upload real Aadhaar or any sensitive ID/document into the current disposable test system.**
