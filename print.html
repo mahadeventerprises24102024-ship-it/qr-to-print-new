@@ -72,29 +72,29 @@
       </div>
       <h2>Upload PDF / Photo • TEST ONLY</h2>
       <p class="subtitle">बिना Customer Login के एक छोटी टेस्ट PDF/JPG/PNG अपलोड करें (अधिकतम 2 MB)। यह सुविधा सिर्फ दुकान द्वारा Guest Test Upload सक्षम होने पर उपलब्ध होगी। निजी या असली ग्राहक दस्तावेज़ अभी न भेजें।</p>
-      <p id="private-upload-status" class="response" role="status" aria-live="polite">Checking private storage...</p>
-      <form id="private-upload-form" hidden>
+      <p id="private-upload-status" class="response" role="status" aria-live="polite">Choose DUMMY photos to preview on this device. To submit a TEST order, scan your shop QR and enable private test storage.</p>
+      <form id="private-upload-form">
         <label for="private-kind">किस प्रकार का Print?</label>
         <select id="private-kind" name="documentKind" aria-describedby="aadhaar-dummy-warning">
+          <option value="dummy_card_front_back" selected>Aadhaar Front + Back Layout • DUMMY TEST ONLY</option>
           <option value="regular_test">PDF / Photo • TEST</option>
-          <option value="dummy_card_front_back">Aadhaar Front + Back Layout • DUMMY TEST ONLY</option>
         </select>
-        <div id="regular-test-file">
+        <div id="regular-test-file" hidden>
           <label for="private-file">Non-sensitive test file (max 2 MB)</label>
           <input id="private-file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg" required>
         </div>
-        <section id="dummy-card-test-files" hidden style="background:#effaf3;border:1px solid #cce8d4;border-radius:13px;padding:16px;margin:14px 0">
+        <section id="dummy-card-test-files" style="background:#effaf3;border:1px solid #cce8d4;border-radius:13px;padding:16px;margin:14px 0">
           <strong>Aadhaar-style Front / Back — 2 Upload Boxes</strong>
           <p id="aadhaar-dummy-warning" class="subtitle"><strong>सिर्फ DUMMY / SAMPLE कार्ड</strong> की फोटो चुनें। असली Aadhaar Card, Aadhaar Number, QR, पता या किसी की निजी पहचान अभी Upload न करें। दोनों फोटो इस डिवाइस पर एक TEST print page में जुड़ती हैं।</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">
             <div style="border:2px dashed #bddbc8;padding:13px;border-radius:12px;background:white">
               <label for="dummy-card-front"><strong>1. Front (सामने)</strong></label>
-              <input id="dummy-card-front" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" disabled>
+              <input id="dummy-card-front" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
               <img id="dummy-front-preview" alt="Sample card front preview, only visible on this device" hidden style="max-width:100%;max-height:150px;object-fit:contain;margin-top:12px">
             </div>
             <div style="border:2px dashed #bddbc8;padding:13px;border-radius:12px;background:white">
               <label for="dummy-card-back"><strong>2. Back (पीछे)</strong></label>
-              <input id="dummy-card-back" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" disabled>
+              <input id="dummy-card-back" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
               <img id="dummy-back-preview" alt="Sample card back preview, only visible on this device" hidden style="max-width:100%;max-height:150px;object-fit:contain;margin-top:12px">
             </div>
           </div>
@@ -116,7 +116,7 @@
           <option value="color">Color</option>
         </select>
         <p id="private-estimate" class="response" role="status" aria-live="polite">Checking prices...</p>
-        <button id="private-upload-button" class="btn" type="submit">Upload TEST file privately →</button>
+        <button id="private-upload-button" class="btn" type="submit" disabled>Upload TEST file privately →</button>
       </form>
       <div class="info">After a successful private TEST upload, your shop owner will see the file in their secured <strong>Quick Print Panel</strong> within about 10 seconds while the panel is open. They must review and accept it before manually printing on their own printer. No automatic printing or payment occurs. Download access ends after 24 hours; the private bucket needs a 1-day expiry lifecycle. Do not upload personal or sensitive documents.</div>
       <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
@@ -617,8 +617,14 @@
           submit.disabled=false;
         }
       });
+      // Keep the two DUMMY card pickers visible even if this page is opened
+      // without a shop QR. The submit button remains locked unless storage
+      // and a valid active shop are verified below.
+      updateDummyKind();
       if (!code || !/^[a-f0-9]{32}$/.test(code)) {
         title.textContent="Invalid QR code";
+        privateNotice("दोनों DUMMY Front/Back फोटो यहाँ देख सकते हैं। TEST अपलोड चालू करने के लिए अपनी दुकान का QR स्कैन करें। असली Aadhaar अपलोड न करें।");
+        document.getElementById("print-rate-card").textContent="Shop QR scan करें ताकि सही प्रिंट रेट दिखें";
         status.textContent="Please scan the QR code shown in your shop dashboard.";
         return;
       }
