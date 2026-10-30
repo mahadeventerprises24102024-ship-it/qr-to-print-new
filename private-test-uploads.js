@@ -121,6 +121,7 @@ async function ensureTestUploadTables(pool) {
       CHECK (status IN ('test_only','accepted','rejected','printed'))
   `);
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS tracking_token_hash VARCHAR(64)");
+  await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS file_deleted_at TIMESTAMPTZ");
   // DUMMY front/back photos become one composite PNG. Real IDs remain unsupported.
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS document_kind VARCHAR(30) NOT NULL DEFAULT 'regular_test'");
   await pool.query("ALTER TABLE test_file_orders DROP CONSTRAINT IF EXISTS test_file_orders_document_kind_check");
@@ -141,6 +142,47 @@ async function ensureTestUploadTables(pool) {
     CREATE INDEX IF NOT EXISTS test_file_orders_customer_recent
     ON test_file_orders(customer_id, created_at DESC, id DESC)
   `);
+}
+
+// Best-effort deletion of expired SAMPLE objects, preserving non-sensitive order
+// metadata. Keep the R2 1-day lifecycle rule as an independent safety backstop.
+async function purgeExpiredTestFiles(pool, env=process.env, dependencies={}) {
+  const cfg=storageSettings(env);
+  if(!cfg.enabled)return {storageEnabled:false,purged:0,failed:0};
+  const client=dependencies.client || new S3Client({
+    endpoint:cfg.endpoint,region:"auto",forcePathStyle:true,
+    requestChecksumCalculation:"WHEN_REQUIRED",
+    credentials:{accessKeyId:cfg.accessKeyId,secretAccessKey:cfg.secretAccessKey}
+  });
+  let found;
+  try{
+    found=await pool.query(
+      `SELECT id,storage_key FROM test_file_orders
+       WHERE created_at < NOW() - INTERVAL '24 hours'
+         AND file_deleted_at IS NULL
+       ORDER BY created_at ASC, id ASC LIMIT 25`
+    );
+  }catch(error){
+    console.error("Expired sample cleanup query failed:",error);
+    return {storageEnabled:true,purged:0,failed:1};
+  }
+  let purged=0,failed=0;
+  for(const record of found.rows){
+    try{
+      await client.send(new DeleteObjectCommand({Bucket:cfg.bucket,Key:record.storage_key}));
+      const result=await pool.query(
+        `UPDATE test_file_orders SET file_deleted_at=NOW()
+         WHERE id=$1 AND storage_key=$2
+           AND file_deleted_at IS NULL AND created_at < NOW() - INTERVAL '24 hours'`,
+        [record.id,record.storage_key]
+      );
+      if(result.rowCount)purged++;
+    }catch(error){
+      failed++;
+      console.error("Expired sample cleanup failed for order",record.id,error);
+    }
+  }
+  return {storageEnabled:true,purged,failed};
 }
 
 // Possession of a random per-order tracking code permits status-only lookup.
@@ -453,7 +495,8 @@ function installTestFileUploads(app, pool, env = process.env) {
            JOIN shop_owners owner ON owner.shop_id = o.shop_id
            WHERE owner.id = $1 AND o.id = $2
              AND o.status IN ('test_only','accepted','printed')
-             AND o.created_at > NOW() - INTERVAL '24 hours'`,
+             AND o.created_at > NOW() - INTERVAL '24 hours'
+             AND o.file_deleted_at IS NULL`,
           [req.session.shopOwnerId, req.params.id]
         );
         if (!result.rows.length) {
@@ -527,5 +570,6 @@ function installTestFileUploads(app, pool, env = process.env) {
 
 module.exports = {
   installTestFileUploads, ensureTestUploadTables,
-  storageSettings, guestTestUploadsEnabled, detectSafeFile, MAX_FILE_BYTES
+  storageSettings, guestTestUploadsEnabled, detectSafeFile, MAX_FILE_BYTES,
+  purgeExpiredTestFiles
 };
