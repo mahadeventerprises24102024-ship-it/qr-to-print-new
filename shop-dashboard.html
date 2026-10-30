@@ -58,7 +58,7 @@
         <section class="card qr-card"><div><span class="qr-badge">CUSTOMER ACCESS</span><h2>Scan. Upload. Print.</h2><p class="description">Give your customers a simple way to begin. This QR is unique to your shop. Customers can scan it to see your shop's print page. Customers can submit demo details and (if enabled) private test samples without signing in. Printing is never automatic.</p><div class="qr-actions"><a class="btn teal" id="customer-print-link" href="#" aria-disabled="true">Open shop print page ↗</a><button id="copy-link" class="btn light" type="button">Copy link</button></div></div><div><img class="qr-art" id="customer-qr" alt="QR code linking to your shop's customer print page" src="/api/shop/qr.png" width="145" height="145"><p id="qr-status" class="description" hidden>QR image could not load. Use Open shop print page or Copy link.</p></div></section>
         <section class="card"><h2>Quick actions</h2><p class="description">Build your printing workspace step by step.</p><div class="quick-list">
           <button class="quick-row" data-go="printers"><span class="quick-symbol">▣</span><span class="quick-txt"><strong>Set up a printer</strong><span>Device connection coming later</span></span><span class="arrow">›</span></button>
-          <button class="quick-row" data-go="orders"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>View print orders</strong><span>Order management is in development</span></span><span class="arrow">›</span></button>
+          <button class="quick-row" data-go="orders"><span class="quick-symbol">▤</span><span class="quick-txt"><strong>View print orders</strong><span>Review test orders and update status</span></span><span class="arrow">›</span></button>
           <button class="quick-row" data-go="wallet"><span class="quick-symbol">₹</span><span class="quick-txt"><strong>Pricing & Bills</strong><span>Set print rates and view simple test bills</span></span><span class="arrow">›</span></button>
         </div></section>
       </div>
@@ -67,8 +67,8 @@
     <section class="panel" id="panel-orders"><div class="card content-panel">
       <div class="eyebrow">SHOP OPERATIONS • DEMO ONLY</div>
       <div class="content-icon">▤</div>
-      <h2>Test print requests</h2>
-      <p>Only document type, reported size, and number of copies are stored. The customer document is NOT uploaded or printed. No live order or payment is created.</p>
+      <h2>Customer Order Inbox • TEST</h2>
+      <p>Customer demo requests arrive here for review. The file stays on the customer device. Mark them Reviewed or Close after checking metadata; these statuses never mean printed.</p>
       <div class="section-head" style="margin-top:24px;gap:12px;flex-wrap:wrap">
         <span id="demo-summary" class="pill">Loading test requests...</span>
         <button class="btn light" type="button" id="refresh-demo-orders">Refresh orders</button>
@@ -76,8 +76,8 @@
       <div id="demo-order-list" class="demo-order-list" role="status" aria-live="polite">Loading...</div>
       <div style="border-top:1px solid var(--line);margin:30px 0 22px"></div>
       <div class="eyebrow">PRIVATE TEST FILES • OWNER REVIEW</div>
-      <h2 style="margin-top:10px">Private test uploads</h2>
-      <p>Guest / test-customer files stored in a private bucket. Only this shop owner can download them. Do not open untrusted files on a production computer. Download access ends after 24 hours. Use Review &amp; Print to open your local print dialog only after reviewing a file. Printing is not automatic.</p>
+      <h2 style="margin-top:10px">Private TEST file orders</h2>
+      <p>Only enabled with configured private storage and guest test opt-in. Download and review non-sensitive test files, then Accept or Reject. Only accepted files can be marked Printed after physically checking paper. Private downloads expire after 24 hours; nothing prints automatically.</p>
       <div class="section-head" style="margin-top:22px;gap:12px;flex-wrap:wrap">
         <span class="pill" id="private-order-summary">Loading private test uploads...</span>
         <button class="btn light" id="refresh-private-orders" type="button">Refresh private files</button>
@@ -239,8 +239,42 @@
         const timestamp = new Date(order.createdAt);
         const when = Number.isNaN(timestamp.getTime())
           ? "" : " • " + timestamp.toLocaleString("en-IN");
-        meta.textContent = size + " KB (reported) • NOT UPLOADED" + when;
+        const labels={demo_only:"NEW • needs review",reviewed:"REVIEWED by shop",closed:"CLOSED • test archived"};
+        meta.textContent = size + " KB (reported) • FILE NOT UPLOADED • "+
+          (labels[order.status]||"Unknown state")+when;
         item.append(details, meta);
+        if(order.status==="demo_only" || order.status==="reviewed"){
+          const actions=document.createElement("div");actions.className="btn-row";
+          const mark=async(next,button)=>{
+            if(!window.confirm("Change demo request #"+order.id+" to "+next+
+              "? File was not uploaded; this does NOT mean printing."))return;
+            button.disabled=true;
+            try{
+              const response=await fetch("/api/shop/demo-orders/"+
+                encodeURIComponent(order.id)+"/status",{
+                method:"POST",credentials:"same-origin",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({status:next})
+              });
+              const result=await response.json().catch(()=>({}));
+              if(!response.ok)throw new Error(result.error||"Could not update demo request");
+              showToast("Demo request #"+order.id+" is now "+next+".");
+              await loadDemoOrders();
+            }catch(error){showToast(error.message);button.disabled=false;}
+          };
+          if(order.status==="demo_only"){
+            const review=document.createElement("button");
+            review.className="btn teal";review.type="button";
+            review.textContent="Mark Reviewed (no file)";
+            review.addEventListener("click",()=>mark("reviewed",review));
+            actions.append(review);
+          }
+          const close=document.createElement("button");
+          close.className="btn light";close.type="button";
+          close.textContent="Close demo request";
+          close.addEventListener("click",()=>mark("closed",close));
+          actions.append(close);item.append(actions);
+        }
         container.appendChild(item);
       });
     } catch (error) {
@@ -452,7 +486,13 @@
           (order.printMode === "color" ? "Color" : "B&W");
         const desc = document.createElement("span");
         const date = new Date(order.createdAt);
-        desc.textContent = (order.status === "printed" ? "Printed (owner confirmed)" : "Private, awaiting print") + " • " +
+        const statusLabel={
+          test_only:"NEW • awaiting owner decision",
+          accepted:"ACCEPTED • ready for owner-reviewed printing",
+          rejected:"REJECTED • not for printing",
+          printed:"PRINTED • owner confirmed physical paper"
+        };
+        desc.textContent = (statusLabel[order.status]||"Unknown status") + " • " +
           Math.round(Number(order.fileSizeBytes)/1024) + " KB • " +
           (Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-IN"));
         desc.style.display = "block";
@@ -466,7 +506,7 @@
         review.href = "/shop-print-preview.html?order=" + encodeURIComponent(id);
         review.target = "_blank";
         review.rel = "noopener noreferrer";
-        review.textContent = "Review & Print";
+        review.textContent = order.status==="accepted"?"Review & Print":"Review TEST file";
         const download = document.createElement("a");
         download.className = "btn light";
         download.href = "/api/shop/test-file-orders/" + id + "/download";
@@ -491,7 +531,37 @@
             remove.disabled = false;
           }
         });
-        controls.append(review, download, remove);
+        if(order.status!=="rejected"){
+          controls.append(review,download);
+        }
+        if(order.status==="test_only"){
+          for(const decision of ["accepted","rejected"]){
+            const button=document.createElement("button");
+            button.className=decision==="accepted"?"btn teal":"btn light";
+            button.type="button";
+            button.textContent=decision==="accepted"?"Accept test order":"Reject test order";
+            button.addEventListener("click",async()=>{
+              if(!window.confirm((decision==="accepted"?
+                "Accept this non-sensitive TEST order for manual review?":
+                "Reject this TEST order? It cannot be marked printed afterwards.")+
+                " Order #"+id))return;
+              button.disabled=true;
+              try{
+                const response=await fetch("/api/shop/test-file-orders/"+id+"/decision",{
+                  method:"POST",credentials:"same-origin",
+                  headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify({decision})
+                });
+                const result=await response.json().catch(()=>({}));
+                if(!response.ok)throw new Error(result.error||"Could not update this order");
+                showToast("TEST order #"+id+" "+decision+".");
+                await loadPrivateOrders();
+              }catch(error){showToast(error.message);button.disabled=false;}
+            });
+            controls.append(button);
+          }
+        }
+        controls.append(remove);
         const existingBill=billsByOrder.get(id);
         if(existingBill){
           const billLink=document.createElement("a");
