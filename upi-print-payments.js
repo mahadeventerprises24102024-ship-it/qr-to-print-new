@@ -45,6 +45,10 @@ async function ensureUpiPrintTables(pool){
     "confirmed_by_owner_id BIGINT REFERENCES shop_owners(id) ON DELETE SET NULL,",
     "confirmed_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
   ].join(" "));
+  // Remove legacy UTR storage as well as the customer-facing UTR box.
+  // Previously collected UTRs are no longer needed for manual bank checks.
+  await pool.query("DROP INDEX IF EXISTS upi_test_utr_unique");
+  await pool.query("ALTER TABLE shop_upi_test_payments DROP COLUMN IF EXISTS customer_utr");
   await pool.query("CREATE INDEX IF NOT EXISTS upi_test_shop_recent ON shop_upi_test_payments(shop_id,id DESC)");
 }
 function installUpiPrintPayments(app,pool){
