@@ -1,5 +1,4 @@
 "use strict";
-
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
@@ -9,17 +8,20 @@ const html=fs.readFileSync(path.join(root,"index.html"),"utf8");
 const css=fs.readFileSync(path.join(root,"style.css"),"utf8");
 const server=fs.readFileSync(path.join(root,"server.js"),"utf8");
 
-test("home page no longer incorrectly calls implemented Shop features Coming next",()=>{
-  assert.doesNotMatch(html,/Coming next/i);
-  assert.doesNotMatch(html,/File upload and shop printing are planned for a later step/i);
-  assert.doesNotMatch(html,/secure shop dashboard will be built after the public tools/i);
+test("public homepage is a professional live shop portal, not a dummy demo landing",()=>{
+  assert.match(html,/QR-TO-PRINT • ONLINE SHOP PORTAL/);
   assert.match(html,/Shop Login \/ Register/);
   assert.match(html,/Quick Print Panel/);
   assert.match(html,/Printer Setup &amp; Test/);
-  assert.match(html,/Customer TEST Orders/);
+  assert.match(html,/Customer Shop QR/);
+  assert.doesNotMatch(html,/Coming next|SHOP TEST WORKFLOW|TEST MODE:|Customer TEST Orders/i);
+  assert.match(html,/ONE WEBSITE • TWO LOGINS/);
+  assert.match(html,/href="\/access\.html\?role=admin"/);
+  assert.match(html,/href="\/access\.html\?role=shop"/);
+  assert.doesNotMatch(html,/href="\/access\.html\?role=customer"/);
 });
 
-test("all home page print navigation routes match explicit server assets",()=>{
+test("all live homepage feature links resolve to explicit backend assets",()=>{
   const expected=[
     "/shop-login.html",
     "/shop-print-panel.html",
@@ -32,25 +34,26 @@ test("all home page print navigation routes match explicit server assets",()=>{
   }
   assert.match(server,/app\.get\("\/shop-print-panel\.html", shopPageGate\(pool\)/);
   assert.match(server,/app\.get\("\/shop-printer-check\.html", shopPageGate\(pool\)/);
-  assert.match(html,/shop's own|Shop QR|अपना अनोखा Shop QR/);
+  assert.match(html,/Shop QR/);
   assert.doesNotMatch(html,/href="\/print\.html"/);
 });
 
-test("home page differentiates TEST customer requests and manual approved printing",()=>{
-  assert.match(html,/TEST MODE/);
+test("homepage does not misrepresent sensitive document workflow as production ready",()=>{
+  assert.match(html,/SAMPLE\/TEST/);
   assert.match(html,/Private customer file uploads/);
   assert.match(html,/R2 TEST Storage/);
-  assert.match(html,/Manual Print/);
   assert.match(html,/असली ग्राहक के निजी दस्तावेज़ अपलोड न करें/);
-  assert.match(html,/Admin वास्तविक बैंक पेमेंट जाँचकर/);
+  assert.match(html,/Production Printing अभी शुरू नहीं हुई है/);
+  assert.match(html,/Admin अपने बैंक में रकम देखकर ही Activation करेगा/);
   assert.match(html,/href="#generator"/);
   assert.match(html,/id="qr-form"/);
   assert.match(html,/<script src="app\.js"><\/script>/);
 });
 
-test("responsive styles include CTA keyboard focus and small-screen navigation",()=>{
+test("responsive live homepage retains readable login and tool navigation",()=>{
   assert.match(css,/\.hero-actions/);
   assert.match(css,/\.site-caution/);
+  assert.match(css,/\.two-role-grid/);
   assert.match(css,/\.tool-card a:focus-visible/);
   assert.match(css,/@media\(max-width:760px\)/);
 });
