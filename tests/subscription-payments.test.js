@@ -231,7 +231,7 @@ test("admin can reject unverified UTR without activating the shop",async()=>{
   assert.equal(yes.body.rejected,true);
   assert.match(queries[0].sql,/kind='upi_manual' AND status='submitted'/);
 });
-test("UI is UPI-only and includes owner checkout and admin review, with no payment gateway",()=>{
+test("Shop subscription UI stays manual UPI-only; Paytm sandbox is isolated to customer TEST files",()=>{
   const root=path.resolve(__dirname,"..");
   const html=fs.readFileSync(path.join(root,"subscription-payment.html"),"utf8");
   const script=html.match(/<script>([\s\S]*?)<\/script>/);
@@ -249,5 +249,9 @@ test("UI is UPI-only and includes owner checkout and admin review, with no payme
   assert.match(server,/await ensureSubscriptionPaymentTables\(pool\)/);
   assert.doesNotMatch(server,/installPaymentWebhook/);
   const packageJSON=JSON.parse(fs.readFileSync(path.join(root,"package.json"),"utf8"));
-  assert.equal(packageJSON.dependencies.paytmchecksum,undefined);
+  assert.equal(packageJSON.dependencies.paytmchecksum,"^1.5.1");
+  const paytm=fs.readFileSync(path.join(root,"paytm-print-payments.js"),"utf8");
+  assert.match(paytm,/PAYTM_TEST_ENABLED/);
+  assert.match(paytm,/shop_paytm_test_payments/);
+  assert.doesNotMatch(fs.readFileSync(path.join(root,"subscription-payments.js"),"utf8"),/paytmchecksum|paytm-print/);
 });
