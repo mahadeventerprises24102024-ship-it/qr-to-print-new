@@ -28,7 +28,7 @@ test("all home page print navigation routes match explicit server assets",()=>{
   ];
   for(const route of expected){
     assert.ok(html.includes('href="'+route+'"'),"Home page should link "+route);
-    assert.ok(server.includes('"/'+route.slice(1)+'"'),"Server should serve "+route);
+    assert.ok(server.includes('"'+route.slice(1)+'"'),"Server should reference served "+route);
   }
   assert.match(server,/app\.get\("\/shop-print-panel\.html", shopPageGate\(pool\)/);
   assert.match(server,/app\.get\("\/shop-printer-check\.html", shopPageGate\(pool\)/);
