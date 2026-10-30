@@ -57,8 +57,9 @@
       <a class="btn secondary" id="download-file">Download private file</a>
       <button id="mark-printed" type="button" style="background:#285667" hidden>Mark Printed (after checking paper)</button>
     </div>
-    <p class="help" id="upi-quote-state" role="status">Shop owner's UPI QR only for non-sensitive TEST file orders. Customer submits UTR; shop must manually check their actual bank credit. No automatic printing.</p>
+    <p class="help" id="upi-quote-state" role="status">Shop owner must verify actual bank receipt, not the customer’s I Paid button. Then a TEST image may open this PC’s Print Dialog; the shop owner still confirms Print.</p>
     <p class="help" id="paytm-quote-state" role="status">Paytm SANDBOX, if configured, can quote this ACCEPTED non-sensitive TEST order. No live money, no customer automatic printing.</p>
+    <p class="help" id="auto-print-notice" role="status" aria-live="polite" hidden></p>
     <p class="help">For photos, click <strong>Review &amp; Print image</strong> after accepting the TEST order. In the native print dialog, choose <strong>your own installed shop printer</strong> (USB/Wi-Fi/network), correct paper size, copies and colour. PDFs must be printed from the PDF viewer. Physical printing only occurs after you confirm the native dialog. Inspect all printed pages, then choose Mark Printed.</p>
   </section>
 </main>
@@ -72,6 +73,36 @@
   const actions = document.getElementById("actions");
   const printArea = document.getElementById("print-area");
   const imageButton = document.getElementById("print-image");
+  const autoPrintRequested=new URLSearchParams(location.search).get("autoPrint")==="1";
+  const autoPrintNote=document.getElementById("auto-print-notice");
+  let autoPrintAuthorized=false;
+  let autoDialogAttempted=false;
+  async function authorizeAutoPrintDialog(id){
+    if(!autoPrintRequested)return;
+    autoPrintNote.hidden=false;
+    autoPrintNote.textContent="Checking that this shop owner manually verified bank payment for this accepted TEST file...";
+    const response=await fetch("/api/shop/upi-payment/orders/"+
+      encodeURIComponent(id)+"/print-ready",{credentials:"same-origin",cache:"no-store"});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok||result.ready!==true||
+       result.manualBankConfirmation!==true||result.openPrintDialogOnly!==true){
+      throw new Error(result.error||"UPI payment must be confirmed by this shop owner before opening Print Dialog");
+    }
+    autoPrintAuthorized=true;
+    autoPrintNote.textContent="Bank payment manually confirmed. Your native Print Dialog will be requested for this TEST image. Check copies/colour/paper and click Print yourself.";
+  }
+  function openImagePrintDialogOnce(){
+    if(!autoPrintRequested||!autoPrintAuthorized||autoDialogAttempted||!printArea.querySelector("img"))return;
+    autoDialogAttempted=true;
+    // Browser may block automatic window.print without user activation.
+    // The explicit Review & Print image button remains a safe fallback.
+    requestAnimationFrame(()=>{
+      try{window.print();}
+      catch{
+        autoPrintNote.textContent="Browser blocked automatic Print Dialog. Please click Review & Print image.";
+      }
+    });
+  }
   const acceptButton = document.getElementById("accept-order");
   const upiQuote=document.getElementById("upi-quote");
   const upiQuoteState=document.getElementById("upi-quote-state");
@@ -175,6 +206,7 @@
     }
     currentOrderId = id;
     document.getElementById("order-heading").textContent = "#" + id;
+    if(autoPrintRequested)await authorizeAutoPrintDialog(id);
     try {
       const listResponse = await fetch("/api/shop/test-file-orders", {
         credentials: "same-origin", cache: "no-store"
@@ -233,6 +265,9 @@
       if (order.status === "printed") status("Order marked Printed by shop owner.");
 
       if (order.fileType === "pdf") {
+        if(autoPrintRequested&&autoPrintAuthorized){
+          autoPrintNote.textContent="UPI payment verified by shop owner. PDF print preview is ready. Browser PDF viewers can block automatic Print Dialog: click Open PDF to Print, then Ctrl+P.";
+        }
         preview.textContent = "PDF is ready. Use Open PDF to Print to review it in your browser.";
         document.getElementById("pdf-help").hidden = false;
         pdfLink.href = objectURL;
@@ -251,6 +286,7 @@
           imageButton.hidden = !canPrint;
           status(canPrint?"Accepted TEST image: review and open the print dialog manually.":
             "Pending shop decision. Review the image; Accept before printing.");
+          if(canPrint)openImagePrintDialogOnce();
         }, { once: true });
         img.addEventListener("error", () => {
           status("Could not display image; printing is disabled.");
