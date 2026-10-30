@@ -10,6 +10,7 @@ const helmet = require("helmet");
 const { installShopAuth, ensureShopTables } = require("./shop-auth");
 const { installDemoOrderApis, ensureDemoOrderTables } = require("./demo-print-orders");
 const { installTestFileUploads, ensureTestUploadTables, purgeExpiredTestFiles } = require("./private-test-uploads");
+const { checkR2Connectivity } = require("./r2-connectivity");
 const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
 const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
 const { installShopBilling, ensureShopBillingTables } = require("./shop-billing");
@@ -450,6 +451,18 @@ async function start() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);
+    // Check Cloudflare R2 once with a harmless temporary file; log only
+    // redacted capability flags, never bucket names or credentials.
+    setTimeout(async()=>{
+      try {
+        const state=await checkR2Connectivity();
+        console.log("R2 sample storage connectivity:",JSON.stringify(state));
+      }catch(error){
+        console.log("R2 sample storage connectivity:",JSON.stringify({
+          configured:false,connectionVerified:false,error:{code:"diagnostic_unavailable"}
+        }));
+      }
+    },1000).unref();
     // Purge expired SAMPLE uploads every 15 minutes while the instance is
     // running; a private R2 bucket 1-day lifecycle is still required.
     let cleanupRunning=false;
