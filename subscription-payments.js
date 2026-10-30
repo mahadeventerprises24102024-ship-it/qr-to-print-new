@@ -385,80 +385,79 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
   });
   app.post("/api/payments/paytm-order",actionLimiter,billingOnly,async(req,res)=>{
     const c=paymentConfig(env);
-    if(!c.gatewayEnabled)return res.status(503).json({error:"Paytm keys and webhook secret are not configured"});
+    if(!c.gatewayEnabled)return res.status(503).json({error:"Paytm MID and Merchant Key are not configured"});
     const q=quote(req.body?.planCode,req.body?.durationDays);
     if(!q)return res.status(400).json({error:"Select Starter, Pro or Business and 30/90/365 days"});
-    let draft;
     try{
+      // The amount comes from the server's immutable plan catalogue.
       const created=await pool.query([
         "INSERT INTO platform_payment_requests",
         "(shop_id,owner_id,kind,plan_code,duration_days,amount_paise,status,gateway_mode)",
         "VALUES($1,$2,'paytm',$3,$4,$5,'draft',$6) RETURNING id"
       ].join(" "),[req.session.billingShopId,req.session.billingOwnerId,
         q.planCode,q.durationDays,q.amountPaise,c.mode]);
-      draft=created.rows[0].id;
-      const order=await paytmFetch(c,"orders",{
-        method:"POST",body:JSON.stringify({
-          amount:q.amountPaise,currency:"INR",receipt:"qrp_"+draft,
-          notes:{shop_payment_request:String(draft)}
-        })
-      },fetchImpl);
-      if(!/^order_[A-Za-z0-9]+$/.test(order.id||"")||
-         order.amount!==q.amountPaise||order.currency!=="INR"){
-        throw new Error("Gateway order mismatch");
+      const draft=created.rows[0].id,orderId="QRPT"+draft;
+      const body={
+        requestType:"Payment",mid:c.mid,websiteName:c.website,
+        orderId,
+        callbackUrl:c.origin+"/api/payments/paytm/callback",
+        txnAmount:{value:(q.amountPaise/100).toFixed(2),currency:"INR"},
+        userInfo:{custId:"SHOP"+req.session.billingShopId}
+      };
+      const response=await paytmCall(c,"/theia/api/v1/initiateTransaction?mid="+
+        encodeURIComponent(c.mid)+"&orderId="+encodeURIComponent(orderId),body,fetchImpl);
+      if(response?.resultInfo?.resultStatus!=="S" ||
+         typeof response.txnToken!=="string"||response.txnToken.length<16){
+        throw new Error("Paytm did not return a valid transaction token");
       }
-      await pool.query([
+      const updated=await pool.query([
         "UPDATE platform_payment_requests SET status='pending',",
-        "paytm_order_id=$2,updated_at=NOW() WHERE id=$1 AND status='draft'"
-      ].join(" "),[draft,order.id]);
+        "paytm_order_id=$2,updated_at=NOW() WHERE id=$1 AND status='draft'",
+        "RETURNING id"
+      ].join(" "),[draft,orderId]);
+      if(!updated.rows.length)throw new Error("Payment order is no longer pending");
       res.set("Cache-Control","no-store");
       return res.status(201).json({
-        requestId:draft,orderId:order.id,keyId:c.keyId,amountPaise:q.amountPaise,
-        currency:"INR",gatewayMode:c.mode,
+        requestId:draft,orderId,txnToken:response.txnToken,mid:c.mid,
+        amountPaise:q.amountPaise,gatewayHost:c.host,gatewayMode:c.mode,
         testOnly:c.mode==="test"
       });
     }catch(error){
-      console.error("Paytm order failed:",error);
+      console.error("Paytm order initiation failed:",error);
       return res.status(503).json({
-        error:"Could not create a gateway checkout. No payment is confirmed; please retry later."
+        error:"Could not start Paytm checkout. No payment was confirmed. Please retry later."
       });
     }
   });
-  app.post("/api/payments/paytm-verify",actionLimiter,billingOnly,async(req,res)=>{
+  // Reconcile against Paytm transaction status; browser cannot submit arbitrary
+  // success data. Also supports returning from checkout with a pending order.
+  app.post("/api/payments/paytm-status",actionLimiter,billingOnly,async(req,res)=>{
+    if(!validId(req.body?.requestId)){
+      return res.status(400).json({error:"Invalid payment request ID"});
+    }
     const c=paymentConfig(env);
     if(!c.gatewayEnabled)return res.status(503).json({error:"Paytm not configured"});
-    const id=req.body?.paytm_order_id,paid=req.body?.paytm_transaction_id,
-      signature=req.body?.paytm_signature;
-    if(!/^order_[A-Za-z0-9]+$/.test(id||"")||
-       !/^pay_[A-Za-z0-9]+$/.test(paid||"")||
-       !secureMatch(signature,id+"|"+paid,c.keySecret)){
-      return res.status(400).json({error:"Invalid payment signature"});
-    }
     try{
       const own=await pool.query([
-        "SELECT id FROM platform_payment_requests",
-        "WHERE paytm_order_id=$1 AND shop_id=$2 AND owner_id=$3"
-      ].join(" "),[id,req.session.billingShopId,req.session.billingOwnerId]);
-      if(!own.rows.length)return res.status(404).json({error:"Payment order not found for this shop"});
-      const payment=await paytmFetch(c,"payments/"+encodeURIComponent(paid),{},fetchImpl);
-      if(payment.id!==paid||payment.order_id!==id||
-         payment.status!=="captured"||payment.currency!=="INR"){
-        return res.status(409).json({error:"Payment is not captured yet. Check again later."});
+        "SELECT paytm_order_id,status FROM platform_payment_requests",
+        "WHERE id=$1 AND shop_id=$2 AND owner_id=$3 AND kind='paytm'"
+      ].join(" "),[req.body.requestId,req.session.billingShopId,req.session.billingOwnerId]);
+      if(!own.rows.length)return res.status(404).json({error:"Payment not found for your shop"});
+      const item=own.rows[0];
+      if(item.status==="paid"||item.status==="test_paid"){
+        return res.json({status:item.status,activated:item.status==="paid"});
       }
-      const result=await settleCapturedGateway(pool,{
-        orderId:id,paymentId:paid,status:payment.status,
-        currency:payment.currency,amountPaise:payment.amount
-      });
-      if(!["paid","test_paid"].includes(result.status))return res.status(409).json({
-        error:"Payment could not be matched to the expected order amount"
-      });
+      if(!/^QRPT[0-9]{1,18}$/.test(item.paytm_order_id||"")||
+         item.status!=="pending")return res.status(409).json({error:"Payment is not ready to verify"});
+      const result=await verifyPaytmOrder(pool,c,item.paytm_order_id,fetchImpl);
       res.set("Cache-Control","no-store");
-      return res.json({status:result.status,
-        activated:result.status==="paid",
-        message:result.status==="paid"?"Captured payment verified. Shop subscription activated.":"Paytm TEST payment verified; shop subscription NOT activated."});
+      return res.json({status:result.status,activated:result.status==="paid",
+        message:result.status==="paid"?"Paytm payment verified. Subscription activated.":
+          result.status==="test_paid"?"Paytm TEST transaction verified; real subscription not activated.":
+          "No verified successful payment yet. Do not pay again before checking status."});
     }catch(error){
-      console.error("Gateway payment verification failed:",error);
-      return res.status(503).json({error:"Could not verify captured payment. Please retry later."});
+      console.error("Paytm status verification failed:",error);
+      return res.status(503).json({error:"Could not verify Paytm transaction. Check again later."});
     }
   });
   app.get("/api/platform/payment-requests",requireAdmin,async(req,res)=>{
