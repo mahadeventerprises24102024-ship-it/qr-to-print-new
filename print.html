@@ -45,11 +45,11 @@
   </style>
 </head>
 <body>
-  <header class="header"><a href="/" class="brand"><span>QR</span> QR-To-Print</a><span class="demo-tag">TEST PREVIEW</span></header>
+  <header class="header"><a href="/" class="brand"><span>QR</span> QR-To-Print</a><span class="demo-tag">TEST ORDERS • NOT LIVE PRINTING</span></header>
   <main class="wrapper">
     <section class="intro">
       <span class="eyebrow">Customer printing</span>
-      <h1>Scan. Upload.<br><span>Print.</span></h1>
+      <h1>Scan. Send.<br><span>Track.</span></h1>
       <p>QR स्कैन करके दुकान चुनें और बिना Customer Login के टेस्ट अनुरोध भेजें। Private TEST Upload भी दुकान की अनुमति से ही चालू होगा। अभी वास्तविक ग्राहक दस्तावेज़ या अपने आप प्रिंटिंग शुरू नहीं होती।</p>
       <div class="shop" aria-live="polite">
         <small>YOU ARE VISITING</small>
@@ -59,7 +59,8 @@
       <div class="steps">
         <div class="step"><b>01</b> Scan the QR at your print shop</div>
         <div class="step"><b>02</b> Check the shop name</div>
-        <div class="step"><b>03</b> Send a test request or private sample (no login)</div>
+        <div class="step"><b>03</b> Send a safe test order and save its private tracking code</div>
+        <div class="step"><b>04</b> Check the status after the shop reviews it</div>
       </div>
       <p class="footer">QR-To-Print • Demo customer print page</p>
     </section>
@@ -107,6 +108,23 @@
       </form>
       <p id="demo-result" class="response" role="status" aria-live="polite" hidden></p>
       <div class="info">⚠ ऊपर वाला फॉर्म केवल फाइल की जानकारी भेजता है; फाइल स्वयं नहीं भेजता। यह डेमो है, असली प्रिंट ऑर्डर नहीं।</div>
+      <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
+      <h2>Track your TEST order</h2>
+      <p class="subtitle">Order भेजने के बाद मिला <strong>Order ID</strong> और <strong>Private Tracking Code</strong> सुरक्षित रखें। बिना Tracking Code के guest status नहीं देख सकता।</p>
+      <form id="track-form">
+        <label for="track-kind">Order type</label>
+        <select id="track-kind" required>
+          <option value="demo-orders">Demo request (file stays on device)</option>
+          <option value="test-file-orders">Private TEST file upload</option>
+        </select>
+        <label for="track-id">Order ID</label>
+        <input id="track-id" inputmode="numeric" pattern="[1-9][0-9]{0,14}" maxlength="15" autocomplete="off" required placeholder="Order number">
+        <label for="track-token">Private Tracking Code</label>
+        <input id="track-token" pattern="[0-9a-f]{48}" maxlength="48" autocomplete="off" spellcheck="false" required placeholder="48-character tracking code">
+        <button id="track-submit" type="submit" class="btn" disabled>Check TEST Order Status</button>
+      </form>
+      <p id="track-status" class="response" aria-live="polite" role="status" hidden></p>
+      <div class="info">Tracking Code किसी के साथ शेयर न करें। इससे सिर्फ उसी दुकान का ऑर्डर स्टेटस दिखता है, फाइल नहीं मिलती।</div>
     </section>
   </main>
   <script>
@@ -121,6 +139,58 @@
       const privateForm=document.getElementById("private-upload-form");
       const privateMessage=document.getElementById("private-upload-status");
       const privateButton=document.getElementById("private-upload-button");
+      const trackForm=document.getElementById("track-form");
+      const trackMessage=document.getElementById("track-status");
+      const trackSubmit=document.getElementById("track-submit");
+      function showTracking(kind,orderId,token){
+        document.getElementById("track-kind").value=kind;
+        document.getElementById("track-id").value=String(orderId);
+        document.getElementById("track-token").value=token;
+        trackMessage.hidden=false;
+        trackMessage.classList.remove("error");
+        trackMessage.textContent="TEST Order #"+orderId+" • Tracking Code: "+token+
+          " • कृपया यह कोड अभी सुरक्षित रख लें।";
+      }
+      const labels={
+        demo_only:"Received • shop review pending; file NOT uploaded",
+        reviewed:"Shop reviewed demo details; file NOT uploaded",
+        closed:"Demo request closed; file NOT uploaded",
+        test_only:"Received • shop decision pending",
+        accepted:"Accepted by shop • manual TEST review only",
+        rejected:"Rejected by shop • not for printing",
+        printed:"Shop owner confirmed physical TEST paper output"
+      };
+      trackForm.addEventListener("submit",async(event)=>{
+        event.preventDefault();
+        if(!verifiedCode||trackSubmit.disabled)return;
+        const orderId=document.getElementById("track-id").value.trim();
+        const trackingToken=document.getElementById("track-token").value.trim();
+        const kind=document.getElementById("track-kind").value;
+        if(!["demo-orders","test-file-orders"].includes(kind)||
+           !/^[1-9][0-9]{0,14}$/.test(orderId)||!/^[a-f0-9]{48}$/.test(trackingToken)){
+          trackMessage.hidden=false;
+          trackMessage.classList.add("error");
+          trackMessage.textContent="Enter valid Order ID and full 48-character Tracking Code.";
+          return;
+        }
+        trackSubmit.disabled=true;
+        try{
+          const response=await fetch("/api/public/shops/"+verifiedCode+"/"+kind+"/status",{
+            method:"POST",credentials:"same-origin",cache:"no-store",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({orderId,trackingToken})
+          });
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||"Tracking status unavailable");
+          trackMessage.classList.remove("error");
+          trackMessage.textContent="TEST Order #"+data.order.id+" • "+
+            (labels[data.order.status]||"Status unavailable")+
+            " • No automatic printing/payment is implied.";
+        }catch(error){
+          trackMessage.classList.add("error");
+          trackMessage.textContent=error.message;
+        }finally{trackMessage.hidden=false;trackSubmit.disabled=false;}
+      });
       let publicRates=null;
       const money=value=>"₹"+Number(value).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
@@ -217,7 +287,8 @@
           if(!response.ok) {
             throw new Error(result.error || "Private test upload failed");
           }
-          privateNotice("TEST #"+result.order.id+" stored privately. The shop owner can download it in Print orders. Nothing was printed or charged.");
+          privateNotice("TEST #"+result.order.id+" stored privately. Its Tracking Code is shown below. Shop must accept it before any manual printing.");
+          showTracking("test-file-orders",result.order.id,result.trackingToken);
           privateForm.reset();
         }catch(error){
           privateNotice(error.message,true);
@@ -258,7 +329,8 @@
           });
           const data=await response.json().catch(()=>({}));
           if(!response.ok) throw new Error(data.error || "Test request failed");
-          showResult("Test request #"+data.order.id+" recorded for this shop. Your actual file was NOT uploaded or printed. Check the shop dashboard's Print orders section.");
+          showResult("Demo request #"+data.order.id+" saved. Actual file was NOT uploaded. Save the Tracking Code shown below.");
+          showTracking("demo-orders",data.order.id,data.trackingToken);
           form.reset();
         } catch(error) {
           showResult(error.message,true);
@@ -282,6 +354,7 @@
         status.textContent="Shop verified • Guest test requests available";
         verifiedCode=code;
         submit.disabled=false;
+        trackSubmit.disabled=false;
         await Promise.all([preparePrivateUpload(code),loadPublicPricing(code)]);
       } catch (error) {
         title.textContent="Shop unavailable";
