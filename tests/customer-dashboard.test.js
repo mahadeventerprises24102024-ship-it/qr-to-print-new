@@ -16,9 +16,10 @@ test("customer dashboard is real TEST-order UI, not a coming-soon mock",()=>{
   assert.match(page,/असली Aadhaar, PAN या निजी पहचान दस्तावेज़ अपलोड न करें/);
 });
 
-test("customer dashboard uses existing session-restricted APIs and scoped tracking",()=>{
-  assert.match(server,/app\.get\("\/dashboard\.html", \(req, res\) => \{/);
-  assert.match(server,/if \(!req\.session \|\| !req\.session\.userId\)/);
+test("archived customer dashboard uses scoped order APIs but is no longer served",()=>{
+  // Legacy customer page is retained in source for compatibility only, not served.
+  assert.match(server,/app\.get\("\/dashboard\.html", \(_req, res\) => \{/);
+  assert.match(server,/return res\.redirect\(302, "\/access\.html"\);/);
   assert.match(page,/api\("\/api\/me"\)/);
   assert.match(page,/api\("\/api\/customer\/test-file-orders"\)/);
   assert.ok(page.includes('"/api/public/shops/"+code+"/"+kind+"/status"'),"shop-scoped status lookup missing");
@@ -29,7 +30,7 @@ test("customer dashboard uses existing session-restricted APIs and scoped tracki
   assert.doesNotMatch(page,/localStorage|sessionStorage/);
 });
 
-test("customer dashboard parses and redirects unauthorized users to customer login",()=>{
+test("archived customer dashboard script remains parseable",()=>{
   const code=page.match(/<script>([\s\S]*?)<\/script>/);
   assert.ok(code);
   assert.doesNotThrow(()=>new Function(code[1]));
