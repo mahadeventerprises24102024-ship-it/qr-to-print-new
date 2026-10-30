@@ -136,8 +136,11 @@ test("private test decision is tenant-scoped; rejected file cannot be printed",a
   const path="/api/shop/test-file-orders/:id/decision";
   const handler=map["POST "+path].at(-1);
   const denied=response();
-  await handler({session:{},params:{id:"23"},body:{decision:"accepted"}},denied);
+  let bypassed=false;
+  map["POST "+path][0]({session:{},params:{id:"23"},body:{decision:"accepted"}},
+    denied,()=>{bypassed=true;});
   assert.equal(denied.statusCode,401);
+  assert.equal(bypassed,false);
   const bad=response();
   await handler({session:{shopOwnerId:3},params:{id:"23"},body:{decision:"printed"}},bad);
   assert.equal(bad.statusCode,400);
