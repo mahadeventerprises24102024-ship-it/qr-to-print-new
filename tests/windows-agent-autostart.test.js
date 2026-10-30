@@ -92,7 +92,7 @@ test("installer encrypts key with Windows user DPAPI and restricts local directo
   assert.match(setup,/Set-Clipboard -Value ''/);
   assert.match(setup,/Read-Host 'Shop pairing key' -AsSecureString/);
   assert.match(setup,/No automatic printing or customer file downloads/);
-  assert.match(setup,/notmatch '\^v\(\[0-9\]\+\)\\\.'/);
+  assert.match(setup,/nodeVersionText -match/);
   assert.match(setup,/Run from your normal unelevated Windows account/);
   assert.doesNotMatch(setup,/UPI_PAYMENT_VPA|DATABASE_URL|SESSION_SECRET/);
   assert.doesNotMatch(setup,/ConvertFrom-SecureString[^\r\n]*-AsPlainText/);
