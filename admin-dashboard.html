@@ -62,6 +62,15 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   <h1>Shop Owners & Subscriptions</h1>
   <p class="sub">नई दुकानें पहले <b>Pending</b> रहती हैं। बिक्री या Trial की पुष्टि के बाद 30, 90 या 365 दिन का एक्सेस दें। प्रत्येक दुकानदार का अपना Dashboard, QR Code, Orders और Rates अलग हैं।</p>
   <div id="alert" role="status" hidden></div>
+  <section class="section" aria-label="Document safety release checklist">
+    <div class="section-head">
+      <div><div class="eyebrow">LIVE DOCUMENT SECURITY</div><h2 style="margin-top:7px">Production Printing Readiness</h2></div>
+      <button id="readiness-refresh" class="outline" type="button">Refresh status</button>
+    </div>
+    <p class="sub">वेबसाइट LIVE है, लेकिन असली Aadhaar/PAN और निजी ग्राहक दस्तावेज़ स्वीकार करने के लिए ये सुरक्षा शर्तें पूरी होनी चाहिए। यह जाँच केवल स्थिति बताती है, कोई अपलोड चालू नहीं करती।</p>
+    <p id="readiness-summary" class="note" role="status" aria-live="polite">Checking document safety...</p>
+    <div id="readiness-checks" class="shop-list" aria-live="polite"></div>
+  </section>
   <section class="section" aria-label="Published subscription price list">
     <div class="eyebrow">SUBSCRIPTION PLANS</div>
     <h2 style="margin-top:8px">Shop Owner Plans &amp; Pricing</h2>
@@ -155,6 +164,29 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   function settingLabel(title,node){
     const label=element("label",null,title);label.append(node);return label;
   }
+  async function loadReadiness(){
+    const output=document.getElementById("readiness-checks");
+    const summary=document.getElementById("readiness-summary");
+    summary.textContent="Checking production prerequisites...";
+    try{
+      const result=await request("/api/platform/production-readiness");
+      summary.textContent=result.productionReady?
+        "Production document processing ready (subject to operator review)." :
+        "Real customer documents: NOT ENABLED. Owner-verified SAMPLE print workflow only.";
+      output.replaceChildren();
+      for(const check of result.checks||[]){
+        const item=element("div","record");
+        const name=element("strong",null,(check.ready?"✓ Configured: ":"• Not ready: ")+check.label);
+        const explanation=element("p","note",check.detail);
+        item.append(name,explanation);
+        output.append(item);
+      }
+    }catch(error){
+      summary.textContent="Unable to check document readiness: "+error.message;
+      output.replaceChildren();
+    }
+  }
+  document.getElementById("readiness-refresh").addEventListener("click",loadReadiness);
   async function request(url,body){
     const options={credentials:"same-origin",cache:"no-store"};
     if(body!==undefined){
@@ -456,7 +488,7 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   });
   request("/api/platform/me").then(data=>{
     document.getElementById("admin-email").textContent=data.email;
-    return Promise.all([loadPlanPrices(),loadShops(),loadHistory(),loadUsage(),loadPayments()]);
+    return Promise.all([loadPlanPrices(),loadShops(),loadHistory(),loadUsage(),loadPayments(),loadReadiness()]);
   }).catch(error=>notify(error.message,true));
 })();
 </script>
