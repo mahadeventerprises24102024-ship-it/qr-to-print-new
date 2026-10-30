@@ -18,6 +18,21 @@ function sha256(value) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+const MAX_PRINTERS = 30;
+const MAX_PRINTER_NAME_LENGTH = 100;
+function validPrinterName(value) {
+  return typeof value === "string" &&
+    value.length >= 1 && value.length <= MAX_PRINTER_NAME_LENGTH &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f]/.test(value);
+}
+function validPrinterNames(names, printerCount) {
+  return Array.isArray(names) &&
+    names.length <= MAX_PRINTERS && names.length <= printerCount &&
+    names.every(validPrinterName) &&
+    new Set(names).size === names.length;
+}
+
 function requireShopOwner(req, res, next) {
   if (!req.session || !req.session.shopOwnerId) {
     return res.status(401).json({ error: "Shop login required" });
@@ -32,10 +47,14 @@ async function ensureAgentTables(pool) {
       token_hash CHAR(64) NOT NULL UNIQUE,
       device_label VARCHAR(80) NOT NULL DEFAULT 'Windows printer PC',
       printer_count SMALLINT NOT NULL DEFAULT 0,
+      printer_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_printer_name VARCHAR(100),
       last_seen_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query("ALTER TABLE shop_print_agents ADD COLUMN IF NOT EXISTS printer_names JSONB NOT NULL DEFAULT '[]'::jsonb");
+  await pool.query("ALTER TABLE shop_print_agents ADD COLUMN IF NOT EXISTS preferred_printer_name VARCHAR(100)");
 }
 
 function installAgentApis(app, pool) {
@@ -50,6 +69,8 @@ function installAgentApis(app, pool) {
          ON CONFLICT (shop_id)
          DO UPDATE SET token_hash = EXCLUDED.token_hash,
                        printer_count = 0,
+                       printer_names = '[]'::jsonb,
+                       preferred_printer_name = NULL,
                        last_seen_at = NULL
          RETURNING shop_id`,
         [req.session.shopOwnerId, sha256(token)]
@@ -74,6 +95,8 @@ function installAgentApis(app, pool) {
       const result = await pool.query(
         `SELECT a.device_label AS "deviceLabel", a.printer_count AS "printerCount",
                 a.last_seen_at AS "lastSeenAt",
+                a.printer_names AS "printerNames",
+                a.preferred_printer_name AS "preferredPrinterName",
                 (a.last_seen_at IS NOT NULL
                   AND a.last_seen_at > NOW() - INTERVAL '100 seconds') AS "online"
          FROM shop_print_agents a
@@ -88,6 +111,8 @@ function installAgentApis(app, pool) {
         online: agent ? Boolean(agent.online) : false,
         deviceLabel: agent ? agent.deviceLabel : null,
         printerCount: agent ? agent.printerCount : 0,
+        printerNames: agent && Array.isArray(agent.printerNames) ? agent.printerNames : [],
+        preferredPrinterName: agent ? agent.preferredPrinterName : null,
         lastSeenAt: agent ? agent.lastSeenAt : null,
         previewOnly: true,
         printingEnabled: false,
@@ -96,6 +121,39 @@ function installAgentApis(app, pool) {
     } catch (error) {
       console.error("Agent status failed:", error);
       return res.status(503).json({ error: "Unable to read agent status" });
+    }
+  });
+
+  // Preferred printer is only an owner-visible hint. Browser printing still
+  // requires selecting a locally installed printer in the native dialog.
+  app.put("/api/shop/agent/preferred-printer", requireShopOwner, async (req, res) => {
+    const printerName = req.body?.printerName;
+    if (printerName !== null && !validPrinterName(printerName)) {
+      return res.status(400).json({ error: "Choose a valid detected printer or clear the selection" });
+    }
+    try {
+      const result = await pool.query(
+        `UPDATE shop_print_agents a
+         SET preferred_printer_name = $2
+         FROM shop_owners o
+         WHERE o.shop_id = a.shop_id AND o.id = $1
+           AND ($2::text IS NULL OR (
+             a.last_seen_at > NOW() - INTERVAL '100 seconds'
+             AND a.printer_names ? $2::text
+           ))
+         RETURNING a.preferred_printer_name AS "preferredPrinterName"`,
+        [req.session.shopOwnerId, printerName]
+      );
+      if (!result.rows.length) {
+        return res.status(409).json({
+          error: "Printer is not currently reported by your online Windows agent. Refresh and try again."
+        });
+      }
+      res.set("Cache-Control", "private, no-store");
+      return res.json({ preferredPrinterName: result.rows[0].preferredPrinterName });
+    } catch (error) {
+      console.error("Printer preference update failed:", error);
+      return res.status(503).json({ error: "Could not save preferred printer" });
     }
   });
 
@@ -128,18 +186,25 @@ function installAgentApis(app, pool) {
       return res.status(401).json({ error: "Invalid printer agent key" });
     }
 
-    const { printerCount } = req.body || {};
+    const { printerCount, printerNames } = req.body || {};
     if (!Number.isInteger(printerCount) ||
         printerCount < 0 || printerCount > 100) {
       return res.status(400).json({ error: "Invalid printer count" });
     }
 
+    // Old PC agents may send only a printer count; keep compatibility.
+    if (printerNames !== undefined && !validPrinterNames(printerNames, printerCount)) {
+      return res.status(400).json({ error: "Invalid installed printer list" });
+    }
     try {
       const result = await pool.query(
         `UPDATE shop_print_agents
-         SET printer_count = $2, last_seen_at = NOW()
+         SET printer_count = $2,
+             printer_names = COALESCE($3::jsonb, printer_names),
+             last_seen_at = NOW()
          WHERE token_hash = $1 RETURNING shop_id`,
-        [sha256(token), printerCount]
+        [sha256(token), printerCount,
+          printerNames === undefined ? null : JSON.stringify(printerNames)]
       );
       if (!result.rows.length) {
         return res.status(401).json({ error: "Printer agent key revoked or invalid" });
@@ -172,4 +237,4 @@ function installAgentApis(app, pool) {
   });
 }
 
-module.exports = { installAgentApis, ensureAgentTables };
+module.exports = { installAgentApis, ensureAgentTables, validPrinterName, validPrinterNames };
