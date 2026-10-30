@@ -3,6 +3,7 @@
 const bcrypt = require("bcryptjs");
 const { createHash } = require("node:crypto");
 const rateLimit = require("express-rate-limit");
+const { productionReadiness } = require("./production-readiness");
 const PLANS = Object.freeze(["starter", "pro", "business", "per_page", "demo"]);
 const PLAN_PRICES = Object.freeze({
   starter: Object.freeze({ label: "Starter", monthlyPaise: 4900, perPagePaise: 0 }),
@@ -161,6 +162,11 @@ function installPlatformAdmin(app,pool,env=process.env) {
     }
     next();
   }
+  // Read-only readiness facts; never leak storage keys or enable real documents.
+  app.get("/api/platform/production-readiness",requireAdmin,(req,res)=>{
+    res.set("Cache-Control","private, no-store");
+    res.json(productionReadiness(env));
+  });
   app.get("/api/platform/plans",requireAdmin,(req,res)=>{
     res.set("Cache-Control","private, no-store");
     return res.json({
