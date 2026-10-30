@@ -541,10 +541,17 @@
         const item=document.createElement("div");item.className="demo-order";
         const info=document.createElement("div");
         const heading=document.createElement("strong");
-        heading.textContent="TEST Order #"+p.orderId+" • ₹"+p.amountRupees+" • "+p.status.toUpperCase();
+        const label={awaiting_payment:"AWAITING PAYMENT",
+          customer_claimed:"CUSTOMER SAYS PAID • CHECK BANK",
+          paid_manual:"PAYMENT RECEIVED • OWNER VERIFIED",
+          rejected:"CLAIM REJECTED"}[p.status]||"UNKNOWN";
+        heading.textContent="TEST Order #"+p.orderId+" • ₹"+p.amountRupees+" • "+label;
         const ref=document.createElement("span");
         ref.style.display="block";
-        ref.textContent="Payment ref: "+p.reference+" • Bank receipt must be checked by shop owner";
+        const time=p.claimedAt?new Date(p.claimedAt):null;
+        ref.textContent="Payment ref: "+p.reference+
+          " • Bank receipt must be checked by shop owner"+
+          (time&&!Number.isNaN(time.getTime())?" • Customer notice: "+time.toLocaleString("en-IN"):"");
         info.append(heading,ref);item.append(info);
         if(p.status==="customer_claimed"){
           const actions=document.createElement("div");
