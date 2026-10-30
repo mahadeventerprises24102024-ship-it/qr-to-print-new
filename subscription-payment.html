@@ -30,7 +30,7 @@ a{color:#087d71} .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:cente
 <header><strong>QR-To-Print • Shop Payments</strong><a href="/shop-login.html">Shop Login / Create Shop</a></header>
 <main>
   <h1>Shop Subscription Payment</h1>
-  <p class="note">अपने shop-owner account से sign in करके प्लान की फीस UPI QR या Razorpay से दें। UPI QR पर पैसा भेजने के बाद Transaction ID भरना जरूरी है; Admin बैंक में पैसा आने की जाँच करेगा। Razorpay के Live payment पर server verification के बाद plan activate होगा।</p>
+  <p class="note">अपने shop-owner account से sign in करके प्लान की फीस UPI QR या Paytm से दें। UPI QR पर पैसा भेजने के बाद Transaction ID भरना जरूरी है; Admin बैंक में पैसा आने की जाँच करेगा। Paytm के Live payment पर server verification के बाद plan activate होगा।</p>
   <p id="message" role="status" aria-live="polite" hidden></p>
   <section id="sign-in" class="card">
     <h2>Shop Owner Payment Login</h2>
@@ -82,11 +82,11 @@ a{color:#087d71} .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:cente
         <p id="upi-unavailable" class="note" hidden>Platform owner ने अभी UPI VPA/Payee Name configure नहीं किया है।</p>
       </section>
       <section class="card" id="gateway-section">
-        <h2>Option 2 • Razorpay Gateway</h2>
-        <p class="note">Pay securely in Razorpay Checkout. केवल server-verified captured payment से subscription activate होगा।</p>
-        <button id="start-gateway" type="button">Pay with Razorpay</button>
-        <p id="gateway-test" class="note" hidden>TEST MODE: यह केवल Razorpay का टेस्ट पेमेंट है। इससे वास्तविक भुगतान या दुकान का प्लान एक्टिवेट नहीं होगा।</p>
-        <p id="gateway-unavailable" class="note" hidden>Gateway अभी configure नहीं है। Render में Razorpay keys + webhook secret जरूरी हैं।</p>
+        <h2>Option 2 • Paytm Gateway</h2>
+        <p class="note">Pay securely in Paytm Checkout. केवल Paytm Transaction Status API से सफल, verify हुए Live payment पर subscription activate होगा।</p>
+        <button id="start-gateway" type="button">Pay with Paytm</button>
+        <p id="gateway-test" class="note" hidden>TEST MODE: यह केवल Paytm का टेस्ट पेमेंट है। इससे वास्तविक भुगतान या दुकान का प्लान एक्टिवेट नहीं होगा।</p>
+        <p id="gateway-unavailable" class="note" hidden>Gateway अभी configure नहीं है। Render में Paytm keys + webhook secret जरूरी हैं।</p>
       </section>
     </div>
     <section class="card">
@@ -134,6 +134,13 @@ async function load(){
       item.textContent="#"+r.id+" • "+r.kind.toUpperCase()+" • "+r.planCode.toUpperCase()+
         " • "+r.durationDays+" days • "+money(r.amountPaise)+" • "+r.status.toUpperCase()+
         " • "+new Date(r.createdAt).toLocaleDateString("en-IN");
+      if(r.kind==="paytm" && r.status==="pending"){
+        const check=document.createElement("button");
+        check.type="button";check.className="secondary";
+        check.textContent="Check Paytm Status";
+        check.addEventListener("click",()=>verifyPaytm(r.id));
+        item.append(document.createTextNode(" "),check);
+      }
       list.append(item);
     });
   }catch(error){
@@ -186,37 +193,58 @@ by("submit-utr").addEventListener("click",async()=>{
   }catch(error){notify(error.message,true);}
   finally{button.disabled=false;}
 });
-function loadRazorpay(){
-  if(window.Razorpay)return Promise.resolve();
+function loadPaytm(mid,host){
+  if(!/^[A-Za-z0-9]{8,36}$/.test(mid)||
+     !["https://secure.paytmpayments.com","https://securestage.paytmpayments.com"].includes(host)){
+    return Promise.reject(Error("Invalid Paytm merchant configuration"));
+  }
+  if(window.Paytm?.CheckoutJS)return Promise.resolve();
   return new Promise((resolve,reject)=>{
     const script=document.createElement("script");
-    script.src="https://checkout.razorpay.com/v1/checkout.js";
-    script.onload=()=>window.Razorpay?resolve():reject(Error("Razorpay Checkout unavailable"));
-    script.onerror=()=>reject(Error("Could not load Razorpay Checkout"));
+    script.src=host+"/merchantpgpui/checkoutjs/merchants/"+encodeURIComponent(mid)+".js";
+    script.crossOrigin="anonymous";
+    script.onload=()=>window.Paytm?.CheckoutJS?resolve():reject(Error("Paytm Checkout script unavailable"));
+    script.onerror=()=>reject(Error("Could not load Paytm Checkout"));
     document.head.append(script);
   });
+}
+async function verifyPaytm(requestId){
+  try{
+    const data=await api("/api/payments/paytm-status",{requestId});
+    notify(data.message || (data.activated?"Paytm payment confirmed. Subscription activated.":
+      "Payment not yet verified; check again later."),!data.activated);
+    await load();
+  }catch(error){notify(error.message+". Check payment status before paying again.",true);}
 }
 by("start-gateway").addEventListener("click",async()=>{
   const button=by("start-gateway");button.disabled=true;
   try{
-    await loadRazorpay();
-    const data=await api("/api/payments/razorpay-order",{
+    const data=await api("/api/payments/paytm-order",{
       planCode:by("plan").value,durationDays:Number(by("duration").value)
     });
-    const checkoutWidget=new window.Razorpay({
-      key:data.keyId,amount:data.amountPaise,currency:"INR",order_id:data.orderId,
-      name:"QR-To-Print",description:by("plan").value+" • "+by("duration").value+" days",
-      theme:{color:"#087d71"},
-      handler:async result=>{
-        try{
-          const verified=await api("/api/payments/razorpay-verify",result);
-          notify(verified.message,!verified.activated);
-          await load();
-        }catch(error){notify(error.message+" Check payment status and contact support before paying again.",true);await load();}
+    await loadPaytm(data.mid,data.gatewayHost);
+    const config={
+      root:"",
+      flow:"DEFAULT",
+      data:{orderId:data.orderId,token:data.txnToken,
+        tokenType:"TXN_TOKEN",amount:(data.amountPaise/100).toFixed(2)},
+      merchant:{redirect:false},
+      handler:{
+        transactionStatus:()=>{verifyPaytm(data.requestId);},
+        notifyMerchant:(eventName)=>{
+          if(eventName==="APP_CLOSED")notify("Paytm checkout closed. Check your payment status before retrying.",true);
+        }
       }
+    };
+    if(!window.Paytm?.CheckoutJS)throw Error("Paytm Checkout script not loaded");
+    window.Paytm.CheckoutJS.onLoad(async()=>{
+      try{
+        await window.Paytm.CheckoutJS.init(config);
+        window.Paytm.CheckoutJS.invoke();
+      }catch(error){notify("Paytm Checkout could not open. Check payment history before retrying.",true);}
     });
-    checkoutWidget.on("payment.failed",result=>notify("Gateway payment failed. Check Razorpay before retrying.",true));
-    checkoutWidget.open();
+    notify(data.testOnly?"Paytm TEST MODE: no real funds or shop activation.":
+      "Paytm checkout started. Payment will activate only after server verification.");
   }catch(error){notify(error.message,true);}
   finally{button.disabled=!account?.gatewayEnabled;}
 });
