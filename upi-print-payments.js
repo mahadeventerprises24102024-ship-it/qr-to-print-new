@@ -1,0 +1,201 @@
+"use strict";
+// Owner-confirmed UPI print TEST payments. No gateway confirmation, no auto printing.
+const {randomBytes,createHash}=require("node:crypto");
+const QRCode=require("qrcode");
+const rateLimit=require("express-rate-limit");
+const limiter=rateLimit({windowMs:900000,limit:20,standardHeaders:"draft-7",legacyHeaders:false});
+const ownerLimiter=rateLimit({windowMs:900000,limit:25,standardHeaders:"draft-7",legacyHeaders:false});
+const codePattern=/^[a-f0-9]{32}$/;
+const idPattern=/^[1-9][0-9]{0,14}$/;
+const tokenPattern=/^[a-f0-9]{48}$/;
+const utrPattern=/^[0-9]{12,22}$/;
+function validVpa(value){return typeof value==="string"&&value.length>=5&&value.length<=133&&/^[A-Za-z0-9][A-Za-z0-9._-]{1,79}@[A-Za-z0-9][A-Za-z0-9._-]{1,49}$/.test(value);}
+function validPayee(value){return typeof value==="string"&&value===value.trim()&&value.length>=2&&value.length<=70&&!/[\x00-\x1f\x7f<>]/.test(value);}
+function rupees(paise){return (Number(paise)/100).toFixed(2);}
+function reference(){return "QRTP"+randomBytes(13).toString("hex").toUpperCase();}
+function upiUrl(vpa,payee,amount,ref){
+  if(!validVpa(vpa)||!validPayee(payee)||!Number.isSafeInteger(amount)||amount<100||amount>250000||!/^QRTP[A-F0-9]{26}$/.test(ref))throw new Error("Invalid UPI quote");
+  return "upi://pay?"+new URLSearchParams({pa:vpa,pn:payee,tr:ref,tn:"QR-To-Print TEST "+ref.slice(-8),am:rupees(amount),cu:"INR"}).toString();
+}
+function hashToken(token){return tokenPattern.test(token||"")?createHash("sha256").update(token).digest("hex"):null;}
+function publicPayment(p){
+  return {orderId:p.order_id,amountRupees:rupees(p.amount_paise),pagesPerCopy:Number(p.pages_per_copy),
+    reference:p.payment_reference,status:p.status,automaticallyVerified:false,
+    automaticPrinting:false,testOnly:true};
+}
+function ownerOnly(req,res,next){if(!req.session?.shopOwnerId)return res.status(401).json({error:"Shop login required"});next();}
+async function ensureUpiPrintTables(pool){
+  await pool.query([
+    "CREATE TABLE IF NOT EXISTS shop_upi_payment_accounts (",
+    "shop_id BIGINT PRIMARY KEY REFERENCES shops(id) ON DELETE CASCADE,",
+    "vpa VARCHAR(133) NOT NULL,payee_name VARCHAR(70) NOT NULL,",
+    "enabled BOOLEAN NOT NULL DEFAULT FALSE,",
+    "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+  ].join(" "));
+  await pool.query([
+    "CREATE TABLE IF NOT EXISTS shop_upi_test_payments (",
+    "id BIGSERIAL PRIMARY KEY,shop_id BIGINT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,",
+    "order_id BIGINT NOT NULL UNIQUE REFERENCES test_file_orders(id) ON DELETE CASCADE,",
+    "payment_reference VARCHAR(30) NOT NULL UNIQUE,",
+    "vpa_snapshot VARCHAR(133) NOT NULL,payee_name_snapshot VARCHAR(70) NOT NULL,",
+    "pages_per_copy SMALLINT NOT NULL CHECK(pages_per_copy BETWEEN 1 AND 20),",
+    "amount_paise INTEGER NOT NULL CHECK(amount_paise BETWEEN 100 AND 250000),",
+    "status VARCHAR(20) NOT NULL DEFAULT 'awaiting_payment'",
+    "CHECK(status IN ('awaiting_payment','customer_claimed','paid_manual','rejected')),",
+    "customer_utr VARCHAR(22),claimed_at TIMESTAMPTZ,",
+    "confirmed_by_owner_id BIGINT REFERENCES shop_owners(id) ON DELETE SET NULL,",
+    "confirmed_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+  ].join(" "));
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS upi_test_utr_unique ON shop_upi_test_payments(customer_utr) WHERE customer_utr IS NOT NULL");
+  await pool.query("CREATE INDEX IF NOT EXISTS upi_test_shop_recent ON shop_upi_test_payments(shop_id,id DESC)");
+}
+function installUpiPrintPayments(app,pool){
+  app.get("/api/shop/upi-payment/account",ownerOnly,async(req,res)=>{
+    try{
+      const q=await pool.query([
+        "SELECT a.vpa,a.payee_name AS \"payeeName\",a.enabled",
+        "FROM shop_upi_payment_accounts a JOIN shop_owners o ON o.shop_id=a.shop_id",
+        "WHERE o.id=$1"
+      ].join(" "),[req.session.shopOwnerId]);
+      res.set("Cache-Control","private, no-store");
+      res.json({configured:q.rows.length>0,account:q.rows[0]||null,manualVerification:true});
+    }catch(e){console.error("UPI recipient",e);res.status(503).json({error:"UPI configuration unavailable"});}
+  });
+  app.put("/api/shop/upi-payment/account",ownerOnly,ownerLimiter,async(req,res)=>{
+    const {vpa,payeeName,enabled,confirmedRecipient}=req.body||{};
+    if(!validVpa(vpa)||!validPayee(payeeName)||typeof enabled!=="boolean"||confirmedRecipient!==true){
+      return res.status(400).json({error:"Enter your valid UPI ID and recipient name and confirm its ownership"});
+    }
+    try{
+      const q=await pool.query([
+        "INSERT INTO shop_upi_payment_accounts(shop_id,vpa,payee_name,enabled)",
+        "SELECT shop_id,$2,$3,$4 FROM shop_owners WHERE id=$1",
+        "ON CONFLICT(shop_id) DO UPDATE SET vpa=EXCLUDED.vpa,payee_name=EXCLUDED.payee_name,",
+        "enabled=EXCLUDED.enabled,updated_at=NOW()",
+        "RETURNING vpa,payee_name AS \"payeeName\",enabled"
+      ].join(" "),[req.session.shopOwnerId,vpa,payeeName,enabled]);
+      if(!q.rows.length)return res.status(404).json({error:"Shop not found"});
+      res.set("Cache-Control","private, no-store");
+      res.json({account:q.rows[0],message:"Owner must manually verify actual bank receipt",automaticPrinting:false});
+    }catch(e){console.error("Save UPI",e);res.status(503).json({error:"Unable to save shop UPI ID"});}
+  });
+  app.post("/api/shop/test-file-orders/:id/upi/quote",ownerOnly,ownerLimiter,async(req,res)=>{
+    const id=req.params.id,pages=req.body?.pagesPerCopy;
+    if(!idPattern.test(id||"")||!Number.isInteger(pages)||pages<1||pages>20)return res.status(400).json({error:"Enter actual pages per copy (1–20)"});
+    try{
+      const q=await pool.query([
+        "SELECT o.id,o.shop_id,o.copies,o.print_mode,",
+        "COALESCE(r.bw_paise,300) AS bw_paise,COALESCE(r.color_paise,1000) AS color_paise,",
+        "a.vpa,a.payee_name FROM test_file_orders o",
+        "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
+        "JOIN shop_upi_payment_accounts a ON a.shop_id=o.shop_id AND a.enabled=TRUE",
+        "LEFT JOIN shop_print_rates r ON r.shop_id=o.shop_id",
+        "WHERE owner.id=$1 AND o.id=$2 AND o.status='accepted'",
+        "AND o.created_at > NOW()-INTERVAL '24 hours'"
+      ].join(" "),[req.session.shopOwnerId,id]);
+      if(!q.rows.length)return res.status(409).json({error:"Configure shop UPI ID and accept an unexpired TEST file first"});
+      const order=q.rows[0];
+      const amount=Number(order.copies)*pages*Number(order.print_mode==="color"?order.color_paise:order.bw_paise);
+      if(!Number.isSafeInteger(amount)||amount<100||amount>250000)return res.status(400).json({error:"Total TEST amount must be ₹1–₹2500"});
+      const result=await pool.query([
+        "INSERT INTO shop_upi_test_payments",
+        "(shop_id,order_id,payment_reference,vpa_snapshot,payee_name_snapshot,pages_per_copy,amount_paise)",
+        "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        "ON CONFLICT(order_id) DO NOTHING",
+        "RETURNING order_id,amount_paise,pages_per_copy,payment_reference,status"
+      ].join(" "),[order.shop_id,id,reference(),order.vpa,order.payee_name,pages,amount]);
+      if(!result.rows.length)return res.status(409).json({error:"This order already has a UPI payment request; duplicate charges are disabled"});
+      res.set("Cache-Control","private, no-store");
+      res.status(201).json({payment:publicPayment(result.rows[0])});
+    }catch(e){console.error("UPI quote",e);res.status(503).json({error:"Unable to create UPI TEST quote"});}
+  });
+  async function lookupCustomer(req){
+    if(!codePattern.test(req.params.code||"")||!idPattern.test(req.params.id||""))return null;
+    const hash=hashToken(req.body?.trackingToken);
+    if(!hash)return null;
+    const q=await pool.query([
+      "SELECT p.*,o.status AS order_status FROM shop_upi_test_payments p",
+      "JOIN test_file_orders o ON o.id=p.order_id AND o.shop_id=p.shop_id",
+      "JOIN shops s ON s.id=p.shop_id",
+      "WHERE s.public_code=$1 AND o.id=$2 AND o.tracking_token_hash=$3",
+      "AND o.created_at > NOW()-INTERVAL '24 hours'"
+    ].join(" "),[req.params.code,req.params.id,hash]);
+    return q.rows[0]||null;
+  }
+  app.post("/api/public/shops/:code/test-file-orders/:id/upi/details",limiter,async(req,res)=>{
+    if(!codePattern.test(req.params.code||"")||!idPattern.test(req.params.id||"")||!hashToken(req.body?.trackingToken))return res.status(400).json({error:"Valid private tracking code required"});
+    try{
+      const p=await lookupCustomer(req);
+      if(!p)return res.status(404).json({error:"Ask shop owner to set UPI payment amount for this TEST order"});
+      const payment=publicPayment(p);
+      if(["awaiting_payment","rejected"].includes(p.status)){
+        const intent=upiUrl(p.vpa_snapshot,p.payee_name_snapshot,Number(p.amount_paise),p.payment_reference);
+        payment.vpa=p.vpa_snapshot;payment.payeeName=p.payee_name_snapshot;payment.upiUrl=intent;
+        payment.qrDataUri=await QRCode.toDataURL(intent,{width:270,margin:2,errorCorrectionLevel:"M"});
+      }
+      res.set("Cache-Control","no-store");
+      res.json({payment});
+    }catch(e){console.error("UPI details",e);res.status(503).json({error:"Unable to get UPI payment QR"});}
+  });
+  app.post("/api/public/shops/:code/test-file-orders/:id/upi/claim",limiter,async(req,res)=>{
+    if(!codePattern.test(req.params.code||"")||!idPattern.test(req.params.id||"")||
+       !hashToken(req.body?.trackingToken)||!utrPattern.test(req.body?.utr||"")){
+      return res.status(400).json({error:"Valid private code and 12–22 digit UPI UTR required"});
+    }
+    try{
+      const p=await lookupCustomer(req);
+      if(!p||p.order_status!=="accepted")return res.status(409).json({error:"TEST order missing or not accepted"});
+      const q=await pool.query([
+        "UPDATE shop_upi_test_payments SET status='customer_claimed',",
+        "customer_utr=$2,claimed_at=NOW()",
+        "WHERE id=$1 AND status IN ('awaiting_payment','rejected')",
+        "RETURNING order_id,amount_paise,pages_per_copy,payment_reference,status"
+      ].join(" "),[p.id,req.body.utr]);
+      if(!q.rows.length)return res.status(409).json({error:"This payment claim was already submitted; do not pay twice"});
+      res.set("Cache-Control","no-store");
+      res.json({payment:publicPayment(q.rows[0]),message:"UTR sent for shop review. NOT verified as Paid."});
+    }catch(e){
+      if(e.code==="23505")return res.status(409).json({error:"This UTR was already used for another TEST order"});
+      console.error("UPI claim",e);res.status(503).json({error:"Unable to send UPI claim"});
+    }
+  });
+  app.get("/api/shop/upi-payment/orders",ownerOnly,async(req,res)=>{
+    try{
+      const q=await pool.query([
+        "SELECT p.order_id,p.payment_reference,p.amount_paise,p.pages_per_copy,",
+        "p.status,p.customer_utr,p.claimed_at,p.confirmed_at",
+        "FROM shop_upi_test_payments p JOIN shop_owners o ON o.shop_id=p.shop_id",
+        "WHERE o.id=$1 ORDER BY p.id DESC LIMIT 50"
+      ].join(" "),[req.session.shopOwnerId]);
+      res.set("Cache-Control","private, no-store");
+      res.json({manualVerification:true,automaticPrinting:false,
+        payments:q.rows.map(p=>({...publicPayment(p),
+          customerUtr:p.customer_utr||null,claimedAt:p.claimed_at||null,
+          confirmedAt:p.confirmed_at||null}))});
+    }catch(e){console.error("UPI inbox",e);res.status(503).json({error:"UPI TEST inbox unavailable"});}
+  });
+  app.post("/api/shop/upi-payment/orders/:id/decision",ownerOnly,ownerLimiter,async(req,res)=>{
+    if(!idPattern.test(req.params.id||"")||!["paid_manual","rejected"].includes(req.body?.decision))return res.status(400).json({error:"Invalid UPI decision"});
+    const paid=req.body.decision==="paid_manual";
+    if(paid&&(req.body.confirmedBankCredit!==true||!Number.isInteger(req.body.confirmedAmountPaise))){
+      return res.status(400).json({error:"Confirm bank credit and exact amount first"});
+    }
+    try{
+      const parts=[
+        "UPDATE shop_upi_test_payments p SET",
+        paid?"status='paid_manual',confirmed_at=NOW(),confirmed_by_owner_id=$1":"status='rejected'",
+        "FROM shop_owners o WHERE o.id=$1 AND o.shop_id=p.shop_id AND p.order_id=$2",
+        "AND p.status='customer_claimed'",
+        paid?"AND p.amount_paise=$3":"",
+        "RETURNING p.order_id,p.amount_paise,p.pages_per_copy,p.payment_reference,p.status"
+      ];
+      const args=paid?[req.session.shopOwnerId,req.params.id,req.body.confirmedAmountPaise]:[req.session.shopOwnerId,req.params.id];
+      const q=await pool.query(parts.join(" "),args);
+      if(!q.rows.length)return res.status(409).json({error:"Claim not found, wrong amount, or already reviewed"});
+      res.set("Cache-Control","private, no-store");
+      res.json({payment:publicPayment(q.rows[0]),automaticPrinting:false,
+        message:paid?"Shop manually verified bank credit; this is not automatic bank verification":"Customer UPI claim rejected"});
+    }catch(e){console.error("UPI decision",e);res.status(503).json({error:"Unable to review UPI claim"});}
+  });
+}
+module.exports={validVpa,validPayee,rupees,reference,upiUrl,hashToken,publicPayment,ensureUpiPrintTables,installUpiPrintPayments};
