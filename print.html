@@ -126,7 +126,7 @@
       <p id="track-status" class="response" aria-live="polite" role="status" hidden></p>
       <section id="upi-test-actions" hidden style="margin-top:20px;padding:18px;border:1px solid #b1d9bf;background:#f0fbf3;border-radius:13px">
         <h3 style="margin:0 0 8px">UPI QR Payment · TEST files</h3>
-        <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। UPI पेमेंट करने के बाद UTR दें। <strong>दुकानदार बैंक में पैसा देखकर पेमेंट Verify करेगा। UTR खुद पेमेंट का प्रमाण नहीं है।</strong> कोई Automatic Printing नहीं है।</p>
+        <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। <strong>यह असली UPI QR है; पैसे वास्तव में कट सकते हैं।</strong> सिर्फ सुरक्षित TEST फाइलें उपयोग करें। पेमेंट के बाद UTR दें। <strong>दुकानदार बैंक में पैसा देखकर पेमेंट Verify करेगा। UTR खुद पेमेंट का प्रमाण नहीं है।</strong> कोई Automatic Printing नहीं है।</p>
         <button id="upi-payment-check" class="btn" type="button">Show UPI QR / Check Payment</button>
         <div id="upi-payment-details" hidden style="margin-top:14px">
           <img id="upi-payment-qr" alt="UPI QR with shop payee and requested TEST amount" style="max-width:270px;width:100%;background:white;border-radius:9px;border:1px solid #b9dcc7;padding:8px">
@@ -308,8 +308,6 @@
         document.getElementById("track-id").value=String(orderId);
         document.getElementById("track-token").value=token;
         showPaytmForKind(kind);
-        showUpiForKind(kind);
-        upiAvailable=true;
         showUpiForKind(kind);
         trackMessage.hidden=false;
         trackMessage.classList.remove("error");
