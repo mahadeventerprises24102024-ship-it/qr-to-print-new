@@ -124,6 +124,22 @@
         <button id="track-submit" type="submit" class="btn" disabled>Check TEST Order Status</button>
       </form>
       <p id="track-status" class="response" aria-live="polite" role="status" hidden></p>
+      <section id="upi-test-actions" hidden style="margin-top:20px;padding:18px;border:1px solid #b1d9bf;background:#f0fbf3;border-radius:13px">
+        <h3 style="margin:0 0 8px">UPI QR Payment · TEST files</h3>
+        <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। <strong>यह असली UPI QR है; पैसे वास्तव में कट सकते हैं।</strong> सिर्फ सुरक्षित TEST फाइलें उपयोग करें। पेमेंट के बाद UTR दें। <strong>दुकानदार बैंक में पैसा देखकर पेमेंट Verify करेगा। UTR खुद पेमेंट का प्रमाण नहीं है।</strong> कोई Automatic Printing नहीं है।</p>
+        <button id="upi-payment-check" class="btn" type="button">Show UPI QR / Check Payment</button>
+        <div id="upi-payment-details" hidden style="margin-top:14px">
+          <img id="upi-payment-qr" alt="UPI QR with shop payee and requested TEST amount" style="max-width:270px;width:100%;background:white;border-radius:9px;border:1px solid #b9dcc7;padding:8px">
+          <p id="upi-payment-summary" class="subtitle"></p>
+          <a id="upi-payment-open" class="btn" href="#" style="max-width:310px;text-decoration:none">Open UPI App</a>
+          <form id="upi-claim-form" style="margin-top:14px">
+            <label for="upi-payment-utr">UPI Transaction Reference / UTR (12–22 digits)</label>
+            <input id="upi-payment-utr" inputmode="numeric" pattern="[0-9]{12,22}" maxlength="22" required autocomplete="off" placeholder="Only after paying">
+            <button id="upi-claim-submit" class="btn" type="submit">Send UTR to Shop for Verification</button>
+          </form>
+        </div>
+        <p id="upi-payment-message" role="status" aria-live="polite" class="response">अपना TEST Order ID और Private Tracking Code डालें।</p>
+      </section>
       <section id="paytm-test-actions" hidden style="margin-top:20px;padding:18px;border:1px solid #a9ddc2;background:#f2fbf4;border-radius:13px">
         <h3 style="margin:0 0 8px">Paytm Payment Gateway · SANDBOX TEST</h3>
         <p class="subtitle">Shop Owner पहले सुरक्षित TEST फ़ाइल को Review/Accept करके कीमत तय करेगा। उसके बाद आप नीचे Paytm का <strong>Test Payment</strong> कर सकते हैं। असली पैसा नहीं कटेगा और ग्राहक की फाइल अपने-आप प्रिंट नहीं होगी।</p>
@@ -154,6 +170,77 @@
       const paytmPay=document.getElementById("paytm-test-pay");
       const paytmMessage=document.getElementById("paytm-test-message");
       let paytmTestEnabled=false;
+      let upiAvailable=false;
+      const upiActions=document.getElementById("upi-test-actions");
+      const upiCheck=document.getElementById("upi-payment-check");
+      const upiDetails=document.getElementById("upi-payment-details");
+      const upiQr=document.getElementById("upi-payment-qr");
+      const upiOpen=document.getElementById("upi-payment-open");
+      const upiSummary=document.getElementById("upi-payment-summary");
+      const upiMessage=document.getElementById("upi-payment-message");
+      function showUpiForKind(kind){
+        upiActions.hidden=!upiAvailable||kind!=="test-file-orders";
+        if(kind!=="test-file-orders")upiDetails.hidden=true;
+      }
+      upiCheck.addEventListener("click",async()=>{
+        upiCheck.disabled=true;
+        try{
+          const {id,trackingToken}=paytmInputs();
+          const response=await fetch("/api/public/shops/"+verifiedCode+"/test-file-orders/"+
+            encodeURIComponent(id)+"/upi/details",{
+            method:"POST",credentials:"same-origin",cache:"no-store",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({trackingToken})
+          });
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||"UPI payment not available");
+          const p=data.payment;
+          if(p.status==="awaiting_payment"||p.status==="rejected"){
+            if(typeof p.qrDataUri!=="string"||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(p.qrDataUri)||
+               typeof p.upiUrl!=="string"||!p.upiUrl.startsWith("upi://pay?"))
+              throw new Error("Unexpected UPI QR response");
+            upiQr.src=p.qrDataUri;upiOpen.href=p.upiUrl;
+            upiSummary.textContent="Pay "+p.payeeName+" ("+p.vpa+") • ₹"+p.amountRupees+
+              " • Reference: "+p.reference+". कृपया UPI ऐप में नाम और रकम चेक करें।";
+            upiDetails.hidden=false;
+            upiMessage.textContent=p.status==="rejected"?
+              "Previous UTR rejected. Check bank/payment first; do not pay twice. If the payment was successful, speak to the shop.":
+              "UPI QR ready. After actual payment submit your UTR. A submitted UTR is NOT a verified payment.";
+          }else{
+            upiDetails.hidden=true;
+            upiMessage.textContent="UPI TEST Order #"+p.orderId+" • ₹"+p.amountRupees+
+              " • "+(p.status==="paid_manual"?
+              "Payment Received — shop owner manually verified bank credit.":
+              "UTR sent; waiting for shop owner bank verification.")+
+              " No automatic printing.";
+          }
+        }catch(error){upiDetails.hidden=true;upiMessage.textContent=error.message;}
+        finally{upiCheck.disabled=false;}
+      });
+      document.getElementById("upi-claim-form").addEventListener("submit",async(event)=>{
+        event.preventDefault();
+        const button=document.getElementById("upi-claim-submit");
+        const utr=document.getElementById("upi-payment-utr").value.trim();
+        if(!/^[0-9]{12,22}$/.test(utr)){
+          upiMessage.textContent="Enter a valid numeric UTR (12–22 digits).";return;
+        }
+        if(!window.confirm("Have you really paid? UTR केवल दुकानदार को जाँच के लिए भेजा जाएगा; भुगतान तुरंत Confirm नहीं होगा।"))return;
+        button.disabled=true;
+        try{
+          const {id,trackingToken}=paytmInputs();
+          const response=await fetch("/api/public/shops/"+verifiedCode+"/test-file-orders/"+
+            encodeURIComponent(id)+"/upi/claim",{
+            method:"POST",credentials:"same-origin",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({trackingToken,utr})
+          });
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||"Could not submit UTR");
+          upiMessage.textContent="UTR sent to shop. Payment NOT yet confirmed. Shop owner will verify their bank credit.";
+          upiDetails.hidden=true;
+        }catch(error){upiMessage.textContent=error.message;}
+        finally{button.disabled=false;}
+      });
       function showPaytmForKind(kind){paytmActions.hidden=!paytmTestEnabled||kind!=="test-file-orders";}
       const paytmInputs=()=>{
         const id=document.getElementById("track-id").value.trim();
@@ -213,6 +300,7 @@
         }catch(error){paytmMessage.textContent=error.message;paytmPay.disabled=false;}
       });
       document.getElementById("track-kind").addEventListener("change",event=>{
+        showUpiForKind(event.target.value);
         showPaytmForKind(event.target.value);
       });
       function showTracking(kind,orderId,token){
@@ -220,6 +308,7 @@
         document.getElementById("track-id").value=String(orderId);
         document.getElementById("track-token").value=token;
         showPaytmForKind(kind);
+        showUpiForKind(kind);
         trackMessage.hidden=false;
         trackMessage.classList.remove("error");
         trackMessage.textContent="TEST Order #"+orderId+" • Tracking Code: "+token+
@@ -241,6 +330,7 @@
         const trackingToken=document.getElementById("track-token").value.trim();
         const kind=document.getElementById("track-kind").value;
         showPaytmForKind(kind);
+        showUpiForKind(kind);
         if(!["demo-orders","test-file-orders"].includes(kind)||
            !/^[1-9][0-9]{0,14}$/.test(orderId)||!/^[a-f0-9]{48}$/.test(trackingToken)){
           trackMessage.hidden=false;
@@ -428,6 +518,8 @@
         title.textContent=data.shop.name;
         status.textContent="Shop verified • Guest test requests available";
         verifiedCode=code;
+        upiAvailable=true;
+        showUpiForKind(document.getElementById("track-kind").value);
         submit.disabled=false;
         trackSubmit.disabled=false;
         await Promise.all([preparePrivateUpload(code),loadPublicPricing(code),

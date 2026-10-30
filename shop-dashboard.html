@@ -168,6 +168,26 @@
       </form>
       <p id="rates-state" class="description" role="status" aria-live="polite">Loading rates...</p>
       <div style="border-top:1px solid var(--line);margin:26px 0"></div>
+      <section style="border:1px solid #bddcca;padding:18px;border-radius:13px;background:#f3fbf5;margin:24px 0">
+        <h2 style="margin:0 0 10px">UPI QR for Customer TEST Orders</h2>
+        <p class="description">हर दुकान अपनी UPI ID लगाती है। ग्राहक UPI QR से भुगतान कर UTR डालता है। <strong>दुकानदार अपने बैंक/UPI ऐप में पैसा आने पर ही Payment Received दबाएगा।</strong> सिर्फ UTR देने से पैसे की पुष्टि नहीं होती। ग्राहक की Automatic Printing बंद है।</p>
+        <form id="upi-account-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;align-items:end">
+          <label style="font-size:12px;font-weight:700">Shop UPI ID
+            <input id="shop-upi-vpa" type="text" autocomplete="off" required placeholder="example@bank" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #d3dfd9;border-radius:8px">
+          </label>
+          <label style="font-size:12px;font-weight:700">Bank / Shop payee name
+            <input id="shop-upi-payee" type="text" autocomplete="off" required maxlength="70" placeholder="Bank account owner name" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #d3dfd9;border-radius:8px">
+          </label>
+          <label style="font-size:13px"><input type="checkbox" id="shop-upi-enabled"> Enable customer TEST UPI QR</label>
+          <button class="btn teal" type="submit" id="shop-upi-save">Save Shop UPI Details</button>
+        </form>
+        <p id="shop-upi-state" class="description" role="status">UPI settings loading...</p>
+        <div class="section-head" style="margin-top:23px">
+          <h3 style="margin:0">Customer UPI Claims • Verify from your BANK</h3>
+          <button type="button" id="refresh-upi-claims" class="btn light">Refresh UPI Claims</button>
+        </div>
+        <div id="shop-upi-claims" class="demo-order-list" role="status" aria-live="polite">Loading UPI TEST claims...</div>
+      </section>
       <div class="section-head"><h2 style="margin:0">Recent simple bills</h2><button class="btn light" id="refresh-bills" type="button">Refresh bills</button></div>
       <div id="bills-list" class="demo-order-list" role="status" aria-live="polite">Loading bills...</div>
       <p class="description">Create a bill from Print orders → Private test uploads → a Printed order → Create bill. Enter the actual page count after checking the PDF. No Aadhaar number or ID data is stored in the bill. Bills are not GST invoices; Cash/UPI payment can only be marked after manual receipt.</p>
@@ -470,6 +490,95 @@
     });
     item.append(editor);
   }
+
+  const upiState=document.getElementById("shop-upi-state");
+  const upiClaims=document.getElementById("shop-upi-claims");
+  async function loadUpiAccount(){
+    try{
+      const response=await fetch("/api/shop/upi-payment/account",{credentials:"same-origin",cache:"no-store"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Could not load UPI settings");
+      const account=data.account;
+      if(account){
+        document.getElementById("shop-upi-vpa").value=account.vpa;
+        document.getElementById("shop-upi-payee").value=account.payeeName;
+        document.getElementById("shop-upi-enabled").checked=account.enabled===true;
+      }
+      upiState.textContent=account?(account.enabled?"UPI QR enabled for new approved TEST orders.":"UPI QR disabled."):
+        "Enter your shop's own UPI ID and verified bank payee name.";
+    }catch(error){upiState.textContent=error.message;}
+  }
+  document.getElementById("upi-account-form").addEventListener("submit",async(event)=>{
+    event.preventDefault();
+    const button=document.getElementById("shop-upi-save");
+    const vpa=document.getElementById("shop-upi-vpa").value.trim();
+    const payeeName=document.getElementById("shop-upi-payee").value.trim();
+    const enabled=document.getElementById("shop-upi-enabled").checked;
+    if(!window.confirm("क्या आपने खुद पुष्टि की है कि "+vpa+" UPI ID आपके SHOP BANK ACCOUNT की है? ग्राहक का पैसा इसी UPI ID पर जाएगा।"))return;
+    button.disabled=true;
+    try{
+      const response=await fetch("/api/shop/upi-payment/account",{
+        method:"PUT",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({vpa,payeeName,enabled,confirmedRecipient:true})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Could not save UPI ID");
+      upiState.textContent="Saved your shop's UPI recipient. "+(enabled?"Customer TEST payment QR enabled.":"QR disabled.");
+    }catch(error){upiState.textContent=error.message;}
+    finally{button.disabled=false;}
+  });
+  async function loadUpiClaims(){
+    upiClaims.textContent="Loading UPI TEST payments...";
+    try{
+      const response=await fetch("/api/shop/upi-payment/orders",{credentials:"same-origin",cache:"no-store"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Could not load UPI claims");
+      upiClaims.replaceChildren();
+      const payments=Array.isArray(data.payments)?data.payments:[];
+      if(!payments.length){upiClaims.textContent="No UPI TEST payment requests yet.";return;}
+      payments.forEach(p=>{
+        const item=document.createElement("div");item.className="demo-order";
+        const info=document.createElement("div");
+        const heading=document.createElement("strong");
+        heading.textContent="TEST Order #"+p.orderId+" • ₹"+p.amountRupees+" • "+p.status.toUpperCase();
+        const ref=document.createElement("span");
+        ref.style.display="block";
+        ref.textContent="Payment ref: "+p.reference+(p.customerUtr?" • Customer UTR (UNVERIFIED): "+p.customerUtr:"");
+        info.append(heading,ref);item.append(info);
+        if(p.status==="customer_claimed"){
+          const actions=document.createElement("div");
+          actions.style.cssText="display:flex;flex-wrap:wrap;gap:8px";
+          const confirm=document.createElement("button");
+          confirm.type="button";confirm.className="btn teal";confirm.textContent="Payment Received";
+          const reject=document.createElement("button");
+          reject.type="button";reject.className="btn light";reject.textContent="Reject claim";
+          async function decide(decision){
+            if(decision==="paid_manual"&&!window.confirm("अपने BANK / UPI transaction history में इस TEST Order की पूरी ₹"+p.amountRupees+" रकम सच में CREDIT देखी है? सिर्फ ग्राहक के UTR या Screenshot पर भरोसा न करें।"))return;
+            if(decision==="rejected"&&!window.confirm("Reject this UTR claim?"))return;
+            confirm.disabled=true;reject.disabled=true;
+            try{
+              const response=await fetch("/api/shop/upi-payment/orders/"+encodeURIComponent(p.orderId)+"/decision",{
+                method:"POST",credentials:"same-origin",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({decision,confirmedBankCredit:decision==="paid_manual",
+                  confirmedAmountPaise:decision==="paid_manual"?Math.round(Number(p.amountRupees)*100):undefined})
+              });
+              const result=await response.json().catch(()=>({}));
+              if(!response.ok)throw new Error(result.error||"Could not update UPI payment");
+              await loadUpiClaims();
+            }catch(error){upiState.textContent=error.message;confirm.disabled=false;reject.disabled=false;}
+          }
+          confirm.addEventListener("click",()=>decide("paid_manual"));
+          reject.addEventListener("click",()=>decide("rejected"));
+          actions.append(confirm,reject);item.append(actions);
+        }
+        upiClaims.append(item);
+      });
+    }catch(error){upiClaims.textContent=error.message;}
+  }
+  document.getElementById("refresh-upi-claims").addEventListener("click",loadUpiClaims);
+  loadUpiAccount();loadUpiClaims();
 
   async function loadPrivateOrders() {
     const list = document.getElementById("private-order-list");
