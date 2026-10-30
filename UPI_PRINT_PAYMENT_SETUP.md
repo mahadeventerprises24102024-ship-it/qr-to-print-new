@@ -1,34 +1,28 @@
-# UPI QR payment for shop TEST print orders — owner verifies bank credit
+# UPI QR payment for TEST print orders — shop owner verifies, then Print Dialog
 
-This is a **real UPI payment request** (not a sandbox). Customers may transfer **real money** to the configured shop recipient. Use only with disposable, non-sensitive TEST documents until production file safety and printing are implemented.
+## What happens
 
-## Workflow
+1. Shop Owner opens **Shop Dashboard → Pricing & Bills**, sets their own UPI ID and bank/payee name, checks the recipient personally, and enables **UPI QR**. Every shop has its own recipient.
+2. Customer scans that shop's QR page, chooses a harmless TEST file or **Aadhaar-style DUMMY TEST Front + Back layout**, and submits it using existing private TEST file upload (R2 and optional guest TEST uploads must already be configured). **Do not upload real Aadhaar, identity documents, addresses, or other private customer information.**
+3. The owner reviews and accepts the harmless TEST document, then chooses **Set UPI QR TEST price** and provides the verified page count. A dummy front/back sample is **one combined A4 page** and uses the shop's **Aadhaar B&W rate per copy** when B&W is selected. Regular PDF/photo jobs use the saved B&W/colour per-page rates. Only a single immutable quote is created for each order.
+4. Customer supplies shop-specific Order ID and private Tracking Code to show the shop's actual **UPI QR / Open UPI App** payment request. Normal UPI payments can deduct **real money**, even though files are TEST-only. Check the recipient/payee before making any payment.
+5. After paying, customer presses **मैंने पेमेंट कर दिया**. **No UTR is required.** This is recorded as an **unverified payment claim**, NOT Paid. Customer claims, screenshots or messages cannot establish a bank deposit.
+6. The owner opens **Shop Dashboard → Pricing & Bills → Customer UPI Claims**, verifies the bank account/UPI app genuinely received the exact amount, and clicks **Payment Received**. Only the owner can record the confirmation (with timestamp and shop owner ID).
+7. Following successful verification, the owner's current desktop browser opens the **TEST print preview**, which requests the **native browser Print Dialog automatically for TEST PNG/JPG images**. The owner chooses printer, copies, paper and colour, and clicks Print. **Print Dialog may be blocked by browser pop-up/automatic printing restrictions**: there is a clickable fallback. For TEST PDFs, use the PDF viewer and **Ctrl+P** because browsers cannot reliably open the PDF Print Dialog programmatically.
+8. After inspecting paper output, the owner manually marks the accepted TEST file Printed.
 
-1. Owner signs in to Shop Dashboard → **Pricing & Bills** → **UPI QR for Customer TEST Orders**, enters their own UPI ID and bank/payee name, checks account ownership personally, enables UPI and saves. The platform does NOT verify account ownership. Every shop has its **own recipient**.
-2. Customer uploads a *non-sensitive TEST PDF/JPG/PNG under 2 MB* to the shop's private test flow (requires existing R2 private TEST storage + guest TEST opt-in). Customer receives private Order ID and Tracking Code.
-3. Owner reviews uploaded content, clicks **Accept TEST order**, opens **Review & Print**, clicks **Set UPI QR TEST price**, and enters actual pages per copy (1–20). The backend calculates the total from that shop's stored price and original copies. The amount and payee are saved in one immutable quote.
-4. Customer uses shop QR page, chooses **Private TEST file upload** in tracking, enters private Order ID and Tracking Code, clicks **Show UPI QR / Check Payment**. The UPI QR requests the saved amount with payment reference, shop's UPI VPA and recipient name. Customer checks payee and amount in UPI app before sending real money.
-5. Customer optionally submits a **12–22-digit UTR**. The server records **customer_claimed** only. A UTR can be fabricated; it is NEVER evidence of verified payment.
-6. Shop Owner opens Dashboard → Pricing & Bills → **Customer UPI Claims**, checks **actual receiving bank transaction history** (not screenshot/UTR alone), then clicks **Payment Received** and confirms the exact expected amount. The server atomically changes the claim to **paid_manual**, stores owner ID and confirmation time. Other shops' orders cannot be changed.
-7. **Automatic printing remains OFF**, even if the owner marks payment received. Browser manual review/print for TEST files still applies. A manual confirmation is not bank API authentication.
+## Security and limits
 
-## Security notes
+- The customer never supplies a trusted payment amount, nor any UPI PIN, bank login, OTP or Merchant Key. The backend computes the amount from shop rate settings and saved order copies.
+- The owner must check real bank credit; no PSP / bank webhook automatically verifies the receipt.
+- One immutable UPI quote per order, maximum ₹2500, shop-specific private Tracking Code, shop-isolated database queries.
+- Print-dialog launch is allowed only for the **same authenticated shop owner**, for a **fresh accepted TEST file** with **manually verified UPI payment**. The local Windows Agent remains preview-only and receives **no customer documents**.
+- The real Aadhaar document workflow is **NOT live**. Only dummy/sample non-sensitive front/back images may be combined into one local PNG TEST page, with one separate Front picker and one Back picker. They are combined inside the customer's browser and uploaded as one flat private TEST image. Composite expires on the existing storage lifecycle; upload only if the existing R2 TEST storage is specifically enabled.
+- Normal UPI QR is a **real-money request**, not a sandbox. Do not use it for harmless demo transactions unless you intend to pay actual money.
+- Owner confirmation is manual and not independently verified by the bank API. If multiple identical amounts arrive, the owner should reconcile independently before marking the correct order Paid.
+- Customers cannot automatically print just by clicking "I Paid". **No silent printing**: the shop owner must inspect and confirm the native Print Dialog. Auto-dialog may be blocked by the browser and is not guaranteed.
+- For production real documents (including Aadhaar), complete malware scanning/CDR, isolated rendering, storage encryption, short retention and deletion, permissioned access, compliance, logging, payments reconciliation and trustworthy printer queue handling before enabling uploads.
 
-- No bank passwords/OTP, MPIN or UPI credentials are collected or stored, only UPI ID and recipient name. Never share a UPI PIN.
-- Unique shop/payment/order reference, unique claimed UTR across existing orders, maximum ₹2500 TEST request, one immutable quote per order, 24-hour expiry for original TEST upload.
-- Customers need the correct private Tracking Code for the exact shop; statuses are private.
-- The app does NOT automatically reconcile bank transactions. To enable automatic paid verification or payment-triggered unattended printing later would require authenticated PSP/bank webhook verification, secure production document scanning/deletion, durable printer queue, exactly-once dispatch and per-shop segregation.
+## Merchant setup
 
-## Current configuration
-
-This feature needs no Paytm merchant credentials and no added Render UPI payment secret. Owner configures shop's UPI recipient inside Shop Dashboard. The existing platform subscription UPI account remains separate. The old optional Paytm SANDBOX flow also remains separate, OFF unless intentionally configured.
-
-**Important:** Scanning the new normal UPI QR can transfer REAL funds. It is not a simulation. Confirm your receiving account and transact cautiously.
-
-## Manual test
-
-Open Shop Dashboard → Pricing & Bills. Save your own UPI ID and enable. Use a harmless uploaded TEST file, accept, quote, then visit shop QR from another browser. Confirm correct payee/amount, do not send money unless intended. A deliberately fake UTR is NOT credited until the shop owner manually verifies; never click Received without actual bank credit.
-
-## Future steps for real operation
-
-Production uploads need malware scanning and safe isolated rendering. Verified payment should be linked to trustworthy bank/gateway status, and print dispatch should be safe against multiple agent heartbeats, duplicate print requests, offline printers and failed jobs. Those features are NOT in this release.
+The shop UPI recipient is configured from the Shop Dashboard. **Paytm Gateway credentials are not needed** for this standard UPI QR workflow. The platform's subscription UPI account and optional Paytm staging gateway are separate.
