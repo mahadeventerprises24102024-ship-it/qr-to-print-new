@@ -213,7 +213,9 @@ function installPlatformAdmin(app,pool,env=process.env) {
         '(SELECT o.name FROM shop_owners o WHERE o.shop_id=s.id ORDER BY o.id LIMIT 1) AS "ownerName",',
         '(SELECT o.email FROM shop_owners o WHERE o.shop_id=s.id ORDER BY o.id LIMIT 1) AS "ownerEmail",',
         '(SELECT COUNT(*)::int FROM test_file_orders t WHERE t.shop_id=s.id) AS "testOrders",',
-        '(SELECT COUNT(*)::int FROM shop_print_bills b WHERE b.shop_id=s.id) AS "bills"',
+        '(SELECT COUNT(*)::int FROM shop_print_bills b WHERE b.shop_id=s.id) AS "bills",',
+        '(SELECT COALESCE(SUM(pages),0)::int FROM platform_demo_page_events d WHERE d.shop_id=s.id) AS "demoPagesUsed",',
+        '(SELECT COALESCE(SUM(pages),0)::bigint FROM platform_page_usage_events p WHERE p.shop_id=s.id) AS "payPerPagePages"',
         'FROM shops s ORDER BY s.created_at DESC, s.id DESC LIMIT 200'
       ].join(" "));
       const totals=await pool.query([
