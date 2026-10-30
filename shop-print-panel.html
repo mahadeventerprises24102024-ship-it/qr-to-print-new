@@ -228,9 +228,9 @@
     const modeSelect=document.getElementById("local-mode");
     let currentUrl=null;
     let currentKind=null;
-    function clearLocal(){
+    function clearLocal(clearInput=true){
       localButton.disabled=true;
-      fileInput.value="";
+      if(clearInput)fileInput.value="";
       currentKind=null;
       if(currentUrl)URL.revokeObjectURL(currentUrl);
       currentUrl=null;
@@ -246,7 +246,7 @@
     modeSelect.addEventListener("change",updateLocalMode);
     fileInput.addEventListener("change",()=>{
       const file=fileInput.files&&fileInput.files[0];
-      clearLocal();
+      clearLocal(false);
       if(!file)return;
       const ext=(file.name.split(".").pop()||"").toLowerCase();
       const kinds={
