@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="QR-To-Print: one secure sign-in page for Super Admin, Shopkeeper and Customer.">
-  <title>3-in-1 Login | QR-To-Print</title>
+  <meta name="description" content="QR-To-Print: secure login for Super Admin and Shopkeeper. Guests use shop QR without login.">
+  <title>Super Admin & Shopkeeper Login | QR-To-Print</title>
   <style>
     :root{--ink:#182e29;--muted:#61746d;--green:#087b63;--lime:#ddf591;--line:#deebe3;--paper:#f3f8f4;--white:#fff}
     *{box-sizing:border-box}
@@ -28,7 +28,7 @@
     .card{background:white;border:1px solid var(--line);border-radius:22px;padding:29px;box-shadow:0 20px 65px #163a2a13}
     .card h2{font-size:24px;letter-spacing:-.6px;margin:0 0 5px}
     .sub{color:var(--muted);font-size:13px;margin:0 0 21px}
-    .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;background:#f0f5f1;padding:6px;border-radius:12px;margin-bottom:27px}
+    .tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;background:#f0f5f1;padding:6px;border-radius:12px;margin-bottom:27px}
     .tab{border:0;border-radius:9px;background:transparent;color:#59746a;padding:13px 6px;font-size:13px;font-weight:800;cursor:pointer;min-height:47px}
     .tab[aria-selected="true"]{background:white;color:#06765c;box-shadow:0 3px 12px #1c372b17}
     .tab:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #419d83;outline-offset:2px}
@@ -54,13 +54,12 @@
   </div></header>
   <main class="layout">
     <section class="intro">
-      <span class="eyebrow">One website · Three secure logins</span>
-      <h1>एक वेबसाइट.<br><span>तीन अलग Login.</span></h1>
-      <p>Super Admin, दुकानदार और ग्राहक — सभी एक ही जगह से अपने अकाउंट में प्रवेश करें। Login के बाद हर यूज़र को सिर्फ उसके अपने अधिकार मिलेंगे।</p>
+      <span class="eyebrow">One website · Two secure logins</span>
+      <h1>एक वेबसाइट.<br><span>दो अलग Login.</span></h1>
+      <p>Super Admin और Shopkeeper — दोनों इसी वेबसाइट से Login करेंगे। ग्राहक को Login की जरूरत नहीं है; वे दुकान का QR स्कैन करके TEST Print Request भेज सकेंगे।</p>
       <div class="features">
         <div class="feature"><span class="glyph">✦</span><div><b>Super Admin</b>सभी दुकानों की Approval, Subscription और Platform Management।</div></div>
         <div class="feature"><span class="glyph">▣</span><div><b>Shopkeeper</b>अपनी दुकान का QR, Print Orders, UPI Verification और Dashboard।</div></div>
-        <div class="feature"><span class="glyph">◉</span><div><b>Customer</b>अपना अकाउंट और Dashboard; Print Request के लिए दुकान का QR इस्तेमाल करें।</div></div>
       </div>
     </section>
     <section class="card" aria-label="Choose login role">
@@ -69,7 +68,6 @@
       <div class="tabs" role="tablist" aria-label="Login account type">
         <button type="button" id="tab-admin" class="tab" role="tab" aria-controls="panel-admin" aria-selected="false" data-role="admin">Super Admin</button>
         <button type="button" id="tab-shop" class="tab" role="tab" aria-controls="panel-shop" aria-selected="true" data-role="shop">Shopkeeper</button>
-        <button type="button" id="tab-customer" class="tab" role="tab" aria-controls="panel-customer" aria-selected="false" data-role="customer">Customer</button>
       </div>
       <section id="panel-admin" class="panel" role="tabpanel" aria-labelledby="tab-admin" hidden>
         <h3>Super Admin Login</h3>
@@ -96,19 +94,7 @@
         <p id="message-shop" class="message" role="status" aria-live="polite" hidden></p>
         <div class="footlinks"><a href="/shop-login.html">New Shop? Register</a><a href="/subscription-payment.html">Subscription / Renew</a></div>
       </section>
-      <section id="panel-customer" class="panel" role="tabpanel" aria-labelledby="tab-customer" hidden>
-        <h3>Customer Login</h3>
-        <p>ग्राहक अपना अकाउंट खोल सकते हैं। TEST Print के लिए संबंधित Shop का QR Code स्कैन करें।</p>
-        <form id="form-customer" data-role="customer">
-          <label for="customer-email">Customer Email</label>
-          <input id="customer-email" name="email" type="email" maxlength="254" autocomplete="username" required>
-          <label for="customer-password">Password</label>
-          <input id="customer-password" name="password" type="password" autocomplete="current-password" required>
-          <button class="submit" type="submit">Open Customer Dashboard →</button>
-        </form>
-        <p id="message-customer" class="message" role="status" aria-live="polite" hidden></p>
-        <div class="footlinks"><a href="/login.html">New Customer? Register</a></div>
-      </section>
+      <p class="sub" style="margin-top:18px">ग्राहक हैं? <strong>दुकान का QR स्कैन करें</strong> — Customer Login की आवश्यकता नहीं है। केवल DUMMY / TEST Files का उपयोग करें।</p>
       <div class="notice">TEST MODE: Aadhaar जैसे असली पहचान दस्तावेज़ अपलोड न करें। किसी का पासवर्ड या OTP साझा न करें। सिर्फ सही भूमिका के अकाउंट से Login करें।</div>
     </section>
   </main>
@@ -117,8 +103,7 @@
   (() => {
     const roles = {
       admin:{ endpoint:"/api/platform/login", target:"/admin-dashboard.html" },
-      shop:{ endpoint:"/api/shop/login", target:"/shop-dashboard.html" },
-      customer:{ endpoint:"/api/login", target:"/dashboard.html" }
+      shop:{ endpoint:"/api/shop/login", target:"/shop-dashboard.html" }
     };
     const tabs = Array.from(document.querySelectorAll('[role="tab"][data-role]'));
     function chooseRole(role, focus=false) {
