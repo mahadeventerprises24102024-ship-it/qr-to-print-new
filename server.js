@@ -15,6 +15,7 @@ const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./can
 const { installShopBilling, ensureShopBillingTables } = require("./shop-billing");
 const { installPlatformAdmin, ensurePlatformTables, shopApiGate, shopPageGate, publicShopGate } = require("./platform-admin");
 const { installSubscriptionPayments, ensureSubscriptionPaymentTables } = require("./subscription-payments");
+const { installPaytmTestPayments, ensurePaytmTestTables } = require("./paytm-print-payments");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -48,6 +49,13 @@ app.use("/api", (req, res, next) => {
   // not browser cookies. Allow only that exact endpoint without Origin.
   if (req.method === "POST" && req.path === "/agent/heartbeat" &&
       !req.get("origin")) {
+    return next();
+  }
+  // Paytm payment gateway form POST: server callback has no browser Origin.
+  // The handler must verify Paytm checksum AND signed status API response.
+  if (req.method === "POST" && req.path === "/paytm-print/callback") {
+    // Paytm's browser form may send a foreign Origin. Only the signed provider
+    // callback + independent signed Transaction Status API can mark Paid.
     return next();
   }
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
@@ -286,12 +294,13 @@ installTestFileUploads(app, pool);
 installAgentApis(app, pool);
 installCanonTestPrintApis(app, pool);
 installShopBilling(app, pool);
+installPaytmTestPayments(app, pool);
 
 // Explicit public assets: never expose backend JavaScript or package.json.
 app.get(["/", "/index.html"], (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
-for (const asset of ["style.css", "app.js", "login.html", "shop-login.html", "print.html", "subscription-payment.html"]) {
+for (const asset of ["style.css", "app.js", "login.html", "shop-login.html", "print.html", "subscription-payment.html", "paytm-print-result.html"]) {
   app.get("/" + asset, (req, res) => {
     res.sendFile(path.join(__dirname, asset));
   });
@@ -410,6 +419,7 @@ async function start() {
   await ensureShopBillingTables(pool);
   await ensureAgentTables(pool);
   await ensureCanonTestPrintTables(pool);
+  await ensurePaytmTestTables(pool);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);
