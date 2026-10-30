@@ -2,7 +2,7 @@
 
 // Opt-in test upload flow. Never enable for actual customer documents without
 // malware scanning, storage lifecycle policies, monitoring and durable DB.
-const { randomUUID, createHash } = require("node:crypto");
+const { randomUUID, createHash, randomBytes } = require("node:crypto");
 const multer = require("multer");
 const rateLimit = require("express-rate-limit");
 const {
@@ -118,7 +118,13 @@ async function ensureTestUploadTables(pool) {
     ALTER TABLE test_file_orders
       DROP CONSTRAINT IF EXISTS test_file_orders_status_check,
       ADD CONSTRAINT test_file_orders_status_check
-      CHECK (status IN ('test_only','printed'))
+      CHECK (status IN ('test_only','accepted','rejected','printed'))
+  `);
+  await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS tracking_token_hash VARCHAR(64)");
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS test_file_orders_tracking_hash_unique
+    ON test_file_orders(tracking_token_hash)
+    WHERE tracking_token_hash IS NOT NULL
   `);
   // Existing installations created customer_id as NOT NULL. Permit NULL for
   // guest sample files while preserving the foreign key on registered accounts.
@@ -133,6 +139,19 @@ async function ensureTestUploadTables(pool) {
   `);
 }
 
+// Possession of a random per-order tracking code permits status-only lookup.
+const TRACK_TOKEN = /^[a-f0-9]{48}$/;
+const trackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many status checks. Try again later." }
+});
+function trackingHash(token) {
+  return TRACK_TOKEN.test(token || "") ?
+    createHash("sha256").update(token).digest("hex") : null;
+}
 function installTestFileUploads(app, pool, env = process.env) {
   const cfg = storageSettings(env);
   const guestUploads = guestTestUploadsEnabled(env);
@@ -233,6 +252,8 @@ function installTestFileUploads(app, pool, env = process.env) {
           storedKey = "test-uploads/" + shopId + "/" + randomUUID() +
             "." + (fileType === "jpeg" ? "jpg" : fileType);
           const checksum = createHash("sha256").update(req.file.buffer).digest("hex");
+          const trackingToken = randomBytes(24).toString("hex");
+          const trackingTokenHash = trackingHash(trackingToken);
 
           await storage.send(new PutObjectCommand({
             Bucket: cfg.bucket,
@@ -245,18 +266,19 @@ function installTestFileUploads(app, pool, env = process.env) {
           const result = await pool.query(
             `INSERT INTO test_file_orders
               (shop_id, customer_id, storage_key, file_type,
-               file_size_bytes, file_sha256, copies, print_mode)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+               file_size_bytes, file_sha256, copies, print_mode, tracking_token_hash)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
              RETURNING id, status, created_at AS "createdAt"`,
             [shopId, (req.session && req.session.userId) || null, storedKey, fileType,
-              req.file.size, checksum, copies, printMode]
+              req.file.size, checksum, copies, printMode, trackingTokenHash]
           );
 
           return res.status(201).json({
             testOnly: true,
             message: "Private TEST file stored. Shop owner review required. No automatic printing or charge.",
             guest: !(req.session && req.session.userId),
-            order: result.rows[0]
+            order: result.rows[0],
+            trackingToken
           });
         } catch (error) {
           console.error("Private test upload failed:", error);
@@ -272,6 +294,61 @@ function installTestFileUploads(app, pool, env = process.env) {
           return res.status(503).json({ error: "Test upload was not completed" });
         }
       });
+    }
+  );
+
+  // Status-only lookup does not reveal the uploaded file or identity.
+  app.post("/api/public/shops/:code/test-file-orders/status",
+    trackLimiter, async (req, res) => {
+      const code = req.params.code;
+      const { orderId, trackingToken } = req.body || {};
+      const hash = trackingHash(trackingToken);
+      if (!/^[a-f0-9]{32}$/.test(code || "") ||
+          !/^[1-9][0-9]{0,14}$/.test(String(orderId || "")) || !hash) {
+        return res.status(400).json({ error: "Enter a valid test order ID and tracking code" });
+      }
+      try {
+        const result = await pool.query(
+          `SELECT o.id, o.status, o.created_at AS "createdAt"
+           FROM test_file_orders o JOIN shops s ON s.id = o.shop_id
+           WHERE s.public_code = $1 AND o.id = $2 AND o.tracking_token_hash = $3`,
+          [code, String(orderId), hash]
+        );
+        res.set("Cache-Control", "no-store");
+        if (!result.rows.length) return res.status(404).json({ error: "Tracking details not found" });
+        return res.json({ testOnly: true, order: result.rows[0] });
+      } catch (error) {
+        console.error("Private test order status lookup failed:", error);
+        return res.status(503).json({ error: "Could not check test order status" });
+      }
+    }
+  );
+  // The owner must accept a sample before confirming printed paper.
+  app.post("/api/shop/test-file-orders/:id/decision",
+    requireShopOwner, async (req, res) => {
+      if (!/^[1-9][0-9]{0,14}$/.test(req.params.id || "") ||
+          !["accepted", "rejected"].includes(req.body?.decision)) {
+        return res.status(400).json({ error: "Select Accept or Reject for a valid order" });
+      }
+      try {
+        const result = await pool.query(
+          `UPDATE test_file_orders o SET status = $3
+           FROM shop_owners owner
+           WHERE owner.shop_id = o.shop_id AND owner.id = $1 AND o.id = $2
+             AND o.status = 'test_only'
+             AND o.created_at > NOW() - INTERVAL '24 hours'
+           RETURNING o.id, o.status`,
+          [req.session.shopOwnerId, req.params.id, req.body.decision]
+        );
+        if (!result.rows.length) return res.status(409).json({
+          error: "Order is not pending, is expired, or does not belong to this shop"
+        });
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ testOnly: true, order: result.rows[0] });
+      } catch (error) {
+        console.error("Private test order decision failed:", error);
+        return res.status(503).json({ error: "Could not update order" });
+      }
     }
   );
 
@@ -336,12 +413,13 @@ function installTestFileUploads(app, pool, env = process.env) {
           `UPDATE test_file_orders o SET status = 'printed'
            FROM shop_owners owner
            WHERE owner.shop_id = o.shop_id AND owner.id = $1
-             AND o.id = $2 AND o.created_at > NOW() - INTERVAL '24 hours'
+             AND o.id = $2 AND o.status = 'accepted'
+             AND o.created_at > NOW() - INTERVAL '24 hours'
            RETURNING o.id, o.status`,
           [req.session.shopOwnerId, req.params.id]
         );
         if (!result.rows.length) {
-          return res.status(404).json({ error: "Order not found for this shop or file expired" });
+          return res.status(404).json({ error: "Order not accepted, not yours, or test file expired" });
         }
         res.set("Cache-Control", "no-store");
         return res.json({ testOnly: true, order: result.rows[0] });
@@ -367,6 +445,7 @@ function installTestFileUploads(app, pool, env = process.env) {
            FROM test_file_orders o
            JOIN shop_owners owner ON owner.shop_id = o.shop_id
            WHERE owner.id = $1 AND o.id = $2
+             AND o.status IN ('test_only','accepted','printed')
              AND o.created_at > NOW() - INTERVAL '24 hours'`,
           [req.session.shopOwnerId, req.params.id]
         );
