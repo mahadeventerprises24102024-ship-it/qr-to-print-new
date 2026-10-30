@@ -50,7 +50,8 @@ if ($null -eq $nodeCommand -or -not $nodeCommand.Source) {
 }
 $nodeExe = $nodeCommand.Source
 $nodeVersionText = & $nodeExe --version
-if ($LASTEXITCODE -ne 0 -or $nodeVersionText -notmatch '^v([0-9]+)\.') {
+if ($LASTEXITCODE -ne 0) { throw 'Cannot execute Node.js.' }
+if (-not ($nodeVersionText -match '^v([0-9]+)\.')) {
   throw 'Cannot verify Node.js version.'
 }
 if ([int]$Matches[1] -lt 20) { throw 'Please install Node.js version 20 or newer.' }
