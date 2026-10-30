@@ -322,8 +322,7 @@ function installPaytmTestPayments(app,pool,env=process.env,doFetch=fetch){
       res.set("Cache-Control","no-store");
       res.set("Referrer-Policy","no-referrer");
       const body=req.body||{};
-      if(!cfg.enabled||!ORDER_ID.test("1")||
-         typeof body.ORDERID!=="string"||
+      if(!cfg.enabled||typeof body.ORDERID!=="string"||
          !/^QRTPTEST_[A-F0-9]{32}$/.test(body.ORDERID)||
          body.MID!==cfg.mid||
          typeof body.CHECKSUMHASH!=="string"){
