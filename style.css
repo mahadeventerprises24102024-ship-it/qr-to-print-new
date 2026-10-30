@@ -20,3 +20,12 @@
   .hero-actions .button{flex:1;min-width:190px;text-align:center}
 }
 @media(max-width:390px){.site-header nav{justify-content:flex-start}}
+
+
+/* Launch-ready homepage: two distinct account entrances */
+.two-role-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.two-role-grid .tool-card{min-height:215px;border-color:#cfe5d9;background:linear-gradient(140deg,#fff 0%,#f5faf7 100%)}
+.two-role-grid .tool-card h3{font-size:22px}
+.two-role-grid .tool-card>a{font-weight:800}
+.hero .hero-disclaimer strong{color:#2b4b3e}
+@media(max-width:760px){.two-role-grid{grid-template-columns:1fr}.two-role-grid .tool-card{min-height:auto}}
