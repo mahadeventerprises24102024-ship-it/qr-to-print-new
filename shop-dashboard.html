@@ -170,7 +170,7 @@
       <div style="border-top:1px solid var(--line);margin:26px 0"></div>
       <section style="border:1px solid #bddcca;padding:18px;border-radius:13px;background:#f3fbf5;margin:24px 0">
         <h2 style="margin:0 0 10px">UPI QR for Customer TEST Orders</h2>
-        <p class="description">हर दुकान अपनी UPI ID लगाती है। ग्राहक UPI QR से भुगतान कर UTR डालता है। <strong>दुकानदार अपने बैंक/UPI ऐप में पैसा आने पर ही Payment Received दबाएगा।</strong> सिर्फ UTR देने से पैसे की पुष्टि नहीं होती। ग्राहक की Automatic Printing बंद है।</p>
+        <p class="description">हर दुकान अपनी UPI ID लगाती है। ग्राहक UPI QR से भुगतान करके <strong>मैंने पेमेंट कर दिया</strong> दबाएगा। <strong>दुकानदार अपने बैंक/UPI ऐप में वास्तविक पैसा आने पर ही Payment Received दबाएगा।</strong> उसके बाद दुकान के कंप्यूटर पर सुरक्षित TEST फोटो का Print Dialog खोलेंगे। प्रिंट की आखिरी पुष्टि दुकानदार करेगा; PDF viewer में Ctrl+P की जरूरत हो सकती है।</p>
         <form id="upi-account-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;align-items:end">
           <label style="font-size:12px;font-weight:700">Shop UPI ID
             <input id="shop-upi-vpa" type="text" autocomplete="off" required placeholder="example@bank" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #d3dfd9;border-radius:8px">
@@ -544,7 +544,7 @@
         heading.textContent="TEST Order #"+p.orderId+" • ₹"+p.amountRupees+" • "+p.status.toUpperCase();
         const ref=document.createElement("span");
         ref.style.display="block";
-        ref.textContent="Payment ref: "+p.reference+(p.customerUtr?" • Customer UTR (UNVERIFIED): "+p.customerUtr:"");
+        ref.textContent="Payment ref: "+p.reference+" • Bank receipt must be checked by shop owner";
         info.append(heading,ref);item.append(info);
         if(p.status==="customer_claimed"){
           const actions=document.createElement("div");
@@ -554,8 +554,18 @@
           const reject=document.createElement("button");
           reject.type="button";reject.className="btn light";reject.textContent="Reject claim";
           async function decide(decision){
-            if(decision==="paid_manual"&&!window.confirm("अपने BANK / UPI transaction history में इस TEST Order की पूरी ₹"+p.amountRupees+" रकम सच में CREDIT देखी है? सिर्फ ग्राहक के UTR या Screenshot पर भरोसा न करें।"))return;
-            if(decision==="rejected"&&!window.confirm("Reject this UTR claim?"))return;
+            if(decision==="paid_manual"&&!window.confirm("अपने BANK / UPI ऐप में इस TEST Order की पूरी ₹"+p.amountRupees+" रकम सच में CREDIT देखी है? ग्राहक के पेमेंट किए कहने या Screenshot पर भरोसा न करें। उसके बाद इसी कंप्यूटर पर Print Dialog खोलने की कोशिश करेंगे।"))return;
+            if(decision==="rejected"&&!window.confirm("Reject this unverified payment claim?"))return;
+            // Opening a same-origin blank window during the real button click
+            // avoids pop-up blocker rejection after the async bank confirmation.
+            // Never navigate it to an order until the server confirms ownership
+            // and the exact bank-credit amount. Only this Windows shop PC prints.
+            const popup=decision==="paid_manual" ?
+              window.open("about:blank","_blank") : null;
+            if(popup){
+              popup.document.title="Waiting for shop verification";
+              popup.document.body.textContent="Checking the shop owner's bank confirmation before preparing a TEST Print Dialog...";
+            }
             confirm.disabled=true;reject.disabled=true;
             try{
               const response=await fetch("/api/shop/upi-payment/orders/"+encodeURIComponent(p.orderId)+"/decision",{
@@ -566,12 +576,33 @@
               });
               const result=await response.json().catch(()=>({}));
               if(!response.ok)throw new Error(result.error||"Could not update UPI payment");
+              if(decision==="paid_manual"&&result.payment?.status==="paid_manual"){
+                const url="/shop-print-preview.html?order="+encodeURIComponent(p.orderId)+"&autoPrint=1";
+                if(popup&&!popup.closed)popup.location.href=url;
+                else {
+                  upiState.replaceChildren();
+                  const link=document.createElement("a");link.href=url;link.target="_blank";link.rel="noopener noreferrer";
+                  link.textContent="Bank verified. Click here to open this TEST print dialog (popup blocked)";
+                  upiState.append(link);
+                }
+              }else if(popup&&!popup.closed)popup.close();
               await loadUpiClaims();
-            }catch(error){upiState.textContent=error.message;confirm.disabled=false;reject.disabled=false;}
+            }catch(error){
+              if(popup&&!popup.closed)popup.close();
+              upiState.textContent=error.message;confirm.disabled=false;reject.disabled=false;
+            }
           }
           confirm.addEventListener("click",()=>decide("paid_manual"));
           reject.addEventListener("click",()=>decide("rejected"));
           actions.append(confirm,reject);item.append(actions);
+        }
+        if(p.status==="paid_manual"){
+          const link=document.createElement("a");
+          link.className="btn teal";
+          link.href="/shop-print-preview.html?order="+encodeURIComponent(p.orderId)+"&autoPrint=1";
+          link.target="_blank";link.rel="noopener noreferrer";
+          link.textContent="Open TEST Print Dialog";
+          item.append(link);
         }
         upiClaims.append(item);
       });
