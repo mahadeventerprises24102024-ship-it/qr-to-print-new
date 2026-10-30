@@ -314,6 +314,59 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
       renderShops();
     }catch(error){shopsBox.textContent=error.message;notify(error.message,true);}
   }
+  async function loadUsage(){
+    const history=document.getElementById("usage-history");
+    history.textContent="Loading manually recorded print pages...";
+    try{
+      const [perPage,demo]=await Promise.all([
+        request("/api/platform/page-usage"),request("/api/platform/demo-usage")
+      ]);
+      history.replaceChildren();
+      const totals=perPage.totals||{};
+      history.append(element("p","note","Pay Per Page total: "+Number(totals.pages||0)+
+        " pages • Recorded charge: "+rupees(Number(totals.totalPaise||0)/100)+
+        " • Unpaid: "+rupees(Number(totals.unpaidPaise||0)/100)));
+      const events=[
+        ...(Array.isArray(perPage.entries)?perPage.entries.map(e=>({...e,type:"per_page"})):[]),
+        ...(Array.isArray(demo.events)?demo.events.map(e=>({...e,type:"demo"})):[])
+      ];
+      events.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+      if(!events.length){history.append(element("p","empty","No confirmed print-page usage recorded yet."));return;}
+      events.slice(0,50).forEach(e=>{
+        const item=element("div","record");
+        if(e.type==="demo"){
+          item.textContent=date(e.createdAt)+" • "+e.shopName+
+            " • Demo: "+e.pages+" free printed pages confirmed (₹0)";
+        }else{
+          item.textContent=date(e.createdAt)+" • "+e.shopName+
+            " • Pay Per Page: "+e.pages+" pages × ₹0.15 = "+
+            rupees(Number(e.chargePaise)/100)+" • "+e.paymentStatus;
+          if(e.paymentStatus==="unpaid"){
+            const received=element("button","outline","Record received payment");
+            received.style.marginLeft="12px";
+            const method=optionSelect([["cash","Cash"],["upi","UPI"]],"cash");
+            method.style.marginLeft="8px";
+            method.className="input";
+            received.addEventListener("click",async()=>{
+              if(!window.confirm("Have you actually received "+rupees(Number(e.chargePaise)/100)+
+                " by "+method.value.toUpperCase()+" for this usage charge?"))return;
+              received.disabled=true;
+              try{
+                await request("/api/platform/page-usage/"+encodeURIComponent(e.id)+"/mark-paid",{
+                  paymentMethod:method.value,confirmedReceipt:true
+                });
+                notify("Manual payment receipt recorded.");
+                await loadUsage();
+              }catch(error){notify(error.message,true);received.disabled=false;}
+            });
+            item.append(method,received);
+          }
+        }
+        history.append(item);
+      });
+    }catch(error){history.textContent=error.message;}
+  }
+  document.getElementById("usage-refresh").addEventListener("click",loadUsage);
   async function loadHistory(){
     try{
       const data=await request("/api/platform/subscriptions");
@@ -338,7 +391,7 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   });
   request("/api/platform/me").then(data=>{
     document.getElementById("admin-email").textContent=data.email;
-    return Promise.all([loadShops(),loadHistory()]);
+    return Promise.all([loadPlanPrices(),loadShops(),loadHistory(),loadUsage()]);
   }).catch(error=>notify(error.message,true));
 })();
 </script>
