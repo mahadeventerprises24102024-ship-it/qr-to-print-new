@@ -21,7 +21,7 @@ test("customer dashboard uses existing session-restricted APIs and scoped tracki
   assert.match(server,/if \(!req\.session \|\| !req\.session\.userId\)/);
   assert.match(page,/api\("\/api\/me"\)/);
   assert.match(page,/api\("\/api\/customer\/test-file-orders"\)/);
-  assert.match(page,/\/api\/public\/shops\/"+code+"\/"+kind+"\/status"/);
+  assert.ok(page.includes('"/api/public/shops/"+code+"/"+kind+"/status"'),"shop-scoped status lookup missing");
   assert.match(page,/if\(url\.origin!==location\.origin \|\| url\.pathname!=="\/print\.html"\)return null;/);
   assert.match(page,/\/\^\[a-f0-9\]\{48\}\$\/\.test\(token\)/);
   assert.match(page,/method:"POST"/);
