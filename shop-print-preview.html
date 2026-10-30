@@ -116,11 +116,12 @@
   }
   upiQuote.addEventListener("click",async()=>{
     if(!currentOrderId||upiQuote.disabled)return;
-    const answer=window.prompt("UPI QR TEST only: कितने पेज प्रति कॉपी? (1–20) पहले फाइल देखकर गिनें।","1");
+    const isDummyCard=details.textContent.includes("DUMMY Front + Back card layout");
+    const answer=window.prompt(isDummyCard?"DUMMY Card Front+Back is one TEST sheet per copy. Enter 1.":"UPI QR TEST only: कितने पेज प्रति कॉपी? (1–20) पहले फाइल देखकर गिनें।","1");
     if(answer===null)return;
     const pages=Number(answer);
-    if(!Number.isInteger(pages)||pages<1||pages>20){
-      upiQuoteState.textContent="Pages per copy must be 1–20.";return;
+    if(!Number.isInteger(pages)||pages<1||pages>20||(isDummyCard&&pages!==1)){
+      upiQuoteState.textContent=isDummyCard?"DUMMY Front/Back card must be one TEST page per copy.":"Pages per copy must be 1–20.";return;
     }
     if(!window.confirm("Create a ONE-TIME UPI QR payment request for "+pages+" pages per copy? Customer will pay your shop's saved UPI ID. Duplicate quotes are blocked."))return;
     upiQuote.disabled=true;
@@ -206,8 +207,8 @@
     }
     currentOrderId = id;
     document.getElementById("order-heading").textContent = "#" + id;
-    if(autoPrintRequested)await authorizeAutoPrintDialog(id);
     try {
+      if(autoPrintRequested)await authorizeAutoPrintDialog(id);
       const listResponse = await fetch("/api/shop/test-file-orders", {
         credentials: "same-origin", cache: "no-store"
       });
@@ -220,6 +221,7 @@
         throw new Error("This TEST order was rejected and cannot be printed.");
       }
       const canPrint=order.status==="accepted";
+      const isDummyCard=order.documentKind==="dummy_card_front_back";
       await configurePaytmQuote(canPrint);
       await configureUpiQuote(canPrint);
       acceptButton.hidden=order.status!=="test_only";
@@ -233,6 +235,7 @@
       const mode = order.printMode === "color" ? "Colour" : "Black & white";
       details.textContent = [
         "Order #" + id,
+        isDummyCard?"DUMMY Front + Back card layout (one A4 TEST page)":"Standard TEST document",
         "File type: " + order.fileType.toUpperCase(),
         "Copies requested: " + order.copies,
         "Print mode: " + mode,
@@ -300,6 +303,7 @@
         "Pending shop decision. Open PDF only for review; Accept before printing.");
     } catch (error) {
       status(error.message || "Unable to load this private test order");
+      if(autoPrintRequested){autoPrintNote.hidden=false;autoPrintNote.textContent="Print Dialog blocked: "+(error.message||"Payment verification failed");}
       preview.textContent = "File preview unavailable.";
       actions.hidden = true;
     }
