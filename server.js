@@ -53,8 +53,9 @@ app.use("/api", (req, res, next) => {
   }
   // Paytm payment gateway form POST: server callback has no browser Origin.
   // The handler must verify Paytm checksum AND signed status API response.
-  if (req.method === "POST" && req.path === "/paytm-print/callback" &&
-      !req.get("origin")) {
+  if (req.method === "POST" && req.path === "/paytm-print/callback") {
+    // Paytm's browser form may send a foreign Origin. Only the signed provider
+    // callback + independent signed Transaction Status API can mark Paid.
     return next();
   }
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
