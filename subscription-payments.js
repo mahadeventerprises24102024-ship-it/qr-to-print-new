@@ -47,13 +47,6 @@ function quote(planCode,durationDays){
   const result=planQuote(planCode,durationDays);
   return {planCode,durationDays,amountPaise:result.upfrontPaise};
 }
-function secureMatch(value,expectedHex,secret){
-  if(typeof value!=="string"||!/^[a-f0-9]{64}$/i.test(value)||
-    typeof secret!=="string"||!secret)return false;
-  const got=Buffer.from(value,"hex");
-  const expected=createHmac("sha256",secret).update(expectedHex).digest();
-  return got.length===expected.length && timingSafeEqual(got,expected);
-}
 function upiUrl({vpa,payeeName,amountPaise,id}){
   const query=new URLSearchParams({
     pa:vpa,pn:payeeName,am:(amountPaise/100).toFixed(2),
@@ -137,24 +130,24 @@ async function activateVerifiedPayment(client,payment,method){
     payment.amount_paise,method,
     method==="gateway"?"verified-paytm@system.internal":payment.reviewed_by]);
 }
-// Calling this twice with one Paytm order is safe: a DB row-lock
-// guarantees at-most-once subscription extension.
-async function settleCapturedGateway(pool,verified){
-  if(!/^[a-zA-Z0-9_-]{6,70}$/.test(verified.orderId||"")||
-     !/^[a-zA-Z0-9_-]{6,70}$/.test(verified.paymentId||"")||
-     verified.currency!=="INR"||verified.status!=="captured"||
-     !Number.isInteger(verified.amountPaise)||verified.amountPaise<=0){
-    throw new Error("Invalid captured payment details");
+// Status API is authoritative; Paytm callback or browser status alone cannot
+// approve a charge. Row locking prevents double subscription extensions.
+async function settleSuccessfulPaytm(pool,transaction){
+  if(typeof transaction.orderId!=="string"||!/^QRPT[0-9]{1,18}$/.test(transaction.orderId)||
+     typeof transaction.txnId!=="string"||!(/^[A-Za-z0-9_-]{6,70}$/.test(transaction.txnId))||
+     transaction.currency!=="INR"||transaction.status!=="TXN_SUCCESS"||
+     !Number.isInteger(transaction.amountPaise)||transaction.amountPaise<=0){
+    throw new Error("Invalid verified Paytm transaction");
   }
   const client=await pool.connect();
   try{
     await client.query("BEGIN");
     const found=await client.query(
       "SELECT * FROM platform_payment_requests WHERE paytm_order_id=$1 FOR UPDATE",
-      [verified.orderId]
+      [transaction.orderId]
     );
     const p=found.rows[0];
-    if(!p||p.kind!=="paytm"||Number(p.amount_paise)!==verified.amountPaise){
+    if(!p||p.kind!=="paytm"||Number(p.amount_paise)!==transaction.amountPaise){
       await client.query("ROLLBACK");
       return {status:"unmatched"};
     }
@@ -169,7 +162,7 @@ async function settleCapturedGateway(pool,verified){
     const status=p.gateway_mode==="live"?"paid":"test_paid";
     await client.query(
       "UPDATE platform_payment_requests SET status=$2,paytm_transaction_id=$3,paid_at=NOW(),updated_at=NOW() WHERE id=$1",
-      [p.id,status,verified.paymentId]
+      [p.id,status,transaction.txnId]
     );
     if(status==="paid")await activateVerifiedPayment(client,p,"gateway");
     await client.query("COMMIT");
@@ -179,55 +172,60 @@ async function settleCapturedGateway(pool,verified){
     throw error;
   }finally{client.release();}
 }
-async function paytmFetch(config,path,options={},fetchImpl=fetch){
-  const credentials=Buffer.from(config.keyId+":"+config.keySecret,"utf8").toString("base64");
-  const res=await fetchImpl("https://api.paytm.com/v1/"+path,{
-    ...options,
-    headers:{"Authorization":"Basic "+credentials,
-      "Content-Type":"application/json"},
+async function paytmCall(config,endpoint,body,fetchImpl=fetch){
+  const signature=await PaytmChecksum.generateSignature(JSON.stringify(body),config.merchantKey);
+  const res=await fetchImpl(config.host+endpoint,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({body,head:{signature}}),
     signal:AbortSignal.timeout(10000)
   });
-  const data=await res.json().catch(()=>({}));
-  if(!res.ok)throw new Error("Gateway API returned "+res.status);
-  return data;
+  const result=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error("Paytm API unavailable: "+res.status);
+  if(typeof result.head?.signature!=="string"||
+     !(await PaytmChecksum.verifySignature(JSON.stringify(result.body),config.merchantKey,result.head.signature))){
+    throw new Error("Paytm API signature verification failed");
+  }
+  return result.body;
 }
-// Webhook route MUST be registered before express.json and the normal browser
-// Origin guard; Paytm webhooks do not carry same-origin browser headers.
+function parsePaytmAmount(value){
+  if(typeof value!=="string"||!/^(0|[1-9]\d{0,7})\.\d{2}$/.test(value))return null;
+  const [whole,decimal]=value.split(".");
+  return Number(whole)*100+Number(decimal);
+}
+async function verifyPaytmOrder(pool,config,orderId,fetchImpl=fetch){
+  const data=await paytmCall(config,"/v3/order/status",{mid:config.mid,orderId},fetchImpl);
+  const resultStatus=data?.resultInfo?.resultStatus;
+  if(resultStatus!=="TXN_SUCCESS")return {status:resultStatus==="PENDING"?"pending":"not_paid"};
+  if(data.orderId!==orderId)return {status:"mismatch"};
+  if(data.mid&&data.mid!==config.mid)return {status:"mismatch"};
+  const amount=parsePaytmAmount(String(data.txnAmount||""));
+  if(amount===null)return {status:"mismatch"};
+  return settleSuccessfulPaytm(pool,{
+    orderId,txnId:data.txnId,currency:"INR",status:"TXN_SUCCESS",amountPaise:amount
+  });
+}
+// Only signed Paytm callbacks are accepted. Every callback is independently
+// rechecked with Paytm's server-to-server Transaction Status API.
 function installPaymentWebhook(app,pool,env=process.env,fetchImpl=fetch){
-  app.post("/api/payments/paytm/webhook",
-    express.raw({type:"application/json",limit:"128kb"}),
+  app.post("/api/payments/paytm/callback",
+    express.urlencoded({extended:false,limit:"12kb",parameterLimit:35}),
     async(req,res)=>{
-      const config=paymentConfig(env);
-      if(!config.gatewayEnabled)return res.status(503).json({error:"Gateway not configured"});
-      if(!Buffer.isBuffer(req.body))return res.status(415).end();
-      const signature=req.get("x-paytm-signature");
-      if(!secureMatch(signature,req.body,config.webhookSecret)){
+      const c=paymentConfig(env);
+      if(!c.gatewayEnabled)return res.status(503).send("Paytm is not configured");
+      const params=req.body||{},hash=params.CHECKSUMHASH;
+      if(typeof hash!=="string"||typeof params.ORDERID!=="string")return res.status(400).end();
+      const unsigned={...params};delete unsigned.CHECKSUMHASH;
+      if(!(await PaytmChecksum.verifySignature(unsigned,c.merchantKey,hash))){
         return res.status(400).end();
       }
-      let event;
-      try{event=JSON.parse(req.body.toString("utf8"));}
-      catch{return res.status(400).end();}
-      if(event?.event!=="payment.captured")return res.status(200).json({received:true});
-      const entity=event?.payload?.payment?.entity;
-      if(entity?.status!=="captured"||!entity?.id||!entity?.order_id){
-        return res.status(400).end();
-      }
+      if(params.MID!==c.mid||!/^QRPT[0-9]{1,18}$/.test(params.ORDERID))return res.status(400).end();
       try{
-        // Back-to-back signed webhook + backend payment lookup for defense in depth.
-        const payment=await paytmFetch(config,"payments/"+encodeURIComponent(entity.id),{},fetchImpl);
-        if(payment.id!==entity.id||payment.order_id!==entity.order_id||
-           payment.status!=="captured"||payment.currency!=="INR"||
-           payment.amount!==entity.amount)return res.status(409).end();
-        const result=await settleCapturedGateway(pool,{
-          orderId:payment.order_id,paymentId:payment.id,status:payment.status,
-          currency:payment.currency,amountPaise:payment.amount
-        });
-        // Unknown transactions are not activated; 200 avoids endless retries
-        // for a payment outside this app's order ledger.
-        return res.status(200).json({received:true,status:result.status});
+        await verifyPaytmOrder(pool,c,params.ORDERID,fetchImpl);
+        return res.redirect(303,"/subscription-payment.html?paytm_return=1");
       }catch(error){
-        console.error("Gateway webhook processing failed:",error);
-        return res.status(503).json({error:"Webhook retry required"});
+        console.error("Paytm callback verification failed:",error);
+        return res.status(503).send("Verification unavailable. Recheck order status from the billing page.");
       }
     }
   );
