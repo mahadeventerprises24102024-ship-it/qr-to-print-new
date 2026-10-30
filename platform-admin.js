@@ -382,6 +382,95 @@ function installPlatformAdmin(app,pool,env=process.env) {
     }
   });
 
+  // Demo printed-page usage is confirmed manually by the platform admin.
+  // There is no trusted automatic paper count from the Canon test agent.
+  app.get("/api/platform/demo-usage",requireAdmin,async(req,res)=>{
+    try{
+      const result=await pool.query([
+        'SELECT d.id,d.shop_id AS "shopId",s.name AS "shopName",d.pages,',
+        'd.recorded_by_email AS "recordedBy",d.created_at AS "createdAt"',
+        "FROM platform_demo_page_events d JOIN shops s ON s.id=d.shop_id",
+        "ORDER BY d.created_at DESC,d.id DESC LIMIT 100"
+      ].join(" "));
+      res.set("Cache-Control","private, no-store");
+      return res.json({events:result.rows,quotaPages:10,manualConfirmation:true});
+    }catch(error){
+      console.error("Demo usage history failed:",error);
+      return res.status(503).json({error:"Unable to load Demo page history"});
+    }
+  });
+  app.post("/api/platform/shops/:id/demo-usage",requireAdmin,async(req,res)=>{
+    if(!/^[1-9][0-9]{0,14}$/.test(req.params.id||"") ||
+       !Number.isInteger(req.body?.pages) || req.body.pages<1 || req.body.pages>10 ||
+       req.body.confirmedPrintedPages!==true){
+      return res.status(400).json({error:"Confirm 1–10 physically printed Demo pages"});
+    }
+    let client;
+    try{
+      client=await pool.connect();
+      await client.query("BEGIN");
+      // The lock serializes concurrent usage submissions for the same shop.
+      const shop=await client.query([
+        "SELECT id FROM shops WHERE id=$1 AND plan_code='demo'",
+        "AND subscription_status='active' AND subscription_expires_at>NOW() FOR UPDATE"
+      ].join(" "),[req.params.id]);
+      if(!shop.rows.length){
+        await client.query("ROLLBACK");
+        return res.status(409).json({error:"Demo plan is not currently active for this shop"});
+      }
+      const current=await client.query([
+        'SELECT COALESCE(SUM(pages),0)::int AS "pagesUsed"',
+        "FROM platform_demo_page_events WHERE shop_id=$1"
+      ].join(" "),[req.params.id]);
+      const used=Number(current.rows[0]?.pagesUsed||0);
+      if(used+req.body.pages>10){
+        await client.query("ROLLBACK");
+        return res.status(409).json({error:"Demo limit exceeded: "+Math.max(0,10-used)+" free pages remaining"});
+      }
+      const saved=await client.query([
+        "INSERT INTO platform_demo_page_events(shop_id,pages,recorded_by_email)",
+        "VALUES($1,$2,$3)",
+        'RETURNING id,shop_id AS "shopId",pages'
+      ].join(" "),[req.params.id,req.body.pages,req.session.platformAdminEmail]);
+      await client.query("COMMIT");
+      res.set("Cache-Control","no-store");
+      return res.status(201).json({
+        event:saved.rows[0],pagesUsed:used+req.body.pages,
+        pagesRemaining:10-used-req.body.pages,manualConfirmation:true
+      });
+    }catch(error){
+      if(client){try{await client.query("ROLLBACK");}catch{}}
+      console.error("Demo page recording failed:",error);
+      return res.status(503).json({error:"Could not record Demo pages"});
+    }finally{if(client)client.release();}
+  });
+
+  // Shop owners can see their own usage without accessing other shops' data.
+  app.get("/api/shop/plan-usage",async(req,res)=>{
+    if(!req.session?.shopOwnerId) return res.status(401).json({error:"Shop login required"});
+    try{
+      const result=await pool.query([
+        'SELECT s.plan_code AS "planCode",s.subscription_expires_at AS "expiresAt",',
+        '(SELECT COALESCE(SUM(pages),0)::int FROM platform_demo_page_events d WHERE d.shop_id=s.id) AS "demoPagesUsed",',
+        '(SELECT COALESCE(SUM(pages),0)::bigint FROM platform_page_usage_events p WHERE p.shop_id=s.id) AS "perPageRecordedPages"',
+        "FROM shops s JOIN shop_owners o ON o.shop_id=s.id WHERE o.id=$1"
+      ].join(" "),[req.session.shopOwnerId]);
+      if(!result.rows.length)return res.status(404).json({error:"Shop not found"});
+      const row=result.rows[0];
+      res.set("Cache-Control","private, no-store");
+      return res.json({
+        planCode:row.planCode,expiresAt:row.expiresAt,
+        demoLimitPages:10,demoPagesUsed:Number(row.demoPagesUsed),
+        demoPagesRemaining:Math.max(0,10-Number(row.demoPagesUsed)),
+        perPageRecordedPages:Number(row.perPageRecordedPages),
+        usageIsManuallyConfirmed:true
+      });
+    }catch(error){
+      console.error("Shop plan usage lookup failed:",error);
+      return res.status(503).json({error:"Unable to load your plan usage"});
+    }
+  });
+
   app.post("/api/platform/shops/:id/suspend",requireAdmin,async(req,res)=>{
     if(!/^[1-9][0-9]{0,14}$/.test(req.params.id||"")){
       return res.status(400).json({error:"Invalid shop ID"});
