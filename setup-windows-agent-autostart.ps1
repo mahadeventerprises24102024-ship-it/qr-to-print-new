@@ -98,7 +98,7 @@ $acl = New-Object System.Security.AccessControl.DirectorySecurity
 $acl.SetAccessRuleProtection($true, $false)
 foreach ($sidText in @($userSid.Value, 'S-1-5-18', 'S-1-5-32-544')) {
   $sid = New-Object System.Security.Principal.SecurityIdentifier($sidText)
-  $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
     $sid, [System.Security.AccessControl.FileSystemRights]::FullControl,
     [System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',
     [System.Security.AccessControl.PropagationFlags]::None,
