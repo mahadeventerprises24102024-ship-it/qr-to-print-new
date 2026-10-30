@@ -2,11 +2,11 @@
 
 // Shop-owner payment checkout. A billing-only session intentionally cannot
 // access the shop dashboard while subscription approval is pending.
-// No credentials, UPI VPA or Razorpay key secrets are stored in source code.
+// No credentials, UPI VPA or Paytm key secrets are stored in source code.
 const bcrypt=require("bcryptjs");
 const QRCode=require("qrcode");
 const express=require("express");
-const {createHmac,timingSafeEqual}=require("node:crypto");
+const PaytmChecksum=require("paytmchecksum");
 const rateLimit=require("express-rate-limit");
 const {planQuote}=require("./platform-admin");
 
@@ -25,15 +25,22 @@ function paymentConfig(env=process.env){
   const payeeName=(env.UPI_PAYMENT_NAME||"").trim();
   const upiEnabled=/^[a-zA-Z0-9._-]{2,80}@[a-zA-Z0-9._-]{2,50}$/.test(vpa)
     && payeeName.length>=2 && payeeName.length<=70 && !/[<>&]/.test(payeeName);
-  const keyId=(env.RAZORPAY_KEY_ID||"").trim();
-  const keySecret=env.RAZORPAY_KEY_SECRET||"";
-  const webhookSecret=env.RAZORPAY_WEBHOOK_SECRET||"";
-  const mode=keyId.startsWith("rzp_live_")?"live":keyId.startsWith("rzp_test_")?"test":"invalid";
-  const gatewayEnabled=mode!=="invalid" && keyId.length>=16 &&
-    keySecret.length>=12 && webhookSecret.length>=12;
+  const mid=(env.PAYTM_MID||"").trim();
+  const merchantKey=env.PAYTM_MERCHANT_KEY||"";
+  const mode=env.PAYTM_ENV==="live"?"live":"test";
+  const website=(env.PAYTM_WEBSITE_NAME|| (mode==="live"?"DEFAULT":"WEBSTAGING")).trim();
+  const validCred=/^[A-Za-z0-9]{8,36}$/.test(mid)&&merchantKey.length>=16&&merchantKey.length<=200&&/^[A-Za-z0-9_-]{2,40}$/.test(website);
+  let origin;
+  try{
+    const u=new URL(env.PUBLIC_BASE_URL||"https://qr-to-print-new.onrender.com");
+    if(u.protocol==="https:"&&!u.username&&!u.password&&!u.search&&!u.hash&&(u.pathname==="/"||!u.pathname))origin=u.origin;
+  }catch{}
   return {upiEnabled,vpa:upiEnabled?vpa:"",payeeName:upiEnabled?payeeName:"",
-    gatewayEnabled,keyId:gatewayEnabled?keyId:"",keySecret:gatewayEnabled?keySecret:"",
-    webhookSecret:gatewayEnabled?webhookSecret:"",mode};
+    gatewayEnabled:validCred&&!!origin,mid:validCred?mid:"",
+    merchantKey:validCred?merchantKey:"",website,mode,
+    host:mode==="live"?"https://secure.paytmpayments.com":"https://securestage.paytmpayments.com",
+    origin};
+
 }
 function quote(planCode,durationDays){
   if(!SELLABLE.includes(planCode)||!PERIODS.includes(durationDays))return null;
@@ -60,15 +67,15 @@ async function ensureSubscriptionPaymentTables(pool){
     "id BIGSERIAL PRIMARY KEY,",
     "shop_id BIGINT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,",
     "owner_id BIGINT NOT NULL REFERENCES shop_owners(id) ON DELETE CASCADE,",
-    "kind VARCHAR(12) NOT NULL CHECK (kind IN ('upi_manual','razorpay')),",
+    "kind VARCHAR(12) NOT NULL CHECK (kind IN ('upi_manual','paytm')),",
     "plan_code VARCHAR(16) NOT NULL CHECK (plan_code IN ('starter','pro','business')),",
     "duration_days SMALLINT NOT NULL CHECK (duration_days IN (30,90,365)),",
     "amount_paise INTEGER NOT NULL CHECK (amount_paise BETWEEN 100 AND 10000000),",
     "status VARCHAR(12) NOT NULL DEFAULT 'pending'",
     "CHECK (status IN ('draft','pending','submitted','paid','test_paid','rejected')),",
     "upi_reference VARCHAR(50) UNIQUE,",
-    "razorpay_order_id VARCHAR(70) UNIQUE,",
-    "razorpay_payment_id VARCHAR(70) UNIQUE,",
+    "paytm_order_id VARCHAR(70) UNIQUE,",
+    "paytm_transaction_id VARCHAR(70) UNIQUE,",
     "gateway_mode VARCHAR(8) CHECK (gateway_mode IN ('live','test')),",
     "reviewed_by VARCHAR(254),",
     "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
@@ -77,7 +84,7 @@ async function ensureSubscriptionPaymentTables(pool){
     ")"
   ].join(" "));
   await pool.query("CREATE INDEX IF NOT EXISTS payment_requests_shop ON platform_payment_requests(shop_id,created_at DESC,id DESC)");
-  // Allow truthful 'gateway' audit labeling for automatic Razorpay receipts.
+  // Allow truthful 'gateway' audit labeling for automatic Paytm receipts.
   // Old deployments created this named constraint as part of CREATE TABLE.
   await pool.query([
     "DO $$ BEGIN",
@@ -128,9 +135,9 @@ async function activateVerifiedPayment(client,payment,method){
     "VALUES ($1,'activate',$2,$3,$4,$5,$6)"
   ].join(" "),[payment.shop_id,payment.plan_code,payment.duration_days,
     payment.amount_paise,method,
-    method==="gateway"?"verified-razorpay@system.internal":payment.reviewed_by]);
+    method==="gateway"?"verified-paytm@system.internal":payment.reviewed_by]);
 }
-// Calling this twice with one Razorpay order is safe: a DB row-lock
+// Calling this twice with one Paytm order is safe: a DB row-lock
 // guarantees at-most-once subscription extension.
 async function settleCapturedGateway(pool,verified){
   if(!/^[a-zA-Z0-9_-]{6,70}$/.test(verified.orderId||"")||
@@ -143,11 +150,11 @@ async function settleCapturedGateway(pool,verified){
   try{
     await client.query("BEGIN");
     const found=await client.query(
-      "SELECT * FROM platform_payment_requests WHERE razorpay_order_id=$1 FOR UPDATE",
+      "SELECT * FROM platform_payment_requests WHERE paytm_order_id=$1 FOR UPDATE",
       [verified.orderId]
     );
     const p=found.rows[0];
-    if(!p||p.kind!=="razorpay"||Number(p.amount_paise)!==verified.amountPaise){
+    if(!p||p.kind!=="paytm"||Number(p.amount_paise)!==verified.amountPaise){
       await client.query("ROLLBACK");
       return {status:"unmatched"};
     }
@@ -161,7 +168,7 @@ async function settleCapturedGateway(pool,verified){
     }
     const status=p.gateway_mode==="live"?"paid":"test_paid";
     await client.query(
-      "UPDATE platform_payment_requests SET status=$2,razorpay_payment_id=$3,paid_at=NOW(),updated_at=NOW() WHERE id=$1",
+      "UPDATE platform_payment_requests SET status=$2,paytm_transaction_id=$3,paid_at=NOW(),updated_at=NOW() WHERE id=$1",
       [p.id,status,verified.paymentId]
     );
     if(status==="paid")await activateVerifiedPayment(client,p,"gateway");
@@ -172,9 +179,9 @@ async function settleCapturedGateway(pool,verified){
     throw error;
   }finally{client.release();}
 }
-async function razorpayFetch(config,path,options={},fetchImpl=fetch){
+async function paytmFetch(config,path,options={},fetchImpl=fetch){
   const credentials=Buffer.from(config.keyId+":"+config.keySecret,"utf8").toString("base64");
-  const res=await fetchImpl("https://api.razorpay.com/v1/"+path,{
+  const res=await fetchImpl("https://api.paytm.com/v1/"+path,{
     ...options,
     headers:{"Authorization":"Basic "+credentials,
       "Content-Type":"application/json"},
@@ -185,15 +192,15 @@ async function razorpayFetch(config,path,options={},fetchImpl=fetch){
   return data;
 }
 // Webhook route MUST be registered before express.json and the normal browser
-// Origin guard; Razorpay webhooks do not carry same-origin browser headers.
+// Origin guard; Paytm webhooks do not carry same-origin browser headers.
 function installPaymentWebhook(app,pool,env=process.env,fetchImpl=fetch){
-  app.post("/api/payments/razorpay/webhook",
+  app.post("/api/payments/paytm/webhook",
     express.raw({type:"application/json",limit:"128kb"}),
     async(req,res)=>{
       const config=paymentConfig(env);
       if(!config.gatewayEnabled)return res.status(503).json({error:"Gateway not configured"});
       if(!Buffer.isBuffer(req.body))return res.status(415).end();
-      const signature=req.get("x-razorpay-signature");
+      const signature=req.get("x-paytm-signature");
       if(!secureMatch(signature,req.body,config.webhookSecret)){
         return res.status(400).end();
       }
@@ -207,7 +214,7 @@ function installPaymentWebhook(app,pool,env=process.env,fetchImpl=fetch){
       }
       try{
         // Back-to-back signed webhook + backend payment lookup for defense in depth.
-        const payment=await razorpayFetch(config,"payments/"+encodeURIComponent(entity.id),{},fetchImpl);
+        const payment=await paytmFetch(config,"payments/"+encodeURIComponent(entity.id),{},fetchImpl);
         if(payment.id!==entity.id||payment.order_id!==entity.order_id||
            payment.status!=="captured"||payment.currency!=="INR"||
            payment.amount!==entity.amount)return res.status(409).end();
@@ -378,9 +385,9 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
       return res.status(503).json({error:"Could not submit UPI reference"});
     }
   });
-  app.post("/api/payments/razorpay-order",actionLimiter,billingOnly,async(req,res)=>{
+  app.post("/api/payments/paytm-order",actionLimiter,billingOnly,async(req,res)=>{
     const c=paymentConfig(env);
-    if(!c.gatewayEnabled)return res.status(503).json({error:"Razorpay keys and webhook secret are not configured"});
+    if(!c.gatewayEnabled)return res.status(503).json({error:"Paytm keys and webhook secret are not configured"});
     const q=quote(req.body?.planCode,req.body?.durationDays);
     if(!q)return res.status(400).json({error:"Select Starter, Pro or Business and 30/90/365 days"});
     let draft;
@@ -388,11 +395,11 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
       const created=await pool.query([
         "INSERT INTO platform_payment_requests",
         "(shop_id,owner_id,kind,plan_code,duration_days,amount_paise,status,gateway_mode)",
-        "VALUES($1,$2,'razorpay',$3,$4,$5,'draft',$6) RETURNING id"
+        "VALUES($1,$2,'paytm',$3,$4,$5,'draft',$6) RETURNING id"
       ].join(" "),[req.session.billingShopId,req.session.billingOwnerId,
         q.planCode,q.durationDays,q.amountPaise,c.mode]);
       draft=created.rows[0].id;
-      const order=await razorpayFetch(c,"orders",{
+      const order=await paytmFetch(c,"orders",{
         method:"POST",body:JSON.stringify({
           amount:q.amountPaise,currency:"INR",receipt:"qrp_"+draft,
           notes:{shop_payment_request:String(draft)}
@@ -404,7 +411,7 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
       }
       await pool.query([
         "UPDATE platform_payment_requests SET status='pending',",
-        "razorpay_order_id=$2,updated_at=NOW() WHERE id=$1 AND status='draft'"
+        "paytm_order_id=$2,updated_at=NOW() WHERE id=$1 AND status='draft'"
       ].join(" "),[draft,order.id]);
       res.set("Cache-Control","no-store");
       return res.status(201).json({
@@ -413,17 +420,17 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
         testOnly:c.mode==="test"
       });
     }catch(error){
-      console.error("Razorpay order failed:",error);
+      console.error("Paytm order failed:",error);
       return res.status(503).json({
         error:"Could not create a gateway checkout. No payment is confirmed; please retry later."
       });
     }
   });
-  app.post("/api/payments/razorpay-verify",actionLimiter,billingOnly,async(req,res)=>{
+  app.post("/api/payments/paytm-verify",actionLimiter,billingOnly,async(req,res)=>{
     const c=paymentConfig(env);
-    if(!c.gatewayEnabled)return res.status(503).json({error:"Razorpay not configured"});
-    const id=req.body?.razorpay_order_id,paid=req.body?.razorpay_payment_id,
-      signature=req.body?.razorpay_signature;
+    if(!c.gatewayEnabled)return res.status(503).json({error:"Paytm not configured"});
+    const id=req.body?.paytm_order_id,paid=req.body?.paytm_transaction_id,
+      signature=req.body?.paytm_signature;
     if(!/^order_[A-Za-z0-9]+$/.test(id||"")||
        !/^pay_[A-Za-z0-9]+$/.test(paid||"")||
        !secureMatch(signature,id+"|"+paid,c.keySecret)){
@@ -432,10 +439,10 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
     try{
       const own=await pool.query([
         "SELECT id FROM platform_payment_requests",
-        "WHERE razorpay_order_id=$1 AND shop_id=$2 AND owner_id=$3"
+        "WHERE paytm_order_id=$1 AND shop_id=$2 AND owner_id=$3"
       ].join(" "),[id,req.session.billingShopId,req.session.billingOwnerId]);
       if(!own.rows.length)return res.status(404).json({error:"Payment order not found for this shop"});
-      const payment=await razorpayFetch(c,"payments/"+encodeURIComponent(paid),{},fetchImpl);
+      const payment=await paytmFetch(c,"payments/"+encodeURIComponent(paid),{},fetchImpl);
       if(payment.id!==paid||payment.order_id!==id||
          payment.status!=="captured"||payment.currency!=="INR"){
         return res.status(409).json({error:"Payment is not captured yet. Check again later."});
@@ -450,7 +457,7 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
       res.set("Cache-Control","no-store");
       return res.json({status:result.status,
         activated:result.status==="paid",
-        message:result.status==="paid"?"Captured payment verified. Shop subscription activated.":"Razorpay TEST payment verified; shop subscription NOT activated."});
+        message:result.status==="paid"?"Captured payment verified. Shop subscription activated.":"Paytm TEST payment verified; shop subscription NOT activated."});
     }catch(error){
       console.error("Gateway payment verification failed:",error);
       return res.status(503).json({error:"Could not verify captured payment. Please retry later."});
@@ -462,7 +469,7 @@ function installSubscriptionPayments(app,pool,requireAdmin,env=process.env,fetch
         'SELECT p.id,p.kind,p.plan_code AS "planCode",',
         'p.duration_days AS "durationDays",p.amount_paise AS "amountPaise",',
         'p.status,p.upi_reference AS "upiReference",',
-        'p.razorpay_order_id AS "gatewayOrderId",p.gateway_mode AS "gatewayMode",',
+        'p.paytm_order_id AS "gatewayOrderId",p.gateway_mode AS "gatewayMode",',
         'p.created_at AS "createdAt",s.name AS "shopName",s.id AS "shopId",',
         'o.email AS "ownerEmail"',
         "FROM platform_payment_requests p",
