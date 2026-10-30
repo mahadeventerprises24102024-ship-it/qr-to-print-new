@@ -14,6 +14,7 @@ const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
 const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
 const { installShopBilling, ensureShopBillingTables } = require("./shop-billing");
 const { installPlatformAdmin, ensurePlatformTables, shopApiGate, shopPageGate, publicShopGate } = require("./platform-admin");
+const { installSubscriptionPayments, ensureSubscriptionPaymentTables } = require("./subscription-payments");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -275,7 +276,8 @@ app.post("/api/logout", (req, res) => {
 // Subscription checks apply to existing sessions and public shop QR routes.
 app.use("/api/shop", shopApiGate(pool));
 app.use("/api/public/shops/:code", publicShopGate(pool));
-installPlatformAdmin(app, pool);
+const {requireAdmin}=installPlatformAdmin(app, pool);
+installSubscriptionPayments(app,pool,requireAdmin);
 
 // Shop endpoints and owners use their own session identity.
 installShopAuth(app, pool);
@@ -289,7 +291,7 @@ installShopBilling(app, pool);
 app.get(["/", "/index.html"], (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
-for (const asset of ["style.css", "app.js", "login.html", "shop-login.html", "print.html"]) {
+for (const asset of ["style.css", "app.js", "login.html", "shop-login.html", "print.html", "subscription-payment.html"]) {
   app.get("/" + asset, (req, res) => {
     res.sendFile(path.join(__dirname, asset));
   });
@@ -373,6 +375,7 @@ async function start() {
 
   await ensureShopTables(pool);
   await ensurePlatformTables(pool);
+  await ensureSubscriptionPaymentTables(pool);
   await ensureDemoOrderTables(pool);
   await ensureTestUploadTables(pool);
   await ensureShopBillingTables(pool);
