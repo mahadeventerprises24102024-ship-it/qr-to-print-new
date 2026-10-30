@@ -305,6 +305,20 @@ app.get("/dashboard.html", (req, res) => {
   }
   return res.sendFile(path.join(__dirname, "dashboard.html"));
 });
+// Owner-only browser diagnostic: no customer files or backend print commands.
+app.get("/shop-printer-check.html", shopPageGate(pool), (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  res.set("Referrer-Policy", "no-referrer");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Content-Security-Policy",
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+    "connect-src 'none'; img-src 'none'; object-src 'none'; " +
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  if (!req.session || !req.session.shopOwnerId) {
+    return res.redirect("/shop-login.html");
+  }
+  return res.sendFile(path.join(__dirname, "shop-printer-check.html"));
+});
 // Private review page: only authenticated shop owners may open uploaded samples.
 app.get("/shop-print-preview.html", shopPageGate(pool), (req, res) => {
   res.set("Cache-Control", "private, no-store");
