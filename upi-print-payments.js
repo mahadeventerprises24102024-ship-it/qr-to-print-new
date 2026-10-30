@@ -82,8 +82,9 @@ function installUpiPrintPayments(app,pool){
     if(!idPattern.test(id||"")||!Number.isInteger(pages)||pages<1||pages>20)return res.status(400).json({error:"Enter actual pages per copy (1–20)"});
     try{
       const q=await pool.query([
-        "SELECT o.id,o.shop_id,o.copies,o.print_mode,",
+        "SELECT o.id,o.shop_id,o.copies,o.print_mode,o.document_kind,",
         "COALESCE(r.bw_paise,300) AS bw_paise,COALESCE(r.color_paise,1000) AS color_paise,",
+        "COALESCE(r.aadhaar_bw_paise,500) AS aadhaar_bw_paise,",
         "a.vpa,a.payee_name FROM test_file_orders o",
         "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
         "JOIN shop_upi_payment_accounts a ON a.shop_id=o.shop_id AND a.enabled=TRUE",
@@ -93,7 +94,16 @@ function installUpiPrintPayments(app,pool){
       ].join(" "),[req.session.shopOwnerId,id]);
       if(!q.rows.length)return res.status(409).json({error:"Configure shop UPI ID and accept an unexpired TEST file first"});
       const order=q.rows[0];
-      const amount=Number(order.copies)*pages*Number(order.print_mode==="color"?order.color_paise:order.bw_paise);
+      // Dummy front/back sample is already one combined A4 TEST sheet. Apply
+      // the configured Aadhaar-card B&W per-copy rate, not the B&W page rate.
+      // Real Aadhaar uploads remain unsupported by this TEST endpoint.
+      const dummyCard=order.document_kind==="dummy_card_front_back";
+      if(dummyCard&&pages!==1)return res.status(400).json({
+        error:"DUMMY front/back card is one combined TEST layout. Enter exactly 1 page per copy."
+      });
+      const unitRate=order.print_mode==="color"?Number(order.color_paise):
+        (dummyCard?Number(order.aadhaar_bw_paise):Number(order.bw_paise));
+      const amount=Number(order.copies)*pages*unitRate;
       if(!Number.isSafeInteger(amount)||amount<100||amount>250000)return res.status(400).json({error:"Total TEST amount must be ₹1–₹2500"});
       const result=await pool.query([
         "INSERT INTO shop_upi_test_payments",
