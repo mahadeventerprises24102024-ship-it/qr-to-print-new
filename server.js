@@ -16,6 +16,7 @@ const { installShopBilling, ensureShopBillingTables } = require("./shop-billing"
 const { installPlatformAdmin, ensurePlatformTables, shopApiGate, shopPageGate, publicShopGate } = require("./platform-admin");
 const { installSubscriptionPayments, ensureSubscriptionPaymentTables } = require("./subscription-payments");
 const { installPaytmTestPayments, ensurePaytmTestTables } = require("./paytm-print-payments");
+const { installUpiPrintPayments, ensureUpiPrintTables } = require("./upi-print-payments");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -295,6 +296,7 @@ installAgentApis(app, pool);
 installCanonTestPrintApis(app, pool);
 installShopBilling(app, pool);
 installPaytmTestPayments(app, pool);
+installUpiPrintPayments(app, pool);
 
 // Explicit public assets: never expose backend JavaScript or package.json.
 app.get(["/", "/index.html"], (req, res) => {
@@ -420,6 +422,7 @@ async function start() {
   await ensureAgentTables(pool);
   await ensureCanonTestPrintTables(pool);
   await ensurePaytmTestTables(pool);
+  await ensureUpiPrintTables(pool);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("QR-To-Print server running on port " + PORT);
