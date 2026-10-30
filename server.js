@@ -304,6 +304,12 @@ app.get("/access.html", (req, res) => {
   res.set("X-Content-Type-Options", "nosniff");
   res.sendFile(path.join(__dirname, "access.html"));
 });
+ // Legacy customer login URL is retired from the public UI.
+ // Existing customer data and API handlers are not deleted by this change.
+app.get("/login.html", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  return res.redirect(302, "/access.html");
+});
 app.get(["/", "/index.html"], (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
@@ -314,12 +320,10 @@ for (const asset of ["style.css", "app.js", "login.html", "shop-login.html", "pr
 }
 
 // Serve each dashboard only to its corresponding authenticated role.
-app.get("/dashboard.html", (req, res) => {
+app.get("/dashboard.html", (_req, res) => {
+  // Retire the former customer dashboard from the public two-login website.
   res.set("Cache-Control", "no-store");
-  if (!req.session || !req.session.userId) {
-    return res.redirect("/login.html");
-  }
-  return res.sendFile(path.join(__dirname, "dashboard.html"));
+  return res.redirect(302, "/access.html");
 });
 // Owner-only browser diagnostic: no customer files or backend print commands.
 app.get("/shop-printer-check.html", shopPageGate(pool), (req, res) => {
