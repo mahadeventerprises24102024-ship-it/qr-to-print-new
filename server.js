@@ -299,6 +299,11 @@ installPaytmTestPayments(app, pool);
 installUpiPrintPayments(app, pool);
 
 // Explicit public assets: never expose backend JavaScript or package.json.
+app.get("/access.html", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.set("X-Content-Type-Options", "nosniff");
+  res.sendFile(path.join(__dirname, "access.html"));
+});
 app.get(["/", "/index.html"], (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
