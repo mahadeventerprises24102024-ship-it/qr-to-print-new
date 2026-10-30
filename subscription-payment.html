@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Shop Subscription Payment • QR-To-Print</title>
+<style>
+:root{font-family:system-ui,"Segoe UI",Arial,sans-serif;color:#1b3440;background:#f2f7f5}
+*{box-sizing:border-box}body{margin:0}header{background:#12232c;color:#fff;padding:19px max(18px,calc((100vw - 1020px)/2));display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+header strong{font-size:20px}header a{color:#dfffe7;text-decoration:none;font-size:13px}
+main{max-width:1020px;margin:auto;padding:24px 17px 55px}
+h1{font-size:clamp(26px,4vw,38px);margin:12px 0}h2{font-size:21px;margin:4px 0 10px}
+.card{background:white;padding:25px;border:1px solid #dfe8e6;border-radius:16px;margin:17px 0;box-shadow:0 10px 30px #193c3210}
+label{display:block;font-size:13px;font-weight:750;margin:12px 0 7px}
+input,select{font:inherit;font-size:15px;border:1px solid #c9dbd4;padding:12px;border-radius:9px;width:100%}
+button{background:#087d71;color:#fff;font:inherit;font-weight:750;padding:12px 17px;border:0;border-radius:9px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.secondary{background:#dff2e8;color:#165746}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:15px}
+.note{font-size:13px;color:#607780;line-height:1.7}.price{font-size:25px;font-weight:850;color:#087d71}
+#message{padding:14px;border-radius:10px;background:#e8f7ec;color:#205a3e;margin:13px 0}
+#message.error{background:#fff0ea;color:#a43a32}
+#qr{width:270px;max-width:100%;height:auto;border:1px solid #dde7e5;border-radius:12px;background:white}
+.record{border-bottom:1px solid #e9eeee;padding:10px 0;font-size:14px;line-height:1.6}
+[hidden]{display:none!important}
+a{color:#087d71} .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:15px 0}
+</style>
+</head>
+<body>
+<header><strong>QR-To-Print • Shop Payments</strong><a href="/shop-login.html">Shop Login / Create Shop</a></header>
+<main>
+  <h1>Shop Subscription Payment</h1>
+  <p class="note">अपने shop-owner account से sign in करके प्लान की फीस UPI QR या Razorpay से दें। UPI QR पर पैसा भेजने के बाद Transaction ID भरना जरूरी है; Admin बैंक में पैसा आने की जाँच करेगा। Razorpay के Live payment पर server verification के बाद plan activate होगा।</p>
+  <p id="message" role="status" aria-live="polite" hidden></p>
+  <section id="sign-in" class="card">
+    <h2>Shop Owner Payment Login</h2>
+    <p class="note">Pending Approval वाली दुकान भी यहाँ भुगतान कर सकती है। यह अलग billing-only login है; इससे बिना subscription के shop dashboard access नहीं मिलता।</p>
+    <form id="auth-form">
+      <div class="grid">
+        <div><label for="email">Shop owner email</label><input id="email" type="email" maxlength="254" autocomplete="email" required></div>
+        <div><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required></div>
+      </div>
+      <button type="submit" style="margin-top:15px">Sign in for payment</button>
+    </form>
+  </section>
+  <section id="checkout" hidden>
+    <div class="card">
+      <div class="actions" style="justify-content:space-between">
+        <div><h2 id="shop-name">Your shop</h2><p id="shop-status" class="note"></p></div>
+        <button id="logout" type="button" class="secondary">Payment Logout</button>
+      </div>
+      <div class="grid">
+        <div><label for="plan">Subscription Plan</label><select id="plan">
+          <option value="starter">Starter — ₹49 / month</option>
+          <option value="pro">Pro — ₹99 / month</option>
+          <option value="business">Business — ₹199 / month</option>
+        </select></div>
+        <div><label for="duration">Duration</label><select id="duration">
+          <option value="30">30 days (1 month)</option>
+          <option value="90">90 days (3 months)</option>
+          <option value="365">365 days (12 months)</option>
+        </select></div>
+      </div>
+      <p class="price" id="quote">₹49</p>
+      <p class="note">Pay Per Page (₹0.15/page) और Free Demo (10 prints) का activation अभी Super Admin के पास है। ऊपर दिए गए तीन मासिक प्लान का भुगतान यहाँ स्वीकार किया जाता है।</p>
+    </div>
+    <div class="grid">
+      <section class="card" id="upi-section">
+        <h2>Option 1 • UPI QR</h2>
+        <p class="note">Google Pay / PhonePe / Paytm से QR scan करें। यह भुगतान automatic verification नहीं करता।</p>
+        <button id="start-upi" type="button">Generate payment QR</button>
+        <div id="upi-payment" hidden>
+          <p><strong id="upi-amount"></strong></p>
+          <img id="qr" alt="UPI payment QR for this plan">
+          <p class="note" id="upi-payee"></p>
+          <div class="actions"><a id="upi-app-link" hidden>Pay via UPI app</a></div>
+          <label for="utr">Transaction ID / UTR (12–35 characters)</label>
+          <input id="utr" maxlength="35" autocomplete="off" placeholder="Enter after successfully paying">
+          <button id="submit-utr" type="button" style="margin-top:10px">Submit UTR for Admin review</button>
+          <p class="note">सिर्फ UTR लिख देने से payment verified नहीं होगा। Admin को अपना bank/UPI account चेक करना होगा।</p>
+        </div>
+        <p id="upi-unavailable" class="note" hidden>Platform owner ने अभी UPI VPA/Payee Name configure नहीं किया है।</p>
+      </section>
+      <section class="card" id="gateway-section">
+        <h2>Option 2 • Razorpay Gateway</h2>
+        <p class="note">Pay securely in Razorpay Checkout. केवल server-verified captured payment से subscription activate होगा।</p>
+        <button id="start-gateway" type="button">Pay with Razorpay</button>
+        <p id="gateway-test" class="note" hidden>TEST MODE: यह केवल Razorpay का टेस्ट पेमेंट है। इससे वास्तविक भुगतान या दुकान का प्लान एक्टिवेट नहीं होगा।</p>
+        <p id="gateway-unavailable" class="note" hidden>Gateway अभी configure नहीं है। Render में Razorpay keys + webhook secret जरूरी हैं।</p>
+      </section>
+    </div>
+    <section class="card">
+      <div class="actions" style="justify-content:space-between"><h2>My Payment Requests</h2><button id="refresh" type="button" class="secondary">Refresh</button></div>
+      <div id="payment-list" class="note">Loading payment status...</div>
+      <p class="note">UPI request status SUBMITTED = Admin verification बाकी है। PAID = receipt confirmed. TEST_PAID = test gateway verification only; no live plan activation.</p>
+    </section>
+  </section>
+  <p class="note">This is still a TEST printing platform. Customer file security, automatic printer-metered page counts, taxes and refunds are not fully integrated. Do not upload Aadhaar or other sensitive customer documents.</p>
+</main>
+<script>
+"use strict";
+(()=>{
+const by=id=>document.getElementById(id);
+const login=by("sign-in"),checkout=by("checkout"),message=by("message");
+const rates={starter:4900,pro:9900,business:19900},multipliers={30:1,90:3,365:12};
+let currentRequest=null,account=null;
+function money(paise){return "₹"+(paise/100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function quote(){const total=rates[by("plan").value]*multipliers[by("duration").value];by("quote").textContent=money(total);return total;}
+function notify(text,error=false){message.textContent=text;message.hidden=false;message.classList.toggle("error",error);message.scrollIntoView({block:"nearest",behavior:"smooth"});}
+async function api(url,payload){
+  const options={credentials:"same-origin",cache:"no-store"};
+  if(payload!==undefined){options.method="POST";options.headers={"Content-Type":"application/json"};options.body=JSON.stringify(payload);}
+  const r=await fetch(url,options),data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.error||"Request failed");
+  return data;
+}
+function setSession(inSession){login.hidden=inSession;checkout.hidden=!inSession;}
+async function load(){
+  try{
+    const data=await api("/api/payments/me");
+    account=data;setSession(true);
+    by("shop-name").textContent=data.shop.name;
+    by("shop-status").textContent="Status: "+data.shop.status+" • Current plan: "+data.shop.planCode+
+      " • Expires: "+(data.shop.expiresAt?new Date(data.shop.expiresAt).toLocaleDateString("en-IN"):"Not set / Legacy");
+    by("start-upi").disabled=!data.upiEnabled;
+    by("upi-unavailable").hidden=data.upiEnabled;
+    by("start-gateway").disabled=!data.gatewayEnabled;
+    by("gateway-unavailable").hidden=data.gatewayEnabled;
+    by("gateway-test").hidden=data.gatewayMode!=="test";
+    const list=by("payment-list");list.replaceChildren();
+    if(!data.requests.length)list.textContent="No payment requests yet.";
+    data.requests.forEach(r=>{
+      const item=document.createElement("div");item.className="record";
+      item.textContent="#"+r.id+" • "+r.kind.toUpperCase()+" • "+r.planCode.toUpperCase()+
+        " • "+r.durationDays+" days • "+money(r.amountPaise)+" • "+r.status.toUpperCase()+
+        " • "+new Date(r.createdAt).toLocaleDateString("en-IN");
+      list.append(item);
+    });
+  }catch(error){
+    if(error.message.includes("Sign in"))setSession(false);
+    else notify(error.message,true);
+  }
+}
+by("auth-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const button=e.currentTarget.querySelector("button");button.disabled=true;
+  try{
+    await api("/api/payments/shop-login",{email:by("email").value,password:by("password").value});
+    by("password").value="";
+    notify("Shop payment login successful.");
+    await load();
+  }catch(error){notify(error.message,true);}
+  finally{button.disabled=false;}
+});
+by("plan").addEventListener("change",()=>{quote();by("upi-payment").hidden=true;currentRequest=null;});
+by("duration").addEventListener("change",()=>{quote();by("upi-payment").hidden=true;currentRequest=null;});
+by("start-upi").addEventListener("click",async()=>{
+  const button=by("start-upi");button.disabled=true;
+  try{
+    const data=await api("/api/payments/upi-request",{planCode:by("plan").value,durationDays:Number(by("duration").value)});
+    currentRequest=data.requestId;
+    by("upi-payment").hidden=false;
+    by("qr").src=data.qrUrl;
+    by("upi-amount").textContent="Pay exactly "+money(data.amountPaise);
+    by("upi-payee").textContent="Payee: "+data.upiPayeeName+" • UPI ID: "+data.upiVpa;
+    // The link comes from our own HTTPS origin's configured recipient and
+    // the server-derived price. No amount is typed by the customer.
+    const params=new URLSearchParams({pa:data.upiVpa,pn:data.upiPayeeName,am:(data.amountPaise/100).toFixed(2),cu:"INR",tn:"QR-To-Print plan #"+data.requestId});
+    by("upi-app-link").href="upi://pay?"+params.toString();
+    by("upi-app-link").hidden=false;
+    by("utr").value="";
+    notify("Scan the QR, make payment and enter the UTR. This has NOT been verified yet.");
+    await load();
+  }catch(error){notify(error.message,true);}
+  finally{button.disabled=!account?.upiEnabled;}
+});
+by("submit-utr").addEventListener("click",async()=>{
+  if(!currentRequest)return notify("Generate a UPI payment QR first.",true);
+  const button=by("submit-utr");button.disabled=true;
+  try{
+    const data=await api("/api/payments/requests/"+encodeURIComponent(currentRequest)+"/submit-upi",{utr:by("utr").value.trim()});
+    notify(data.message);
+    by("upi-payment").hidden=true;
+    currentRequest=null;
+    await load();
+  }catch(error){notify(error.message,true);}
+  finally{button.disabled=false;}
+});
+function loadRazorpay(){
+  if(window.Razorpay)return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    script.src="https://checkout.razorpay.com/v1/checkout.js";
+    script.onload=()=>window.Razorpay?resolve():reject(Error("Razorpay Checkout unavailable"));
+    script.onerror=()=>reject(Error("Could not load Razorpay Checkout"));
+    document.head.append(script);
+  });
+}
+by("start-gateway").addEventListener("click",async()=>{
+  const button=by("start-gateway");button.disabled=true;
+  try{
+    await loadRazorpay();
+    const data=await api("/api/payments/razorpay-order",{
+      planCode:by("plan").value,durationDays:Number(by("duration").value)
+    });
+    const checkoutWidget=new window.Razorpay({
+      key:data.keyId,amount:data.amountPaise,currency:"INR",order_id:data.orderId,
+      name:"QR-To-Print",description:by("plan").value+" • "+by("duration").value+" days",
+      theme:{color:"#087d71"},
+      handler:async result=>{
+        try{
+          const verified=await api("/api/payments/razorpay-verify",result);
+          notify(verified.message,!verified.activated);
+          await load();
+        }catch(error){notify(error.message+" Check payment status and contact support before paying again.",true);await load();}
+      }
+    });
+    checkoutWidget.on("payment.failed",result=>notify("Gateway payment failed. Check Razorpay before retrying.",true));
+    checkoutWidget.open();
+  }catch(error){notify(error.message,true);}
+  finally{button.disabled=!account?.gatewayEnabled;}
+});
+by("refresh").addEventListener("click",load);
+by("logout").addEventListener("click",async()=>{
+  try{await api("/api/payments/logout",{});account=null;setSession(false);notify("Signed out of subscription billing.");}
+  catch(error){notify(error.message,true);}
+});
+quote();load();
+})();
+</script>
+</body>
+</html>
