@@ -78,8 +78,8 @@ const upload = multer({
   limits: {
     fileSize: MAX_FILE_BYTES,
     files: 1,
-    fields: 2,
-    parts: 3,
+    fields: 3,
+    parts: 4,
     fieldSize: 50
   }
 });
@@ -121,6 +121,10 @@ async function ensureTestUploadTables(pool) {
       CHECK (status IN ('test_only','accepted','rejected','printed'))
   `);
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS tracking_token_hash VARCHAR(64)");
+  // DUMMY front/back photos become one composite PNG. Real IDs remain unsupported.
+  await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS document_kind VARCHAR(30) NOT NULL DEFAULT 'regular_test'");
+  await pool.query("ALTER TABLE test_file_orders DROP CONSTRAINT IF EXISTS test_file_orders_document_kind_check");
+  await pool.query("ALTER TABLE test_file_orders ADD CONSTRAINT test_file_orders_document_kind_check CHECK (document_kind IN ('regular_test','dummy_card_front_back'))");
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS test_file_orders_tracking_hash_unique
     ON test_file_orders(tracking_token_hash)
@@ -216,11 +220,14 @@ function installTestFileUploads(app, pool, env = process.env) {
         const fileType = detectSafeFile(req.file);
         const copies = Number(req.body && req.body.copies);
         const printMode = req.body && req.body.printMode;
+        const documentKind = (req.body && req.body.documentKind) || "regular_test";
 
         if (!/^[a-f0-9]{32}$/.test(code || "") ||
             !fileType || !Number.isInteger(copies) ||
             copies < 1 || copies > 10 ||
-            !["bw", "color"].includes(printMode)) {
+            !["bw", "color"].includes(printMode) ||
+            !["regular_test", "dummy_card_front_back"].includes(documentKind) ||
+            (documentKind === "dummy_card_front_back" && fileType !== "png")) {
           return res.status(400).json({
             error: "Choose a valid PDF/JPG/PNG sample (max 2 MB), copies and print mode"
           });
@@ -266,11 +273,11 @@ function installTestFileUploads(app, pool, env = process.env) {
           const result = await pool.query(
             `INSERT INTO test_file_orders
               (shop_id, customer_id, storage_key, file_type,
-               file_size_bytes, file_sha256, copies, print_mode, tracking_token_hash)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+               file_size_bytes, file_sha256, copies, print_mode, tracking_token_hash, document_kind)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
              RETURNING id, status, created_at AS "createdAt"`,
             [shopId, (req.session && req.session.userId) || null, storedKey, fileType,
-              req.file.size, checksum, copies, printMode, trackingTokenHash]
+              req.file.size, checksum, copies, printMode, trackingTokenHash, documentKind]
           );
 
           return res.status(201).json({
@@ -376,7 +383,7 @@ function installTestFileUploads(app, pool, env = process.env) {
   app.get("/api/shop/test-file-orders", requireShopOwner, async (req, res) => {
     try {
       const result = await pool.query(
-        `SELECT o.id, o.file_type AS "fileType",
+        `SELECT o.id, o.document_kind AS "documentKind", o.file_type AS "fileType",
                 o.file_size_bytes AS "fileSizeBytes", o.copies,
                 o.print_mode AS "printMode", o.status,
                 o.created_at AS "createdAt"
