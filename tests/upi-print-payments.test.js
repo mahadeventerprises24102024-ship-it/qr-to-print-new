@@ -64,13 +64,15 @@ test("UPI database maintains separate per-shop payees, unique order and referenc
   const {module:m}=harness();
   const sql=[];
   await m.ensureUpiPrintTables({query:async q=>{sql.push(q);return {rows:[]};}});
-  assert.equal(sql.length,3);
+  assert.equal(sql.length,5);
   assert.match(sql[0],/shop_upi_payment_accounts/);
   assert.match(sql[0],/shop_id BIGINT PRIMARY KEY/);
   assert.match(sql[1],/shop_upi_test_payments/);
   assert.match(sql[1],/order_id BIGINT NOT NULL UNIQUE/);
   assert.match(sql[1],/payment_reference VARCHAR\(30\) NOT NULL UNIQUE/);
-  assert.doesNotMatch(sql.join(" "),/customer_utr|upi_test_utr_unique/);
+  assert.doesNotMatch(sql[1],/customer_utr/);
+  assert.match(sql[2],/DROP INDEX IF EXISTS upi_test_utr_unique/);
+  assert.match(sql[3],/DROP COLUMN IF EXISTS customer_utr/);
 });
 test("UPI recipient update only via logged-in shop owner with explicit recipient confirmation",async()=>{
   const h=harness();
