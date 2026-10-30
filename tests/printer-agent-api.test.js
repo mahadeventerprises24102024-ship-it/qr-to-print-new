@@ -30,7 +30,8 @@ function makeHarness() {
   const routes = {};
   const app = {
     get(name, ...handlers) { routes["GET " + name] = handlers; },
-    post(name, ...handlers) { routes["POST " + name] = handlers; }
+    post(name, ...handlers) { routes["POST " + name] = handlers; },
+    put(name, ...handlers) { routes["PUT " + name] = handlers; }
   };
   return { routes, app, ...moduleObject.exports };
 }
@@ -53,6 +54,7 @@ test("shop owner login required for pairing, status and revoke", () => {
   for (const key of [
     "POST /api/shop/agent/pair",
     "GET /api/shop/agent/status",
+    "PUT /api/shop/agent/preferred-printer",
     "POST /api/shop/agent/revoke"
   ]) {
     const res = response();
