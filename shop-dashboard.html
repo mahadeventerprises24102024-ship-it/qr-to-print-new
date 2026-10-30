@@ -130,6 +130,7 @@
     <section class="panel" id="panel-wallet"><div class="card content-panel">
       <div class="eyebrow">MAHADEV ENTERPRISES • PRINT PRICING</div>
       <div class="content-icon">₹</div><h2>Pricing &amp; Bills</h2>
+      <p id="shop-plan-usage" class="description" role="status">Checking subscription plan...</p>
       <p>Save your shop's per-page rates. B&amp;W and Colour are charged per printed page; Aadhaar B&amp;W is a flat rate per card/copy. Only owner-confirmed Printed TEST orders can generate simple bills. No online payments or GST tax invoicing.</p>
       <form id="rates-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end;margin-top:22px">
         <label style="font-size:12px;font-weight:700">B&amp;W ₹ / page
@@ -171,7 +172,7 @@
     crumb.textContent="Shop panel / "+names[key];
     location.hash=key;
     if(key==="orders") { loadDemoOrders(); loadPrivateOrders(); }
-    if(key==="wallet") { loadShopPrices(); loadShopBills(); }
+    if(key==="wallet") { loadShopPrices(); loadShopBills(); loadShopPlanUsage(); }
     if(key==="printers") loadAgentStatus();
   }
   document.querySelectorAll("[data-section]").forEach(b=>b.addEventListener("click",()=>openSection(b.dataset.section)));
@@ -251,6 +252,30 @@
   document.getElementById("refresh-demo-orders")
     .addEventListener("click", loadDemoOrders);
   loadDemoOrders();
+
+  async function loadShopPlanUsage(){
+    const label=document.getElementById("shop-plan-usage");
+    try{
+      const response=await fetch("/api/shop/plan-usage",{
+        credentials:"same-origin",cache:"no-store"
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to load subscription usage");
+      if(data.planCode==="demo"){
+        label.textContent="Your Demo plan: "+data.demoPagesUsed+" / "+data.demoLimitPages+
+          " free printed pages confirmed; "+data.demoPagesRemaining+
+          " remaining. Administrator confirms actual paper output manually.";
+      }else if(data.planCode==="per_page"){
+        const pages=Number(data.perPageRecordedPages||0);
+        label.textContent="Pay Per Page plan: "+pages+" pages manually recorded. "+
+          "Estimated platform usage charge ₹"+(pages*0.15).toFixed(2)+
+          ". Ask the platform administrator about payments.";
+      }else{
+        label.textContent="Platform subscription: "+String(data.planCode||"unknown")+
+          ". Your customer-facing print rates below are separate from the platform plan fee.";
+      }
+    }catch(error){label.textContent=error.message;}
+  }
 
   let currentShopRates = { bw: 3, aadhaarBw: 5, color: 10 };
   const rupees = value => "₹" + Number(value).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
