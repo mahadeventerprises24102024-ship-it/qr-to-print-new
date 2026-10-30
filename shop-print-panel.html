@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="Shop-owner-only quick print panel for safe QR-To-Print testing.">
+  <title>Quick Print Panel | QR-To-Print</title>
+  <style>
+    :root { color-scheme:light; font-family:Inter,system-ui,"Segoe UI",Arial,sans-serif; --ink:#17302d;--muted:#5f786d;--green:#06775d;--line:#dae9df;--bg:#f3f8f5; }
+    * { box-sizing:border-box }
+    body { margin:0;min-height:100vh;background:var(--bg);color:var(--ink) }
+    a { color:var(--green) }
+    header { background:#132d29;color:#fff; }
+    .top { max-width:1120px;margin:auto;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap }
+    .brand { font-size:18px;font-weight:850;letter-spacing:-.5px }
+    header a { color:#dbffe6;font-size:13px;text-decoration:none }
+    main { max-width:1120px;margin:26px auto 56px;padding:0 22px }
+    .eyebrow { color:#09775c;font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase }
+    h1 { font-size:clamp(27px,4vw,39px);letter-spacing:-1.4px;margin:6px 0 8px }
+    h2 { font-size:21px;margin:0 0 9px;letter-spacing:-.4px }
+    p { line-height:1.7;margin:9px 0 }
+    .muted { color:var(--muted);font-size:13px }
+    .notice { background:#fff5df;border:1px solid #f3dfae;padding:14px 16px;border-radius:12px;color:#7a5720;font-size:13px;line-height:1.65;margin:20px 0 }
+    .grid { display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:18px;align-items:start }
+    .card { background:white;border:1px solid var(--line);border-radius:17px;padding:23px;box-shadow:0 8px 26px #17462f0d }
+    .full { grid-column:1/-1 }
+    label { display:block;font-weight:730;font-size:13px;margin:16px 0 7px }
+    input[type=file], select { width:100%;max-width:100%;border:1px solid #cbded2;border-radius:10px;padding:12px;background:#f9fcf9;font:inherit }
+    .btn,button { display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:10px;padding:12px 17px;font:inherit;font-size:13px;font-weight:760;cursor:pointer;text-decoration:none;line-height:1.35;background:var(--green);color:white }
+    .btn.secondary,button.secondary { background:#e6f3ed;color:#08674f }
+    button:disabled { cursor:not-allowed;opacity:.55 }
+    .actions { display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px }
+    .state { padding:11px 13px;background:#e8f5ed;border-radius:10px;color:#245e49;font-size:13px;line-height:1.6;margin:14px 0 }
+    .state.error { background:#fff0ed;color:#9b372b }
+    .pill { display:inline-block;font-size:11px;font-weight:800;background:#e5f4ed;color:#075a45;border-radius:40px;padding:8px 12px }
+    .queue-head { display:flex;align-items:start;justify-content:space-between;gap:15px;flex-wrap:wrap }
+    .list { margin-top:20px;display:grid;gap:12px }
+    .order { border:1px solid var(--line);border-radius:12px;padding:17px;background:#fbfdfb;display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap }
+    .order.new { border-color:#79c69a;background:#f1fcf4 }
+    .order strong { font-size:15px;display:block }
+    .order .meta { color:var(--muted);font-size:12px;line-height:1.7;overflow-wrap:anywhere;margin-top:5px }
+    .order-status { display:inline-block;margin-top:8px;font-size:11px;font-weight:850;color:#2e745b }
+    .order-status.rejected { color:#993f35 }
+    .empty { border:1px dashed #c7dbce;background:#f7faf8;border-radius:12px;padding:26px;color:#617a6f;font-size:13px;line-height:1.65 }
+    .local-tip { background:#f5faf6;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12px;color:#567469;line-height:1.6;margin-top:14px }
+    #print-image-area { display:none }
+    @page { size:A4;margin:8mm }
+    @media print {
+      html,body { background:white!important }
+      header,main { display:none!important }
+      #print-image-area { display:flex!important;height:270mm;width:100%;justify-content:center;align-items:center }
+      #print-image-area img { display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain }
+      #print-image-area.bw img { filter:grayscale(100%) }
+    }
+    @media (max-width:760px) { .grid {grid-template-columns:1fr}.card{padding:18px}main{padding:0 16px}.top{padding:15px 16px} }
+  </style>
+</head>
+<body>
+  <header><div class="top">
+    <span class="brand">▣ QR-To-Print · Quick Print Panel</span>
+    <a href="/shop-dashboard.html#orders">← Shop Dashboard</a>
+  </div></header>
+  <main>
+    <span class="eyebrow">Shop owners · TEST PRINTING</span>
+    <h1>Document आया? Print विकल्प तैयार.</h1>
+    <p class="muted">ग्राहक का Private TEST Upload आने पर यहाँ ऑर्डर सूची अपने-आप अपडेट होगी। दुकान का मालिक Review और Accept करने के बाद अपने कंप्यूटर से प्रिंट करेगा।</p>
+    <div class="notice"><strong>सुरक्षित टेस्ट मोड:</strong> अभी केवल गैर-संवेदनशील, छोटी TEST PDF/Photo (अधिकतम 2 MB) इस्तेमाल करें। असली ग्राहक के निजी दस्तावेज़, Aadhaar, या भुगतान विवरण अपलोड न करें। प्रिंटर अपने-आप नहीं चलेगा; दुकानदार को Print Dialog में पुष्टि करनी होगी।</div>
+    <div class="grid">
+      <section class="card" aria-labelledby="queue-title">
+        <div class="queue-head">
+          <div><span class="eyebrow">CUSTOMER TEST FILES</span><h2 id="queue-title">Incoming Print Orders</h2><span class="pill" id="queue-count">Checking orders…</span></div>
+          <button class="secondary" id="refresh-orders" type="button">Refresh now</button>
+        </div>
+        <p class="muted">पैनल खुला रहने पर लगभग हर 10 सेकंड में नई टेस्ट फाइल दिखाई देगी। केवल इसी दुकान के ऑर्डर दिखेंगे।</p>
+        <p id="storage-note" class="state" role="status">Checking private TEST upload availability…</p>
+        <div id="queue-list" class="list" aria-live="polite" aria-relevant="additions text">
+          <div class="empty">Loading shop orders…</div>
+        </div>
+        <p id="queue-message" class="muted" role="status" aria-live="polite">Only accepted TEST orders can be marked Printed after physically checking paper.</p>
+      </section>
+      <section class="card" aria-labelledby="local-title">
+        <span class="eyebrow">NO CLOUD STORAGE NEEDED</span>
+        <h2 id="local-title">Upload from shop PC &amp; Print</h2>
+        <p class="muted">दुकानदार अपने कंप्यूटर पर कोई सुरक्षित, गैर-संवेदनशील टेस्ट PDF/JPG/PNG चुने। फाइल वेबसाइट पर Upload नहीं होगी; चुनते ही Print का बटन चालू होगा।</p>
+        <label for="local-file">Choose local TEST PDF or Photo (up to 2 MB)</label>
+        <input id="local-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/png,image/jpeg">
+        <label for="local-mode">Printing mode</label>
+        <select id="local-mode"><option value="bw">Black &amp; White</option><option value="color">Colour</option></select>
+        <label for="local-copies">Copies requested (select again in Print dialog)</label>
+        <select id="local-copies"><option value="1">1 copy</option><option value="2">2 copies</option><option value="3">3 copies</option><option value="5">5 copies</option><option value="10">10 copies</option></select>
+        <p id="local-file-state" class="state" role="status" aria-live="polite">Choose a safe test file. Print will be available immediately.</p>
+        <div class="actions"><button id="print-local" type="button" disabled>Print selected file</button><button id="clear-local" class="secondary" type="button">Clear file</button></div>
+        <p class="local-tip">Image: native Print Dialog खुलेगा। PDF: आपके browser का PDF viewer खुलेगा, वहाँ <strong>Ctrl + P</strong> दबाएँ। हर बार अपनी दुकान का installed Canon, HP, Epson या दूसरा Printer, Copies और Color चुनें।</p>
+      </section>
+    </div>
+  </main>
+  <div id="print-image-area" aria-hidden="true"></div>
+  <script>
+  "use strict";
+  (() => {
+    const ORDER_ID=/^[1-9][0-9]{0,14}$/;
+    const list=document.getElementById("queue-list");
+    const note=document.getElementById("queue-message");
+    const storageNote=document.getElementById("storage-note");
+    const count=document.getElementById("queue-count");
+    const refresh=document.getElementById("refresh-orders");
+    const originalTitle=document.title;
+    let firstLoad=true;
+    let seenIds=new Set();
+    let requestInFlight=false;
+
+    function makeText(tag,text,className){
+      const element=document.createElement(tag);
+      element.textContent=text;
+      if(className)element.className=className;
+      return element;
+    }
+    function formatWhen(value){
+      const date=new Date(value);
+      return Number.isNaN(date.getTime())?"":date.toLocaleString("en-IN");
+    }
+    function openOrder(id){
+      if(!ORDER_ID.test(String(id)))return;
+      window.open("/shop-print-preview.html?order="+encodeURIComponent(id),
+        "_blank","noopener,noreferrer");
+    }
+    function renderOrders(orders){
+      const valid=orders.filter(o=>ORDER_ID.test(String(o.id))).slice(0,20);
+      const pending=valid.filter(o=>o.status==="test_only"||o.status==="accepted");
+      const incoming=valid.filter(o=>o.status==="test_only");
+      count.textContent=pending.length+" Ready to review · "+incoming.length+" New";
+      const newIds=new Set(valid.map(o=>String(o.id)));
+      const arrivals=firstLoad?[]:incoming.filter(o=>!seenIds.has(String(o.id)));
+      firstLoad=false;
+      seenIds=newIds;
+      if(arrivals.length){
+        document.title="("+arrivals.length+" new TEST orders) "+originalTitle;
+        note.textContent=arrivals.length+" new private TEST file order(s) arrived. Use Review & Print after verifying the file.";
+      }else{
+        document.title=originalTitle;
+        note.textContent="Only accepted TEST orders can be marked Printed after physically checking paper.";
+      }
+      list.replaceChildren();
+      if(!valid.length){
+        list.append(makeText("div",
+          "No private TEST file orders yet. Customer file uploads are available only if private R2 TEST storage and the guest TEST opt-in are enabled.",
+          "empty"));
+        return;
+      }
+      const labels={
+        test_only:"NEW • Awaiting shop review",
+        accepted:"ACCEPTED • Ready for manual print",
+        rejected:"REJECTED • Cannot print",
+        printed:"PRINTED • Owner confirmed paper"
+      };
+      valid.forEach(order=>{
+        const id=String(order.id);
+        const item=document.createElement("article");
+        item.className="order"+(arrivals.some(o=>String(o.id)===id)?" new":"");
+        const info=document.createElement("div");
+        info.append(makeText("strong","Order #"+id+" · "+String(order.fileType||"").toUpperCase()));
+        const mode=order.printMode==="color"?"Colour":"Black & White";
+        const copies=Number(order.copies);
+        const details=(Number.isInteger(copies)?copies:"?")+" copies · "+mode+
+          " · "+Math.round(Number(order.fileSizeBytes)/1024)+" KB · "+formatWhen(order.createdAt);
+        info.append(makeText("div",details,"meta"));
+        info.append(makeText("span",labels[order.status]||"Status unknown",
+          "order-status"+(order.status==="rejected"?" rejected":"")));
+        item.append(info);
+        if(["test_only","accepted"].includes(order.status)){
+          const printButton=document.createElement("button");
+          printButton.type="button";
+          printButton.textContent=order.status==="test_only"?
+            "Review & Accept to Print":"Print Now · Manual";
+          printButton.addEventListener("click",()=>openOrder(id));
+          item.append(printButton);
+        }else{
+          item.append(makeText("span","No new print action","muted"));
+        }
+        list.append(item);
+      });
+    }
+    async function refreshOrders(){
+      if(requestInFlight||document.visibilityState==="hidden")return;
+      requestInFlight=true;
+      refresh.disabled=true;
+      try{
+        const response=await fetch("/api/shop/test-file-orders",{
+          credentials:"same-origin",cache:"no-store",
+          headers:{"Accept":"application/json"}
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok){
+          if(response.status===401||response.status===403){
+            throw new Error("Your active shop login is required. Open Shop Dashboard and sign in.");
+          }
+          throw new Error(data.error||"Unable to load shop orders");
+        }
+        renderOrders(Array.isArray(data.orders)?data.orders:[]);
+      }catch(error){
+        note.textContent=error.message||"Unable to refresh shop orders";
+      }finally{
+        requestInFlight=false;
+        refresh.disabled=false;
+      }
+    }
+    async function checkStorage(){
+      try{
+        const response=await fetch("/api/test-upload/config",{
+          credentials:"same-origin",cache:"no-store"
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw Error("Unable to check test storage");
+        if(data.enabled&&data.guestTestUploadsEnabled){
+          storageNote.textContent="Private TEST uploads enabled. New customer test files appear here after submission. No automatic printing.";
+        }else{
+          storageNote.textContent="Customer file uploads are currently OFF: private R2 TEST storage and guest test-upload opt-in must be configured. Local shop-PC test printing on the right is available without storage.";
+        }
+      }catch(error){storageNote.textContent="Storage status unavailable. Local TEST printing still works.";}
+    }
+
+    const fileInput=document.getElementById("local-file");
+    const localButton=document.getElementById("print-local");
+    const clear=document.getElementById("clear-local");
+    const localMessage=document.getElementById("local-file-state");
+    const printArea=document.getElementById("print-image-area");
+    const modeSelect=document.getElementById("local-mode");
+    let currentUrl=null;
+    let currentKind=null;
+    function clearLocal(){
+      localButton.disabled=true;
+      fileInput.value="";
+      currentKind=null;
+      if(currentUrl)URL.revokeObjectURL(currentUrl);
+      currentUrl=null;
+      printArea.replaceChildren();
+      localMessage.textContent="Choose a safe test file. Print will be available immediately.";
+      localMessage.classList.remove("error");
+    }
+    clear.addEventListener("click",clearLocal);
+    window.addEventListener("pagehide",()=>{if(currentUrl)URL.revokeObjectURL(currentUrl);});
+    function updateLocalMode(){
+      printArea.classList.toggle("bw",modeSelect.value==="bw");
+    }
+    modeSelect.addEventListener("change",updateLocalMode);
+    fileInput.addEventListener("change",()=>{
+      const file=fileInput.files&&fileInput.files[0];
+      clearLocal();
+      if(!file)return;
+      const ext=(file.name.split(".").pop()||"").toLowerCase();
+      const kinds={
+        pdf:"application/pdf",
+        png:"image/png",
+        jpg:"image/jpeg",
+        jpeg:"image/jpeg"
+      };
+      if(!kinds[ext]||file.type!==kinds[ext]||file.size<8||
+          file.size>2*1024*1024){
+        localMessage.textContent="Only safe small TEST PDF/JPG/PNG files up to 2 MB are allowed. Do not use real customer documents.";
+        localMessage.classList.add("error");
+        return;
+      }
+      currentKind=ext==="jpg"||ext==="jpeg"?"jpeg":ext;
+      currentUrl=URL.createObjectURL(file);
+      if(currentKind!=="pdf"){
+        const img=document.createElement("img");
+        img.alt="Locally selected TEST image";
+        img.addEventListener("error",()=>{
+          localMessage.textContent="Image could not be opened for printing.";
+          localMessage.classList.add("error");
+          localButton.disabled=true;
+        });
+        img.src=currentUrl;
+        printArea.replaceChildren(img);
+        updateLocalMode();
+      }
+      localButton.disabled=false;
+      localMessage.classList.remove("error");
+      localMessage.textContent="TEST file ready: "+file.name+
+        ". Press Print to open your own computer's Print dialog. No file was uploaded to QR-To-Print.";
+    });
+    localButton.addEventListener("click",()=>{
+      if(!currentUrl||!currentKind||localButton.disabled)return;
+      const copies=document.getElementById("local-copies").value;
+      const color=modeSelect.value==="color"?"Colour":"Black & white";
+      if(!window.confirm(
+        "Print this LOCAL TEST file on your shop's own installed printer?"+
+        "\nSelect "+copies+" copy/copies, "+color+", paper size and your printer in the native Print dialog. No file is sent to the server."
+      ))return;
+      if(currentKind==="pdf"){
+        // Open browser's PDF viewer only as a direct user action; no silent printing.
+        const pdf=document.createElement("a");
+        pdf.href=currentUrl;
+        pdf.target="_blank";
+        pdf.rel="noopener noreferrer";
+        pdf.click();
+        localMessage.textContent="PDF viewer opened. Review the TEST document and press Ctrl + P there. Select your shop printer and the correct copies/colour.";
+      }else{
+        const img=printArea.querySelector("img");
+        if(!img||!img.complete||img.naturalWidth===0){
+          localMessage.textContent="Photo is still loading or invalid. Choose a valid TEST image.";
+          return;
+        }
+        window.print();
+        localMessage.textContent="Native Print dialog opened. After printing, physically check the paper. Local tests do not create shop orders or bills.";
+      }
+    });
+    refresh.addEventListener("click",refreshOrders);
+    document.addEventListener("visibilitychange",()=>{
+      if(document.visibilityState==="visible")refreshOrders();
+    });
+    checkStorage();
+    refreshOrders();
+    setInterval(refreshOrders,10000);
+  })();
+  </script>
+</body>
+</html>
