@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Test Your Shop Printer | QR-To-Print</title>
+<style>
+  *{box-sizing:border-box}
+  body{font:16px system-ui,"Segoe UI",Arial,sans-serif;color:#17302d;background:#eff5f1;margin:0}
+  .wrap{max-width:800px;margin:26px auto;padding:0 17px}
+  .box{background:#fff;border:1px solid #d5e8da;border-radius:14px;padding:24px;line-height:1.65}
+  h1{margin:0 0 10px;font-size:26px}p{margin:10px 0}
+  .muted{color:#56736b}
+  button{background:#087d68;color:white;border:0;border-radius:9px;padding:15px 20px;cursor:pointer;font:inherit;font-weight:700}
+  .sheet{margin:24px auto;background:white;padding:22mm 17mm;max-width:210mm;min-height:220mm;border:1px solid #e1e9e1}
+  .sheet h2{font-size:24px}
+  .edge{border:2px solid #182e28;padding:14px;text-align:center;margin:25px 0}
+  @page{size:A4;margin:8mm}
+  @media print{
+    body{background:white}header,.no-print{display:none!important}
+    .wrap{max-width:none;padding:0;margin:0}
+    .sheet{border:0;box-shadow:none;margin:0;padding:12mm;min-height:0}
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="box no-print">
+    <h1>Test your shop's own printer</h1>
+    <p>यह एक <strong>साधारण सुरक्षित टेस्ट पेज</strong> है। Canon, HP, Epson, Brother या किसी भी compatible USB/Wi-Fi/network प्रिंटर को Windows/browser के Print dialog से चुन सकते हैं।</p>
+    <p class="muted">Printer आपकी दुकान के PC पर installed होना चाहिए। यह साइट किसी प्रिंटर को अपने आप नहीं चुनती या print नहीं करती। कोई Customer File यहाँ शामिल नहीं है।</p>
+    <button type="button" id="print-test">Open Print Dialog</button>
+    <p id="state" role="status" aria-live="polite">Print केवल तब होगा जब आप native Print dialog में अपनी दुकान का printer चुनकर पुष्टि करेंगे।</p>
+    <p><a href="/shop-dashboard.html#printers">← Back to shop printers</a></p>
+  </header>
+  <article class="sheet" aria-label="Safe printable diagnostic sheet">
+    <h2>QR-To-Print • SHOP PRINTER TEST</h2>
+    <p>This is a fixed diagnostic page for the shop owner.</p>
+    <div class="edge">TEST PAGE — NOT A CUSTOMER DOCUMENT</div>
+    <p>Use this page to verify that your locally installed printer can print from your browser.</p>
+    <p>Paper: A4 · Suggested copies: 1 · Print mode: black &amp; white (saves ink)</p>
+    <p>After physically checking paper output, return to the Shop Dashboard to review test orders.</p>
+  </article>
+</main>
+<script>
+"use strict";
+document.getElementById("print-test").addEventListener("click",()=>{
+  if(!window.confirm("Open the native print dialog for ONE fixed TEST page? Select your own installed shop printer. Printing consumes paper and ink; no customer file is included."))return;
+  document.getElementById("state").textContent=
+    "Print dialog requested. Choose your own printer and confirm in that dialog. Paper output must be checked manually.";
+  window.print();
+});
+</script>
+</body>
+</html>

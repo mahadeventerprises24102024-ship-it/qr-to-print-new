@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * QR-To-Print Windows Printer Agent — CONNECTION PREVIEW ONLY
+ * QR-To-Print Windows Printer Agent — PRINTER DISCOVERY PREVIEW ONLY
  *
- * This script reports PC status and may print a fixed diagnostic page only after
+ * This script reports installed printer names and may print a fixed Canon diagnostic page only after
  * an explicit authenticated shop-owner click. It NEVER downloads or prints customer documents.
  * Requires Node.js 20+, Windows PowerShell and a shop-issued pairing key.
  * The secret key remains in memory only and is not written to disk.
@@ -13,6 +13,50 @@ const { spawnSync } = require("node:child_process");
 const SERVER = "https://qr-to-print-new.onrender.com";
 const HEARTBEAT_MS = 30_000;
 const TOKEN_PATTERN = /^qrpa_[A-Za-z0-9_-]{43}$/;
+const MAX_REPORTED_PRINTERS = 30;
+const MAX_PRINTER_NAME = 100;
+
+function validPrinterName(value) {
+  return typeof value === "string" && value.length > 0 &&
+    value.length <= MAX_PRINTER_NAME && value.trim() === value &&
+    !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+// Fixed Windows command: never evaluate any names as commands or print files.
+// Names are only forwarded to the authenticated shop's dashboard as hints.
+function listWindowsPrinters() {
+  if (process.platform !== "win32") {
+    throw new Error("Printer discovery is supported on Windows only");
+  }
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    "$names = @(Get-Printer -ErrorAction Stop | Select-Object -ExpandProperty Name)",
+    "$names | ConvertTo-Json -Compress"
+  ].join("\n");
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile", "-NonInteractive", "-Command", command
+  ], {
+    timeout: 10000, windowsHide: true, encoding: "utf8",
+    maxBuffer: 12 * 1024
+  });
+  if (result.error || result.status !== 0) {
+    return { names: null, warning: "Could not list Windows printers; reporting count only" };
+  }
+  let parsed;
+  try {
+    const raw=(result.stdout||"").trim();
+    parsed=raw ? JSON.parse(raw) : [];
+  } catch {
+    return { names: null, warning: "Printer list response was unreadable; reporting count only" };
+  }
+  const allNames=typeof parsed==="string" ? [parsed] : parsed;
+  if(!Array.isArray(allNames)||allNames.length>MAX_REPORTED_PRINTERS||
+     !allNames.every(validPrinterName)||
+     new Set(allNames).size!==allNames.length) {
+    return { names: null, warning: "Windows printer list could not be safely reported" };
+  }
+  return { names: allNames, warning: null };
+}
 
 function countWindowsPrinters() {
   if (process.platform !== "win32") {
@@ -135,7 +179,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function heartbeat(secret, printerCount, testPrintResult = null) {
+async function heartbeat(secret, printerCount, testPrintResult = null, printerNames = null) {
   const response = await fetch(SERVER + "/api/agent/heartbeat", {
     method: "POST",
     headers: {
@@ -144,6 +188,7 @@ async function heartbeat(secret, printerCount, testPrintResult = null) {
       Accept: "application/json"
     },
     body: JSON.stringify({ printerCount, supportsCanonTestPrint: true,
+      ...(printerNames !== null ? { printerNames } : {}),
       ...(testPrintResult ? { testPrintResult } : {}) }),
     signal: AbortSignal.timeout(12_000)
   });
@@ -165,7 +210,7 @@ async function heartbeat(secret, printerCount, testPrintResult = null) {
 }
 
 async function run() {
-  console.log("\nQR-To-Print Windows Agent — connection preview");
+  console.log("\nQR-To-Print Windows Agent — shop-owned printer discovery preview");
   console.log("Customer documents are never downloaded or printed. Owner-requested fixed Canon test page only.");
   console.log("Keep the pairing key private. Press Ctrl+C to stop.\n");
 
@@ -181,11 +226,14 @@ async function run() {
 
   let pendingResult = null;
   while (true) {
-    const result = countWindowsPrinters();
+    const discovered = listWindowsPrinters();
+    if (discovered.warning) console.warn("Warning:", discovered.warning);
+    const result = discovered.names !== null ?
+      { count: discovered.names.length, warning: null } : countWindowsPrinters();
     if (result.warning) console.warn("Warning:", result.warning);
 
     try {
-      const response = await heartbeat(secret, result.count, pendingResult);
+      const response = await heartbeat(secret, result.count, pendingResult, discovered.names);
       pendingResult = null;
       console.log(
         new Date().toLocaleTimeString() +
@@ -218,4 +266,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { countWindowsPrinters, heartbeat, readClipboardKey, printCanonFixedTestPage };
+module.exports = { countWindowsPrinters, listWindowsPrinters, validPrinterName, heartbeat, readClipboardKey, printCanonFixedTestPage };

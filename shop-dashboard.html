@@ -85,26 +85,37 @@
       <div id="private-order-list" class="demo-order-list" role="status" aria-live="polite">Loading...</div>
     </div></section>
     <section class="panel" id="panel-printers"><div class="card content-panel">
-      <div class="eyebrow">DEVICES • TEST CONNECTION ONLY</div>
+      <div class="eyebrow">PRINTERS • EVERY SHOP USES ITS OWN DEVICE</div>
       <div class="content-icon">▣</div>
-      <h2>Connect your Windows printer PC</h2>
-      <p>This first version confirms your Windows computer is online and counts installed printer devices. It cannot download customer documents or charge customers. Only a fixed Canon G2010 diagnostic page can be printed after manual shop approval and test enablement.</p>
+      <h2>Print using your shop's own printer</h2>
+      <p>Each shop can use its own installed <strong>Canon, HP, Epson, Brother or other Windows printer</strong> (USB, Wi-Fi, or network). Review and Accept a safe TEST order, then use the Windows/browser Print dialog on the computer connected to the printer. The browser cannot change printer settings automatically. The Windows Agent never downloads customer documents.</p>
       <div class="info-list">
         <div class="info-item"><strong>Windows agent</strong><span id="agent-state" role="status">Checking...</span></div>
         <div class="info-item"><strong>Printers found on PC</strong><span id="agent-printers">—</span></div>
         <div class="info-item"><strong>Last heartbeat</strong><span id="agent-last-seen">—</span></div>
-        <div class="info-item"><strong>Customer print jobs</strong><span>Disabled. Only owner-approved fixed Canon test page supported.</span></div>
+        <div class="info-item"><strong>Customer print jobs</strong><span>Only manual, owner-approved browser printing of safe TEST files. Agent automatic printing is OFF.</span></div>
       </div>
+      <section style="background:#eff8f3;border:1px solid #cfe5d8;padding:17px;border-radius:12px;margin-top:16px">
+        <h3 style="margin:0 0 8px">Choose your own printer</h3>
+        <p class="description">Names are detected from <strong>your paired Windows PC</strong>. Saving a printer only remembers your preference: you must choose it manually in the native Print dialog. If you print from a different computer, its installed printers may differ.</p>
+        <label for="agent-printer-choice" style="font-weight:700;display:block;margin:8px 0">Preferred printer</label>
+        <select id="agent-printer-choice" disabled style="max-width:520px;width:100%;padding:11px;border:1px solid #bdd6cb;border-radius:8px;background:white">
+          <option value="">Connect Windows Agent to detect printers</option>
+        </select>
+        <button class="btn teal" id="save-agent-printer" type="button" disabled>Save preferred printer</button>
+        <p id="agent-printer-message" class="description" role="status" aria-live="polite">Connect the Windows Agent to list printers.</p>
+        <a class="btn light" href="/shop-printer-check.html" target="_blank" rel="noopener noreferrer">Print a local test page (any printer)</a>
+        <p class="description">Manual test opens the browser's print dialog. It does not use the Windows Agent or remote printing.</p>
+      </section>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin:22px 0">
         <button class="btn teal" type="button" id="pair-agent">Generate printer PC pairing key</button>
         <button class="btn light" type="button" id="refresh-agent">Refresh status</button>
         <button class="btn ghost" type="button" id="revoke-agent">Revoke connection</button>
       </div>
       <section style="border:1px solid #d5e5e0;border-radius:12px;padding:16px;margin:14px 0">
-        <div class="eyebrow">CANON G2010 • MANUAL TEST PRINT</div>
-        <h3 style="margin:8px 0">Print one safe test page</h3>
-        <p>This button only requests a fixed QR-To-Print diagnostic page on your Canon G2010.
-        It never prints customer uploads. You must approve each test; limit 5 per hour.</p>
+        <div class="eyebrow">OPTIONAL LEGACY CANON G2010 AGENT DIAGNOSTIC</div>
+        <h3 style="margin:8px 0">Canon G2010-only remote diagnostic</h3>
+        <p>Only use this optional diagnostic if you own a Canon G2010 and explicitly enable the test setting. For every other printer use the local browser test page above. No customer uploads; limit 5 per hour.</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0">
           <button type="button" class="btn teal" id="canon-test-print" disabled>Print Canon G2010 TEST page</button>
           <button type="button" class="btn light" id="canon-test-refresh">Refresh test status</button>
@@ -120,12 +131,12 @@
         <p class="description">The key will be hidden after copying or 90 seconds. Regenerating it disconnects an earlier pairing.</p>
       </section>
       <div class="info-list">
-        <div class="info-item"><strong>1.</strong><span>On your Windows shop PC, install Node.js 20+.</span></div>
+        <div class="info-item"><strong>1.</strong><span>On your Windows printer PC, install the correct printer driver and Node.js 20+ (for optional discovery).</span></div>
         <div class="info-item"><strong>2.</strong><span>Download this project's GitHub ZIP, extract it, then open PowerShell in that folder.</span></div>
         <div class="info-item"><strong>3.</strong><span>Run: <code>node windows-print-agent.js</code></span></div>
         <div class="info-item"><strong>4.</strong><span>Copy the pairing key before running the agent. The updated agent reads Windows Clipboard automatically; refresh status.</span></div>
       </div>
-      <p class="description" style="margin-top:18px">Agent is for Windows only. It requires an internet connection and stays in memory while the terminal remains open. Do not put the secret in GitHub, browser screenshots or PowerShell commands.</p>
+      <p class="description" style="margin-top:18px">Windows Agent is optional for printer discovery. Manual browser printing works without it, using the printer selected locally. Keep your pairing key secret and never include it in screenshots.</p>
     </div></section>
     <section class="panel" id="panel-wallet"><div class="card content-panel">
       <div class="eyebrow">MAHADEV ENTERPRISES • PRINT PRICING</div>
@@ -658,6 +669,57 @@
     clearTimeout(agentKeyTimer);
   }
 
+  function showPrinterChoices(data) {
+    const select=document.getElementById("agent-printer-choice");
+    const button=document.getElementById("save-agent-printer");
+    const message=document.getElementById("agent-printer-message");
+    const names=Array.isArray(data.printerNames)?data.printerNames.filter(name=>
+      typeof name==="string"&&name.length>0&&name.length<=100):[];
+    select.replaceChildren();
+    const empty=document.createElement("option");
+    empty.value="";empty.textContent="No preference — choose in native Print dialog";
+    select.append(empty);
+    names.forEach(name=>{
+      const option=document.createElement("option");
+      option.value=name;option.textContent=name;
+      select.append(option);
+    });
+    const preferred=typeof data.preferredPrinterName==="string"?data.preferredPrinterName:"";
+    if(preferred&&!names.includes(preferred)){
+      const old=document.createElement("option");
+      old.value=preferred;old.textContent=preferred+" (not currently detected)";
+      old.disabled=true;select.append(old);
+    }
+    select.value=preferred;
+    select.disabled=!data.online||names.length===0;
+    button.disabled=!data.online||names.length===0;
+    if(data.online&&names.length){
+      message.textContent=names.length+" installed printer(s) detected on your shop's paired Windows PC."+
+        (preferred?" Saved preference: "+preferred+".":" Select and save your preference if you wish.")+
+        " Choose the printer again in the native Print dialog.";
+    }else{
+      message.textContent=data.paired?
+        "Windows Agent offline or no printer names detected. Manual browser printing still works when you have a locally installed printer.":
+        "Pair Windows Agent for printer discovery, or use manual browser printing without it.";
+    }
+  }
+  document.getElementById("save-agent-printer").addEventListener("click",async()=>{
+    const button=document.getElementById("save-agent-printer");
+    const name=document.getElementById("agent-printer-choice").value;
+    button.disabled=true;
+    try{
+      const response=await fetch("/api/shop/agent/preferred-printer",{
+        method:"PUT",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({printerName:name||null})
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||"Could not save printer");
+      showToast("Printer preference saved. Select it again in Windows Print dialog.");
+      await loadAgentStatus();
+    }catch(error){showToast(error.message);button.disabled=false;}
+  });
+
   async function loadAgentStatus() {
     try {
       const response = await fetch("/api/shop/agent/status", {
@@ -671,6 +733,7 @@
       document.getElementById("agent-overview-state").textContent = display;
       document.getElementById("agent-printers").textContent =
         data.online ? String(data.printerCount) + " installed" : "—";
+      showPrinterChoices(data);
       const seen = data.lastSeenAt ? new Date(data.lastSeenAt) : null;
       document.getElementById("agent-last-seen").textContent =
         seen && !Number.isNaN(seen.getTime()) ? seen.toLocaleString("en-IN") : "Never";
