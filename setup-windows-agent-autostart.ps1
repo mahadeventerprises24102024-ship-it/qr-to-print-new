@@ -18,7 +18,7 @@ $launcherPath = Join-Path $installDir 'start-agent.ps1'
 $keyFile = Join-Path $installDir 'pairing-key.dpapi'
 
 # DPAPI must use the same Windows account as the scheduled task.
-$principalCheck = New-Object System.Security.Principal.WindowsPrincipal($identity)
+$principalCheck = [System.Security.Principal.WindowsPrincipal]::new($identity)
 if ($principalCheck.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
   throw 'Run from your normal unelevated Windows account, NOT Run as administrator.'
 }
@@ -67,9 +67,11 @@ $clipboardValue = $null
 try { $clipboardValue = Get-Clipboard -Raw -ErrorAction Stop }
 catch { $clipboardValue = $null }
 $secureKey = $null
+$clipboardUsed = $false
 if ($clipboardValue -is [string] -and
     $clipboardValue.Trim() -cmatch '^qrpa_[A-Za-z0-9_-]{43}$') {
   $secureKey = ConvertTo-SecureString -String $clipboardValue.Trim() -AsPlainText -Force
+  $clipboardUsed = $true
   Write-Host 'Valid-format shop pairing key read from the clipboard.'
 } else {
   Write-Host 'Clipboard has no valid pairing key. Paste your new key below (hidden).'
@@ -97,7 +99,7 @@ if (-not (Test-Path -LiteralPath $installDir)) {
 $acl = New-Object System.Security.AccessControl.DirectorySecurity
 $acl.SetAccessRuleProtection($true, $false)
 foreach ($sidText in @($userSid.Value, 'S-1-5-18', 'S-1-5-32-544')) {
-  $sid = New-Object System.Security.Principal.SecurityIdentifier($sidText)
+  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)
   $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
     $sid, [System.Security.AccessControl.FileSystemRights]::FullControl,
     [System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',
@@ -123,6 +125,10 @@ try {
   $encrypted = $null
 }
 
+if ($clipboardUsed) {
+  try { Set-Clipboard -Value '' -ErrorAction Stop } catch { }
+}
+$secureKey.Dispose()
 Copy-Item -LiteralPath $sourceAgent -Destination $installedAgent -Force
 
 # The task is hidden and always runs under the same interactive Windows user.
@@ -168,7 +174,7 @@ Register-ScheduledTask @registration | Out-Null
 Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
 
 Write-Host ''
-Write-Host 'SUCCESS: Agent starts now, and again after this Windows account signs in.'
+Write-Host 'Auto-start task registered; initial launch requested. Confirm ONLINE in Shop Dashboard.'
 Write-Host 'After network outages it retries automatically.'
 Write-Host 'Shop Dashboard > Printers > Refresh status should show Online.'
 Write-Host 'Customer document auto-printing remains OFF.'
