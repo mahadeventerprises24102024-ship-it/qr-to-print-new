@@ -81,22 +81,32 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
     <div class="shop-list" id="shops" role="status" aria-live="polite">Loading shops...</div>
   </section>
   <section class="section">
+    <div class="section-head">
+      <h2>Shop Subscription Payments</h2>
+      <button id="payment-refresh" class="outline" type="button">Refresh payments</button>
+    </div>
+    <p class="sub">दुकानदार UPI QR स्कैन करके UTR भेजेगा। UTR केवल भुगतान का दावा है; अपने बैंक या UPI App में सही रकम और UTR मिलने पर ही Approve करें।</p>
+    <p id="payment-settings" class="note">Checking payment settings...</p>
+    <div id="payment-requests" role="status" aria-live="polite">Loading payment requests...</div>
+  </section>
+  <section class="section">
     <div class="section-head"><h2>Recorded print-page usage</h2><button id="usage-refresh" class="outline" type="button">Refresh page usage</button></div>
     <p class="sub">Pay Per Page charges and Demo quota are based on manually verified entries, not automatic Canon printer reports.</p>
     <div id="usage-history" role="status" aria-live="polite">Loading usage...</div>
   </section>
   <section class="section">
     <div class="section-head"><h2>Subscription activity</h2><button id="history-refresh" class="outline" type="button">Refresh history</button></div>
-    <p class="sub">Recorded manual activations and suspensions. This is not a payment gateway or verified accounting ledger.</p>
+    <p class="sub">Recorded manual activations and suspensions. No automatic receipt verification or accounting ledger is connected.</p>
     <div id="history" role="status" aria-live="polite">Loading subscription history...</div>
   </section>
-  <p class="note">No online payment collection is connected. Only enter a received amount after independently checking actual cash/UPI receipt. Plans currently control subscription dates/access, not separate feature entitlements. Do not onboard real sensitive document uploads while storage, scanning and operational security are still test-only.</p>
+  <p class="note">UPI QR के लिए बैंक में भुगतान की मैनुअल पुष्टि जरूरी है। UTR या स्क्रीनशॉट पर्याप्त नहीं हैं। Only enter an actual received amount after independently checking actual cash/UPI receipt. Plans currently control subscription dates/access, not separate feature entitlements. Do not onboard real sensitive document uploads while storage, scanning and operational security are still test-only.</p>
 </main>
 <script>
 "use strict";
 (() => {
   const shopsBox=document.getElementById("shops");
   const historyBox=document.getElementById("history");
+  const paymentBox=document.getElementById("payment-requests");
   const alertBox=document.getElementById("alert");
   const search=document.getElementById("shop-search");
   let cachedShops=[];
@@ -314,6 +324,61 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
       renderShops();
     }catch(error){shopsBox.textContent=error.message;notify(error.message,true);}
   }
+  async function loadPayments(){
+    try{
+      const [c,data]=await Promise.all([
+        request("/api/payments/config"),
+        request("/api/platform/payment-requests")
+      ]);
+      document.getElementById("payment-settings").textContent=
+        "UPI QR: "+(c.upiEnabled?"Configured — ready for manual payment collection":
+        "Not configured: set UPI_PAYMENT_VPA and UPI_PAYMENT_NAME on Render")+
+        " • Shop-owner payment page: /subscription-payment.html";
+      paymentBox.replaceChildren();
+      if(!data.requests.length){
+        paymentBox.append(element("p","empty","No shop payment requests yet."));
+        return;
+      }
+      data.requests.forEach(p=>{
+        const item=element("div","record");
+        item.append(element("div",null,
+          "#"+p.id+" • "+p.shopName+" • "+p.kind.toUpperCase()+
+          " • "+p.planCode.toUpperCase()+" • "+p.durationDays+" days • "+
+          rupees(Number(p.amountPaise)/100)+" • "+p.status.toUpperCase()+
+          (p.upiReference?" • UTR: "+p.upiReference:"")));
+        if(p.kind==="upi_manual" && p.status==="submitted"){
+          const buttons=element("div","btn-row");
+          const approve=element("button",null,"Verify bank receipt & Activate");
+          approve.type="button";
+          approve.addEventListener("click",async()=>{
+            if(!window.confirm("Have you checked your own bank/UPI statement and confirmed exactly "+
+              rupees(Number(p.amountPaise)/100)+" received for UTR "+p.upiReference+
+              "? A screenshot/UTR alone is NOT payment proof. Confirm only verified funds."))return;
+            approve.disabled=true;
+            try{
+              await request("/api/platform/payment-requests/"+encodeURIComponent(p.id)+"/approve",{confirmedReceipt:true});
+              notify(p.shopName+" • UPI payment verified manually; subscription activated.");
+              await Promise.all([loadPayments(),loadShops(),loadHistory()]);
+            }catch(error){notify(error.message,true);approve.disabled=false;}
+          });
+          const reject=element("button","btn-danger","Reject unverified UTR");
+          reject.type="button";
+          reject.addEventListener("click",async()=>{
+            if(!window.confirm("Reject unverified UPI transaction claim from "+p.shopName+"?"))return;
+            reject.disabled=true;
+            try{
+              await request("/api/platform/payment-requests/"+encodeURIComponent(p.id)+"/reject",{confirmedRejection:true});
+              notify("Unverified UPI reference rejected.");
+              await loadPayments();
+            }catch(error){notify(error.message,true);reject.disabled=false;}
+          });
+          buttons.append(approve,reject);item.append(buttons);
+        }
+        paymentBox.append(item);
+      });
+    }catch(error){paymentBox.textContent=error.message;}
+  }
+  document.getElementById("payment-refresh").addEventListener("click",loadPayments);
   async function loadUsage(){
     const history=document.getElementById("usage-history");
     history.textContent="Loading manually recorded print pages...";
@@ -391,7 +456,7 @@ h1{font-size:31px;margin:7px 0 6px}h2{font-size:21px;margin:0 0 11px}
   });
   request("/api/platform/me").then(data=>{
     document.getElementById("admin-email").textContent=data.email;
-    return Promise.all([loadPlanPrices(),loadShops(),loadHistory(),loadUsage()]);
+    return Promise.all([loadPlanPrices(),loadShops(),loadHistory(),loadUsage(),loadPayments()]);
   }).catch(error=>notify(error.message,true));
 })();
 </script>
