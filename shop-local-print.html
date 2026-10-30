@@ -35,7 +35,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--green);flex:none}
 #paper.mode-bw img{filter:grayscale(100%)}
 #paper .cards{align-self:flex-start;width:100%;display:flex;flex-direction:column;align-items:center;gap:7mm;padding-top:8mm}
 #paper .side{width:86mm;height:54mm;max-width:100%;border:0.15mm solid #c4c4c4;display:flex;align-items:center;justify-content:center}
-#paper .side img{width:100%;height:100%;object-fit:fill}
+#paper .side img{width:100%;height:100%;object-fit:contain}
 #paper .side-label{font-size:10pt;color:#222}
 .caption{font-size:12px;line-height:1.7;color:var(--muted)}
 @page{size:A4 portrait;margin:0}
@@ -222,6 +222,7 @@ header,main{display:none!important}
   mode.addEventListener("change",applyMode);
   $("clear-all").addEventListener("click",reset);
   window.addEventListener("pagehide",clearPreview);
+  window.addEventListener("afterprint",()=>stage.replaceChildren());
   printButton.addEventListener("click",()=>{
     if(!ready||!payment.checked||printButton.disabled)return;
     const copies=$("copies").value;
@@ -236,14 +237,11 @@ header,main{display:none!important}
       tell("PDF Viewer खुला है। उसमें Ctrl+P दबाएँ और Canon G2010, A4, Copies चुनें।");
       return;
     }
-    // Move same preview element into print-only stage and restore after dialog.
-    stage.append(paper);
-    try{
-      window.print();
-      tell("Print Dialog खुला है। Print करने के बाद कागज जाँचें और Clear Files दबाएँ।");
-    }finally{
-      document.querySelector(".sheet-wrap").append(paper);
-    }
+    // Keep a print-only snapshot until the native Print Dialog finishes.
+    // Moving the live preview would risk a blank asynchronous print on browsers.
+    stage.replaceChildren(paper.cloneNode(true));
+    window.print();
+    tell("Print Dialog खुला है। Print करने के बाद कागज जाँचें और Clear Files दबाएँ।");
   });
 })();
 </script>
