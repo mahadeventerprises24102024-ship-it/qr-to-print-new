@@ -170,16 +170,29 @@
       <p id="rates-state" class="description" role="status" aria-live="polite">Loading rates...</p>
       <div style="border-top:1px solid var(--line);margin:26px 0"></div>
       <section style="border:1px solid #bddcca;padding:18px;border-radius:13px;background:#f3fbf5;margin:24px 0">
-        <h2 style="margin:0 0 10px">UPI QR for Customer TEST Orders</h2>
-        <p class="description">हर दुकान अपनी UPI ID लगाती है। ग्राहक UPI QR से भुगतान करके <strong>मैंने पेमेंट कर दिया</strong> दबाएगा। <strong>दुकानदार अपने बैंक/UPI ऐप में वास्तविक पैसा आने पर ही Payment Received दबाएगा।</strong> उसके बाद दुकान के कंप्यूटर पर सुरक्षित TEST फोटो का Print Dialog खोलेंगे। प्रिंट की आखिरी पुष्टि दुकानदार करेगा; PDF viewer में Ctrl+P की जरूरत हो सकती है।</p>
+        <h2 style="margin:0 0 10px">Customer UPI QR / Paytm Soundbox</h2>
+        <p class="description">हर दुकान अपनी UPI ID या Paytm Soundbox से जुड़ी Merchant UPI ID लगाती है। ग्राहक UPI QR से भुगतान करके <strong>मैंने पेमेंट कर दिया</strong> दबाएगा। <strong>दुकानदार अपने बैंक/UPI ऐप में वास्तविक पैसा आने पर ही Payment Received दबाएगा।</strong> उसके बाद दुकान के कंप्यूटर पर सुरक्षित TEST फोटो का Print Dialog खोलेंगे। प्रिंट की आखिरी पुष्टि दुकानदार करेगा; PDF viewer में Ctrl+P की जरूरत हो सकती है।</p>
         <form id="upi-account-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;align-items:end">
+          <label style="font-size:12px;font-weight:700">Payment Method
+            <select id="shop-upi-channel" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #d3dfd9;border-radius:8px">
+              <option value="regular_upi">Regular Shop UPI</option>
+              <option value="paytm_soundbox">Paytm Soundbox Merchant UPI ID</option>
+            </select>
+          </label>
           <label style="font-size:12px;font-weight:700">Shop UPI ID
             <input id="shop-upi-vpa" type="text" autocomplete="off" required placeholder="example@bank" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #d3dfd9;border-radius:8px">
           </label>
           <label style="font-size:12px;font-weight:700">Bank / Shop payee name
             <input id="shop-upi-payee" type="text" autocomplete="off" required maxlength="70" placeholder="Bank account owner name" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #d3dfd9;border-radius:8px">
           </label>
-          <label style="font-size:13px"><input type="checkbox" id="shop-upi-enabled"> Enable customer TEST UPI QR</label>
+          <div id="shop-soundbox-mapping" hidden style="grid-column:1 / -1;border:1px solid #dbd4a6;border-radius:10px;padding:12px;background:#fffcf0">
+            <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5">
+              <input type="checkbox" id="shop-soundbox-mapped" style="width:auto;margin-top:3px">
+              मैंने Paytm for Business में जाँच लिया है कि यह Merchant UPI ID मेरी दुकान के Paytm QR / Soundbox से जुड़ी है। (यह केवल दुकानदार की घोषणा है, वेबसाइट इसकी जाँच नहीं करती।)
+            </label>
+            <p class="description" style="margin-top:8px">Paytm Soundbox केवल Paytm के साथ लिंक Merchant QR पर दर्ज सफल भुगतान बोलता है। QR-To-Print का बनाया UPI QR Soundbox में बजेगा, इसकी गारंटी नहीं है। पहले Paytm for Business में QR mapping और छोटे वास्तविक भुगतान से जाँचें। वेबसाइट Soundbox को सीधे command नहीं भेजती और payment को अपने-आप Paid नहीं करेगी।</p>
+          </div>
+          <label style="font-size:13px"><input type="checkbox" id="shop-upi-enabled"> Enable customer UPI QR</label>
           <button class="btn teal" type="submit" id="shop-upi-save">Save Shop UPI Details</button>
         </form>
         <p id="shop-upi-state" class="description" role="status">UPI settings loading...</p>
@@ -494,6 +507,18 @@
 
   const upiState=document.getElementById("shop-upi-state");
   const upiClaims=document.getElementById("shop-upi-claims");
+  const upiChannel=document.getElementById("shop-upi-channel");
+  const soundboxMappingBox=document.getElementById("shop-soundbox-mapping");
+  const soundboxMapped=document.getElementById("shop-soundbox-mapped");
+  function refreshSoundboxChoice(){
+    const isSoundbox=upiChannel.value==="paytm_soundbox";
+    soundboxMappingBox.hidden=!isSoundbox;
+    document.getElementById("shop-upi-vpa").placeholder=
+      isSoundbox?"your-paytm-merchant@upi":"example@bank";
+    if(!isSoundbox)soundboxMapped.checked=false;
+  }
+  upiChannel.addEventListener("change",refreshSoundboxChoice);
+  refreshSoundboxChoice();
   async function loadUpiAccount(){
     try{
       const response=await fetch("/api/shop/upi-payment/account",{credentials:"same-origin",cache:"no-store"});
@@ -504,8 +529,14 @@
         document.getElementById("shop-upi-vpa").value=account.vpa;
         document.getElementById("shop-upi-payee").value=account.payeeName;
         document.getElementById("shop-upi-enabled").checked=account.enabled===true;
+        upiChannel.value=account.paymentChannel==="paytm_soundbox"?"paytm_soundbox":"regular_upi";
+        soundboxMapped.checked=account.soundboxMappingDeclared===true;
+        refreshSoundboxChoice();
       }
-      upiState.textContent=account?(account.enabled?"UPI QR enabled for new approved TEST orders.":"UPI QR disabled."):
+      upiState.textContent=account?(account.enabled?
+        (account.paymentChannel==="paytm_soundbox"?
+          "Paytm Soundbox Merchant UPI ID saved. Device announcement must be confirmed on the linked Paytm QR; manual bank verification remains required.":
+          "UPI QR enabled for new approved orders."):"UPI QR disabled."):
         "Enter your shop's own UPI ID and verified bank payee name.";
     }catch(error){upiState.textContent=error.message;}
   }
@@ -515,17 +546,26 @@
     const vpa=document.getElementById("shop-upi-vpa").value.trim();
     const payeeName=document.getElementById("shop-upi-payee").value.trim();
     const enabled=document.getElementById("shop-upi-enabled").checked;
+    const paymentChannel=upiChannel.value;
+    const soundboxMappingDeclared=paymentChannel==="paytm_soundbox"&&soundboxMapped.checked;
+    if(paymentChannel==="paytm_soundbox"&&enabled&&!soundboxMappingDeclared){
+      upiState.textContent="Paytm for Business में QR और Soundbox mapping खुद Verify करके Checkbox चुनें।";
+      return;
+    }
     if(!window.confirm("क्या आपने खुद पुष्टि की है कि "+vpa+" UPI ID आपके SHOP BANK ACCOUNT की है? ग्राहक का पैसा इसी UPI ID पर जाएगा।"))return;
     button.disabled=true;
     try{
       const response=await fetch("/api/shop/upi-payment/account",{
         method:"PUT",credentials:"same-origin",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({vpa,payeeName,enabled,confirmedRecipient:true})
+        body:JSON.stringify({vpa,payeeName,enabled,confirmedRecipient:true,
+          paymentChannel,soundboxMappingDeclared})
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Could not save UPI ID");
-      upiState.textContent="Saved your shop's UPI recipient. "+(enabled?"Customer TEST payment QR enabled.":"QR disabled.");
+      upiState.textContent=paymentChannel==="paytm_soundbox"&&enabled?
+        "Paytm Soundbox Merchant UPI ID saved. Customer payment QR uses this UPI ID. Paytm QR/Soundbox mapping must be confirmed in Paytm for Business; check actual bank credit manually.":
+        "Saved your shop's UPI recipient. "+(enabled?"Customer payment QR enabled.":"QR disabled.");
     }catch(error){upiState.textContent=error.message;}
     finally{button.disabled=false;}
   });
