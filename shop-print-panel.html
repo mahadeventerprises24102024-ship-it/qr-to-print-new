@@ -352,7 +352,8 @@
     });
     checkStorage();
     refreshOrders();refreshPayments();
-    setInterval(()=>{refreshOrders();if(document.visibilityState==="visible")refreshPayments();},10000);
+    setInterval(refreshOrders,10000);
+    setInterval(()=>{if(document.visibilityState==="visible")refreshPayments();},10000);
   })();
   </script>
 </body>
