@@ -6,7 +6,7 @@
  * only after shop-owner UPI bank verification and explicit Auto Print opt-in.
  */
 const {spawnSync}=require("node:child_process");
-const {readSavedKey,listWindowsPrinters,countWindowsPrinters,heartbeat}=
+const {readSavedKey,listWindowsPrinters,countWindowsPrinters}=
   require("./windows-print-agent");
 const SERVER="https://qr-to-print-new.onrender.com";
 const TOKEN=/^qrpa_[A-Za-z0-9_-]{43}$/;
@@ -98,6 +98,16 @@ async function callAgent(secret,path,opts={}){
   }
   return r;
 }
+async function reportHeartbeat(secret,printerCount,printerNames){
+  // Unlike the older preview agent, do not claim Canon fixed test print jobs.
+  // This worker uses only the photo queue endpoints and never accepts PDF jobs.
+  const r=await callAgent(secret,"/api/agent/heartbeat",{
+    body:{printerCount,printerNames},timeout:12000
+  });
+  const result=await r.json().catch(()=>({}));
+  if(!r.ok||result.connected!==true||result.printingEnabled!==false)
+    throw Error("Printer heartbeat unavailable or unexpected server state");
+}
 async function processOne(secret,names){
   const response=await callAgent(secret,"/api/agent/auto-print/claim",{body:{}});
   const parsed=await response.json().catch(()=>({}));
@@ -141,7 +151,7 @@ async function run(){
       const p=listWindowsPrinters();
       const names=Array.isArray(p.names)?p.names:[];
       const count=p.names===null?countWindowsPrinters().count:names.length;
-      await heartbeat(secret,count,null,p.names);
+      await reportHeartbeat(secret,count,p.names===null?undefined:p.names);
       if(names.length){
         const done=await processOne(secret,names);
         if(done)console.log("Print job #"+done.id+" "+done.status+
