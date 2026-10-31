@@ -649,7 +649,7 @@
         item.className = "demo-order";
         const info = document.createElement("div");
         const heading = document.createElement("strong");
-        heading.textContent = "TEST FILE #" + id + " • " +
+        heading.textContent = (order.documentKind==="customer_photo"?"CUSTOMER PHOTO #":"TEST FILE #") + id + " • " +
           String(order.fileType).toUpperCase() + " • " +
           order.copies + " copies • " +
           (order.printMode === "color" ? "Color" : "B&W");
@@ -676,11 +676,12 @@
         review.href = "/shop-print-preview.html?order=" + encodeURIComponent(id);
         review.target = "_blank";
         review.rel = "noopener noreferrer";
-        review.textContent = order.status==="accepted"?"Review & Print":"Review TEST file";
+        review.textContent = order.status==="accepted"?"Review & Print":
+          (order.documentKind==="customer_photo"?"Review Customer Photo":"Review TEST file");
         const download = document.createElement("a");
         download.className = "btn light";
         download.href = "/api/shop/test-file-orders/" + id + "/download";
-        download.textContent = "Download TEST";
+        download.textContent = order.documentKind==="customer_photo"?"Download Private Photo":"Download TEST";
         const remove = document.createElement("button");
         remove.className = "btn ghost";
         remove.type = "button";
