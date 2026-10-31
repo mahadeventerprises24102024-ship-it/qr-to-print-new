@@ -50,12 +50,18 @@ async function ensureUpiPrintTables(pool){
   await pool.query("DROP INDEX IF EXISTS upi_test_utr_unique");
   await pool.query("ALTER TABLE shop_upi_test_payments DROP COLUMN IF EXISTS customer_utr");
   await pool.query("CREATE INDEX IF NOT EXISTS upi_test_shop_recent ON shop_upi_test_payments(shop_id,id DESC)");
+  // This is shop-owner-declared metadata, not Paytm/device verification.
+  // Existing UPI recipients keep their current settings unchanged.
+  await pool.query("ALTER TABLE shop_upi_payment_accounts ADD COLUMN IF NOT EXISTS payment_channel VARCHAR(20) NOT NULL DEFAULT 'regular_upi'");
+  await pool.query("ALTER TABLE shop_upi_payment_accounts ADD COLUMN IF NOT EXISTS soundbox_mapping_declared BOOLEAN NOT NULL DEFAULT FALSE");
 }
 function installUpiPrintPayments(app,pool){
   app.get("/api/shop/upi-payment/account",ownerOnly,async(req,res)=>{
     try{
       const q=await pool.query([
-        "SELECT a.vpa,a.payee_name AS \"payeeName\",a.enabled",
+        "SELECT a.vpa,a.payee_name AS \"payeeName\",a.enabled,",
+        "a.payment_channel AS \"paymentChannel\",",
+        "a.soundbox_mapping_declared AS \"soundboxMappingDeclared\"",
         "FROM shop_upi_payment_accounts a JOIN shop_owners o ON o.shop_id=a.shop_id",
         "WHERE o.id=$1"
       ].join(" "),[req.session.shopOwnerId]);
@@ -65,20 +71,32 @@ function installUpiPrintPayments(app,pool){
   });
   app.put("/api/shop/upi-payment/account",ownerOnly,ownerLimiter,async(req,res)=>{
     const {vpa,payeeName,enabled,confirmedRecipient}=req.body||{};
-    if(!validVpa(vpa)||!validPayee(payeeName)||typeof enabled!=="boolean"||confirmedRecipient!==true){
+    const paymentChannel=req.body?.paymentChannel??"regular_upi";
+    const soundboxMappingDeclared=req.body?.soundboxMappingDeclared===true;
+    if(!validVpa(vpa)||!validPayee(payeeName)||typeof enabled!=="boolean"||confirmedRecipient!==true||
+      !["regular_upi","paytm_soundbox"].includes(paymentChannel)||
+      (paymentChannel==="paytm_soundbox"&&enabled&&!soundboxMappingDeclared)){
+
       return res.status(400).json({error:"Enter your valid UPI ID and recipient name and confirm its ownership"});
     }
     try{
       const q=await pool.query([
-        "INSERT INTO shop_upi_payment_accounts(shop_id,vpa,payee_name,enabled)",
-        "SELECT shop_id,$2,$3,$4 FROM shop_owners WHERE id=$1",
+        "INSERT INTO shop_upi_payment_accounts(shop_id,vpa,payee_name,enabled,payment_channel,soundbox_mapping_declared)",
+        "SELECT shop_id,$2,$3,$4,$5,$6 FROM shop_owners WHERE id=$1",
         "ON CONFLICT(shop_id) DO UPDATE SET vpa=EXCLUDED.vpa,payee_name=EXCLUDED.payee_name,",
-        "enabled=EXCLUDED.enabled,updated_at=NOW()",
-        "RETURNING vpa,payee_name AS \"payeeName\",enabled"
-      ].join(" "),[req.session.shopOwnerId,vpa,payeeName,enabled]);
+        "enabled=EXCLUDED.enabled,payment_channel=EXCLUDED.payment_channel,",
+        "soundbox_mapping_declared=EXCLUDED.soundbox_mapping_declared,updated_at=NOW()",
+        "RETURNING vpa,payee_name AS \"payeeName\",enabled,",
+        "payment_channel AS \"paymentChannel\",",
+        "soundbox_mapping_declared AS \"soundboxMappingDeclared\""
+      ].join(" "),[req.session.shopOwnerId,vpa,payeeName,enabled,paymentChannel,
+        paymentChannel==="paytm_soundbox"&&soundboxMappingDeclared]);
       if(!q.rows.length)return res.status(404).json({error:"Shop not found"});
       res.set("Cache-Control","private, no-store");
-      res.json({account:q.rows[0],message:"Owner must manually verify actual bank receipt",automaticPrinting:false});
+      res.json({account:q.rows[0],
+        message:"Owner must manually verify actual bank receipt. Paytm Soundbox alerts are issued by Paytm for payments to its linked merchant QR, not by this website.",
+        paytmSoundboxDeviceConnectedByWebsite:false,
+        paymentAutomaticallyVerified:false,automaticPrinting:false});
     }catch(e){console.error("Save UPI",e);res.status(503).json({error:"Unable to save shop UPI ID"});}
   });
   app.post("/api/shop/test-file-orders/:id/upi/quote",ownerOnly,ownerLimiter,async(req,res)=>{
