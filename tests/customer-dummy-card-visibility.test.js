@@ -5,11 +5,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const page = fs.readFileSync(path.join(__dirname, "..", "print.html"), "utf8");
 
-test("dummy Aadhaar front and back pickers are visible without shop QR", () => {
+test("dummy Aadhaar front and back pickers remain available without shop QR when selected", () => {
   assert.match(page, /<form id="private-upload-form">/);
-  assert.match(page, /<option value="dummy_card_front_back" selected>/);
-  assert.match(page, /<div id="regular-test-file" hidden>/);
-  assert.match(page, /<section id="dummy-card-test-files" style=/);
+  assert.match(page, /<option value="regular_test" selected>/);
+  assert.match(page, /<option value="dummy_card_front_back">/);
+  assert.match(page, /<div id="regular-test-file">/);
+  assert.match(page, /normalFileBox.hidden=isDummy/);
+  assert.match(page, /<section id="dummy-card-test-files" hidden style=/);
+  assert.match(page, /dummyBox.hidden=!isDummy/);
   assert.match(page, /id="dummy-card-front" type="file"[^>]*>/);
   assert.match(page, /id="dummy-card-back" type="file"[^>]*>/);
   assert.doesNotMatch(page, /id="dummy-card-front"[^>]*disabled/);
