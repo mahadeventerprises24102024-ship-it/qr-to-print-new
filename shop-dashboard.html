@@ -91,16 +91,16 @@
       <div class="content-icon">▣</div>
       <h2>Print using your shop's own printer</h2>
       <p><a class="btn teal" href="/shop-local-print.html" target="_blank" rel="noopener noreferrer">🖨 Print Local PDF, Photo or Aadhaar Front/Back Now</a></p>
-      <p>Each shop can use its own installed <strong>Canon, HP, Epson, Brother or other Windows printer</strong> (USB, Wi-Fi, or network). Review and Accept a safe TEST order, then use the Windows/browser Print dialog on the computer connected to the printer. The browser cannot change printer settings automatically. The Windows Agent never downloads customer documents.</p>
+      <p>Each shop can use its own installed <strong>Canon, HP, Epson, Brother or other Windows printer</strong> (USB, Wi-Fi, or network). Manual Browser Print Dialog is available. For real, non-sensitive CUSTOMER PHOTOS only, the owner can separately opt in to automatic printing after verifying UPI bank credit, using the Windows Photo Auto-Print Agent.</p>
       <div class="info-list">
         <div class="info-item"><strong>Windows agent</strong><span id="agent-state" role="status">Checking...</span></div>
         <div class="info-item"><strong>Printers found on PC</strong><span id="agent-printers">—</span></div>
         <div class="info-item"><strong>Last heartbeat</strong><span id="agent-last-seen">—</span></div>
-        <div class="info-item"><strong>Customer print jobs</strong><span>Only manual, owner-approved browser printing of safe TEST files. Agent automatic printing is OFF.</span></div>
+        <div class="info-item"><strong>Customer print jobs</strong><span>Photo Auto Print stays OFF until you enable it below. All PDFs, identity documents, SAMPLE files and unverified payments stay blocked.</span></div>
       </div>
       <section style="background:#eff8f3;border:1px solid #cfe5d8;padding:17px;border-radius:12px;margin-top:16px">
         <h3 style="margin:0 0 8px">Choose your own printer</h3>
-        <p class="description">Names are detected from <strong>your paired Windows PC</strong>. Saving a printer only remembers your preference: you must choose it manually in the native Print dialog. If you print from a different computer, its installed printers may differ.</p>
+        <p class="description">Printer names are detected on <strong>your paired Windows PC</strong>. Saving one keeps it as your preferred printer. Manual browser printing still requires selecting it in the Windows dialog; the separate Photo Auto-Print Agent can use it after owner opt-in.</p>
         <label for="agent-printer-choice" style="font-weight:700;display:block;margin:8px 0">Preferred printer</label>
         <select id="agent-printer-choice" disabled style="max-width:520px;width:100%;padding:11px;border:1px solid #bdd6cb;border-radius:8px;background:white">
           <option value="">Connect Windows Agent to detect printers</option>
@@ -108,7 +108,25 @@
         <button class="btn teal" id="save-agent-printer" type="button" disabled>Save preferred printer</button>
         <p id="agent-printer-message" class="description" role="status" aria-live="polite">Connect the Windows Agent to list printers.</p>
         <a class="btn light" href="/shop-printer-check.html" target="_blank" rel="noopener noreferrer">Print a local test page (any printer)</a>
-        <p class="description">Manual test opens the browser's print dialog. It does not use the Windows Agent or remote printing.</p>
+        <p class="description">Manual test opens the browser's print dialog; it does not create an automatic order.</p>
+      </section>
+      <section style="border:2px solid #9bd0b0;border-radius:13px;padding:18px;margin-top:20px;background:#f3fff7" id="photo-auto-print-settings">
+        <div class="eyebrow">PER SHOP • WINDOWS PHOTO AUTO PRINT</div>
+        <h3 style="margin:10px 0">Auto Print after owner-confirmed UPI payment</h3>
+        <p>दुकानदार के Windows PC में <strong>Install-QR-To-Print-Auto-Print.cmd</strong> चलाएँ। ऊपर अपना प्रिंटर चुनकर Save करें। उसके बाद ही Auto Print ON करें। यह सुविधा सिर्फ सामान्य, server-sanitized CUSTOMER JPG फोटो के लिए है। <strong>PDF, Aadhaar/PAN, अन्य पहचान दस्तावेज़, SAMPLE orders और बिना दुकानदार की बैंक पुष्टि वाले Payment कभी Auto Print नहीं होंगे।</strong></p>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:14px 0">
+          <label style="display:flex;align-items:center;gap:9px;font-weight:700">
+            <input id="auto-print-enabled" type="checkbox" style="width:auto">
+            Auto Print ON (नई Verified UPI फोटो के लिए)
+          </label>
+          <button id="save-auto-print" type="button" class="btn teal">Save Auto Print Settings</button>
+          <button id="refresh-auto-print" type="button" class="btn light">Refresh Queue</button>
+        </div>
+        <p id="auto-print-message" class="description" role="status" aria-live="polite">Auto Print settings loading…</p>
+        <p class="description">Paper: <strong>A4</strong>. Copies और B&amp;W/Colour ग्राहक के ऑर्डर से आएँगे। Power/Internet बंद होने पर Pending jobs रुकेंगे। Windows ने job स्वीकारा = <strong>SPOOLED</strong>, कागज़ निकला है इसकी पुष्टि नहीं। किसी अनिश्चित job का automatic retry नहीं होगा।</p>
+        <a class="btn teal" href="https://github.com/mahadeventerprises24102024-ship-it/qr-to-print-new/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">Download Photo Auto-Print Agent ZIP</a>
+        <p class="description">ZIP Extract → Node.js 20+ Install → pairing key Copy → <strong>Install-QR-To-Print-Auto-Print.cmd</strong> चलाएँ। Agent Windows Login पर Start होगा; Auto Print की permission Dashboard से अलग ON करें।</p>
+        <div id="auto-print-jobs" class="demo-order-list" aria-live="polite">No print jobs yet.</div>
       </section>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin:22px 0">
         <button class="btn teal" type="button" id="pair-agent">Generate secure Windows pairing key</button>
@@ -136,7 +154,7 @@
       <section style="border:1px solid #b9dfce;background:#f4fbf7;border-radius:13px;padding:17px;margin-top:22px">
         <div class="eyebrow">WINDOWS AUTO-CONNECT • ONE-TIME SETUP</div>
         <h3 style="margin:10px 0">Start Printer Agent automatically after Windows Login</h3>
-        <p>एक बार अपने दुकान के Windows कंप्यूटर में Install करें। अगली बार उसी Windows अकाउंट में Login करते ही Agent खुद शुरू होगा और इंटरनेट उपलब्ध होने पर आपकी दुकान से जुड़ जाएगा। <strong>बिना Windows Login किए नहीं चलेगा।</strong> Client documents की Automatic Printing अभी OFF है।</p>
+        <p>एक बार अपने दुकान के Windows कंप्यूटर में Install करें। अगली बार उसी Windows अकाउंट में Login करते ही Agent खुद शुरू होगा। <strong>बिना Windows Login किए नहीं चलेगा।</strong> पुराना Installer केवल Printer Discovery करता है; नए <strong>Photo Auto-Print Installer</strong> का विकल्प ऊपर है। उसे लगाना अपने-आप Auto Print ON नहीं करता।</p>
         <a class="btn teal" href="https://github.com/mahadeventerprises24102024-ship-it/qr-to-print-new/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">Download Windows Agent Installer (GitHub ZIP)</a>
         <div class="info-list">
           <div class="info-item"><strong>1. Windows PC</strong><span>Printer का driver और <strong>Node.js 20+</strong> install करें। Installer normal Windows account से चलाएँ, Administrator से नहीं।</span></div>
@@ -147,7 +165,7 @@
         <p class="description" style="margin-top:15px"><strong>Security:</strong> Key Windows user-specific encrypted form में लोकल PC पर रहती है, GitHub/Task arguments में नहीं। दूसरे PC या Windows account पर अलग Setup करें। बंद करने के लिए ZIP में <code>Uninstall-QR-To-Print-Agent.cmd</code> चलाकर यहाँ <strong>Revoke connection</strong> भी दबाएँ।</p>
         <p class="description"><a href="https://github.com/mahadeventerprises24102024-ship-it/qr-to-print-new/blob/main/WINDOWS_AGENT_AUTOSTART.md" target="_blank" rel="noopener noreferrer" style="text-decoration:underline">Detailed Auto-Start Setup Guide</a> · अगर Windows की सुरक्षा नीति Task Scheduler को रोकती है, तो Agent Install नहीं होगा; PC administrator से अनुमति लें।</p>
       </section>
-      <p class="description" style="margin-top:18px">Manual browser printing किसी भी compatible local printer पर Windows Agent के बिना भी काम करती है। Agent केवल Printer Discovery/heartbeat और अलग से मंजूर किए गए Canon fixed test के लिए है। ग्राहक की फाइल को Agent ऑटोमैटिक Print नहीं करता।</p>
+      <p class="description" style="margin-top:18px">Manual browser printing Windows Agent के बिना भी काम करती है। पुराना discovery-only Agent ग्राहक फाइलें नहीं छापता; नया Photo Auto-Print Agent अलग से install करके मालिक के ON करने के बाद ही सिर्फ validated JPEG फोटो प्रिंट करता है।</p>
     </div></section>
     <section class="panel" id="panel-wallet"><div class="card content-panel">
       <div class="eyebrow">MAHADEV ENTERPRISES • PRINT PRICING</div>
@@ -608,7 +626,7 @@
             // avoids pop-up blocker rejection after the async bank confirmation.
             // Never navigate it to an order until the server confirms ownership
             // and the exact bank-credit amount. Only this Windows shop PC prints.
-            const popup=decision==="paid_manual" ?
+            const popup=decision==="paid_manual"&&!ownerAutoPrintEnabled ?
               window.open("about:blank","_blank") : null;
             if(popup){
               popup.document.title="Waiting for shop verification";
@@ -624,7 +642,10 @@
               });
               const result=await response.json().catch(()=>({}));
               if(!response.ok)throw new Error(result.error||"Could not update UPI payment");
-              if(decision==="paid_manual"&&result.payment?.status==="paid_manual"){
+              if(decision==="paid_manual"&&result.payment?.status==="paid_manual"&&ownerAutoPrintEnabled){
+                upiState.textContent="Payment confirmed. Eligible CUSTOMER PHOTO will enter Windows Auto Print Queue. Check Printers → Refresh Queue. No automatic retry on uncertain jobs.";
+                await loadAutoPrintState();
+              }else if(decision==="paid_manual"&&result.payment?.status==="paid_manual"){
                 const url="/shop-print-preview.html?order="+encodeURIComponent(p.orderId)+"&autoPrint=1";
                 if(popup&&!popup.closed)popup.location.href=url;
                 else {
@@ -862,6 +883,58 @@
     });
   loadCanonTestStatus();
 
+  let ownerAutoPrintEnabled=false;
+  async function loadAutoPrintState(){
+    const note=document.getElementById("auto-print-message");
+    const list=document.getElementById("auto-print-jobs");
+    try{
+      const r=await fetch("/api/shop/auto-print/status",{credentials:"same-origin",cache:"no-store"});
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(data.error||"Photo Auto Print status unavailable");
+      ownerAutoPrintEnabled=data.settings?.enabled===true;
+      document.getElementById("auto-print-enabled").checked=ownerAutoPrintEnabled;
+      note.textContent=(ownerAutoPrintEnabled?"Auto Print ON":"Auto Print OFF")+
+        " • Printer: "+(data.settings?.preferredPrinter||"not selected")+
+        " • Windows Agent: "+(data.settings?.agentOnline?"online":"offline")+
+        " • Only new owner-verified UPI CUSTOMER PHOTO orders are eligible.";
+      list.replaceChildren();
+      const jobs=Array.isArray(data.jobs)?data.jobs:[];
+      if(!jobs.length){list.textContent="No Photo Auto-Print jobs yet.";return;}
+      jobs.forEach(job=>{
+        const row=document.createElement("div");row.className="demo-order";
+        const date=new Date(job.createdAt);
+        row.textContent="Photo #"+job.orderId+" • "+String(job.status).toUpperCase()+
+          " • "+(job.printerName||"Printer pending")+
+          (Number.isNaN(date.getTime())?"":" • "+date.toLocaleString("en-IN"));
+        list.append(row);
+      });
+    }catch(error){note.textContent=error.message;list.textContent="Cannot load photo print queue.";}
+  }
+  document.getElementById("refresh-auto-print").addEventListener("click",loadAutoPrintState);
+  document.getElementById("save-auto-print").addEventListener("click",async()=>{
+    const button=document.getElementById("save-auto-print");
+    const enabled=document.getElementById("auto-print-enabled").checked;
+    const state=document.getElementById("auto-print-message");
+    if(enabled&&!window.confirm("Auto Print ON: आपकी दुकान की नई सामान्य JPG फोटो, जिनकी UPI रकम आपने बैंक में देखकर Payment Received दबाई है, चुने हुए Windows प्रिंटर से बिना Print Dialog निकलेगी। केवल सुरक्षित फोटो, PDF/ID नहीं। जारी रखें?")){
+      document.getElementById("auto-print-enabled").checked=ownerAutoPrintEnabled;return;
+    }
+    button.disabled=true;
+    try{
+      const r=await fetch("/api/shop/auto-print/settings",{
+        method:"PUT",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({enabled})
+      });
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok)throw Error(data.error||"Unable to save Auto Print settings");
+      ownerAutoPrintEnabled=data.settings.enabled===true;
+      showToast(ownerAutoPrintEnabled?"Photo Auto Print ON — after manual UPI verification only.":"Photo Auto Print OFF.");
+      await loadAutoPrintState();
+    }catch(error){state.textContent=error.message;document.getElementById("auto-print-enabled").checked=ownerAutoPrintEnabled;}
+    finally{button.disabled=false;}
+  });
+  loadAutoPrintState();
+
   let agentKeyTimer;
   function clearAgentKey() {
     const field = document.getElementById("agent-pairing-key");
@@ -916,7 +989,8 @@
       });
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||"Could not save printer");
-      showToast("Printer preference saved. Select it again in Windows Print dialog.");
+      showToast("Printer preference saved. Photo Auto Print can use it after opt-in.");
+      await loadAutoPrintState();
       await loadAgentStatus();
     }catch(error){showToast(error.message);button.disabled=false;}
   });
