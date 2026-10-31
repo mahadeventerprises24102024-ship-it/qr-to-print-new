@@ -64,7 +64,7 @@ test("UPI database maintains separate per-shop payees, unique order and referenc
   const {module:m}=harness();
   const sql=[];
   await m.ensureUpiPrintTables({query:async q=>{sql.push(q);return {rows:[]};}});
-  assert.equal(sql.length,5);
+  assert.equal(sql.length,7);
   assert.match(sql[0],/shop_upi_payment_accounts/);
   assert.match(sql[0],/shop_id BIGINT PRIMARY KEY/);
   assert.match(sql[1],/shop_upi_test_payments/);
@@ -73,6 +73,8 @@ test("UPI database maintains separate per-shop payees, unique order and referenc
   assert.doesNotMatch(sql[1],/customer_utr/);
   assert.match(sql[2],/DROP INDEX IF EXISTS upi_test_utr_unique/);
   assert.match(sql[3],/DROP COLUMN IF EXISTS customer_utr/);
+  assert.match(sql[5],/ADD COLUMN IF NOT EXISTS payment_channel/);
+  assert.match(sql[6],/ADD COLUMN IF NOT EXISTS soundbox_mapping_declared/);
 });
 test("UPI recipient update only via logged-in shop owner with explicit recipient confirmation",async()=>{
   const h=harness();
@@ -94,8 +96,8 @@ test("UPI recipient update only via logged-in shop owner with explicit recipient
     ...auth,body:{vpa:"owner@bank",payeeName:"Sample Store",enabled:true,confirmedRecipient:true}
   },okay);
   assert.equal(okay.statusCode,200);
-  assert.match(calls[0].q,/SELECT shop_id,\$2,\$3,\$4 FROM shop_owners WHERE id=\$1/);
-  assert.deepEqual(Array.from(calls[0].args),[42,"owner@bank","Sample Store",true]);
+  assert.match(calls[0].q,/SELECT shop_id,\$2,\$3,\$4,\$5,\$6 FROM shop_owners WHERE id=\$1/);
+  assert.deepEqual(Array.from(calls[0].args),[42,"owner@bank","Sample Store",true,"regular_upi",false]);
 });
 test("UPI immutable quote requires accepted same-shop TEST order, enabled payee, stored rate and copies",async()=>{
   const h=harness();
