@@ -185,6 +185,39 @@ function installUpiPrintPayments(app,pool){
           confirmedAt:p.confirmed_at||null}))});
     }catch(e){console.error("UPI inbox",e);res.status(503).json({error:"UPI TEST inbox unavailable"});}
   });
+  // Owner-scoped print permission for SAMPLE orders. Existing UPI quotes
+  // lock the browser Print action until actual bank credit is owner-confirmed.
+  // An order with no UPI quote can use the owner's existing cash/manual-test path.
+  app.get("/api/shop/test-file-orders/:id/print-permission",ownerOnly,async(req,res)=>{
+    if(!idPattern.test(req.params.id||""))
+      return res.status(400).json({error:"Invalid SAMPLE order"});
+    try{
+      const q=await pool.query([
+        "SELECT o.status AS order_status,p.status AS upi_status",
+        "FROM test_file_orders o",
+        "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
+        "LEFT JOIN shop_upi_test_payments p ON p.order_id=o.id AND p.shop_id=o.shop_id",
+        "WHERE owner.id=$1 AND o.id=$2",
+        "AND o.created_at > NOW()-INTERVAL '24 hours' AND o.file_deleted_at IS NULL"
+      ].join(" "),[req.session.shopOwnerId,req.params.id]);
+      res.set("Cache-Control","private, no-store");
+      if(!q.rows.length)return res.status(404).json({error:"Sample order missing, expired or not your shop"});
+      const row=q.rows[0];
+      const hasUpiQuote=row.upi_status!==null&&row.upi_status!==undefined;
+      const allowed=row.order_status==="accepted"&&
+        (!hasUpiQuote||row.upi_status==="paid_manual");
+      return res.json({
+        canPrint:allowed,accepted:row.order_status==="accepted",
+        upiQuoteExists:hasUpiQuote,upiStatus:hasUpiQuote?row.upi_status:null,
+        requiresManualBankConfirmation:hasUpiQuote&&row.upi_status!=="paid_manual",
+        paymentMode:hasUpiQuote?"upi_quote":"manual_test",
+        sampleOnly:true,automaticPrinting:false
+      });
+    }catch(error){
+      console.error("Sample print permission check",error);
+      res.status(503).json({error:"Cannot check payment state for this SAMPLE order"});
+    }
+  });
   // Restrict automatic print-DIALOG launch to a fresh accepted TEST file
   // whose bank receipt was explicitly confirmed by THIS shop owner. No file
   // or printer command is returned by this endpoint.
