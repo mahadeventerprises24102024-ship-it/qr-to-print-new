@@ -51,11 +51,13 @@ app.use(express.json({ limit: "20kb" }));
 app.use("/api", (req, res, next) => {
   // The local Windows test agent authenticates with a secret bearer token,
   // not browser cookies. Allow only that exact endpoint without Origin.
-  if (req.method === "POST" &&
-      (req.path === "/agent/heartbeat" ||
-       req.path === "/agent/auto-print/claim" ||
-       /^\/agent\/auto-print\/ack\/[1-9][0-9]{0,14}$/.test(req.path)) &&
+  if (req.method === "POST" && req.path === "/agent/heartbeat" &&
       !req.get("origin")) {
+    return next();
+  }
+  if (req.method === "POST" && !req.get("origin") &&
+      (req.path === "/agent/auto-print/claim" ||
+       /^\/agent\/auto-print\/ack\/[1-9][0-9]{0,14}$/.test(req.path))) {
     return next();
   }
   // Paytm payment gateway form POST: server callback has no browser Origin.
