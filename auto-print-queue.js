@@ -5,6 +5,7 @@
 const {randomBytes,createHash}=require("node:crypto");
 const rateLimit=require("express-rate-limit");
 const {S3Client,GetObjectCommand}=require("@aws-sdk/client-s3");
+const sharp=require("sharp");
 const {storageSettings}=require("./private-test-uploads");
 const limiter=rateLimit({windowMs:60*1000,limit:45,standardHeaders:"draft-7",legacyHeaders:false});
 const idPattern=/^[1-9][0-9]{0,14}$/;
@@ -175,7 +176,7 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
     try{
       const q=await pool.query(`
         SELECT o.storage_key AS "key",o.file_sha256 AS "hash",
-          o.file_size_bytes AS "size"
+          o.file_size_bytes AS "size",o.print_mode AS "printMode"
         FROM shop_auto_print_jobs j
         JOIN shop_print_agents a ON a.shop_id=j.shop_id
         JOIN test_file_orders o ON o.id=j.order_id AND o.shop_id=j.shop_id
@@ -200,10 +201,16 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
       if(bytes.length!==Number(record.size)||digest(bytes)!==record.hash||
          bytes.subarray(0,3).toString("hex")!=="ffd8ff")
         return res.status(503).json({error:"Stored photo failed integrity checks"});
+      // Normalize B&W requests before Windows driver consumes the picture.
+      const printBytes=record.printMode==="bw"?
+        await sharp(bytes,{limitInputPixels:8*1024*1024}).grayscale()
+          .jpeg({quality:80}).toBuffer():bytes;
+      if(printBytes.length>allowedPhotoSize)return res.status(503).json({
+        error:"B&W photo exceeds safe print size"});
       res.set({"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff",
         "Content-Security-Policy":"sandbox",
         "Content-Disposition":'attachment; filename="sanitized-photo.jpg"'});
-      return res.type("image/jpeg").send(bytes);
+      return res.type("image/jpeg").send(printBytes);
     }catch(e){console.error("Auto-print photo fetch",e?.name);return res.status(503).json({error:"Unable to fetch authorized sanitized photo"});}
   });
   app.post("/api/agent/auto-print/ack/:id",limiter,async(req,res)=>{
