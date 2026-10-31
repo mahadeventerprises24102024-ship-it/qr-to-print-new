@@ -94,6 +94,7 @@ function installUpiPrintPayments(app,pool){
         "JOIN shop_upi_payment_accounts a ON a.shop_id=o.shop_id AND a.enabled=TRUE",
         "LEFT JOIN shop_print_rates r ON r.shop_id=o.shop_id",
         "WHERE owner.id=$1 AND o.id=$2 AND o.status='accepted'",
+        "AND o.file_deleted_at IS NULL",
         "AND o.created_at > NOW()-INTERVAL '24 hours'"
       ].join(" "),[req.session.shopOwnerId,id]);
       if(!q.rows.length)return res.status(409).json({error:"Configure shop UPI ID and accept an unexpired TEST file first"});
@@ -130,7 +131,8 @@ function installUpiPrintPayments(app,pool){
       "JOIN test_file_orders o ON o.id=p.order_id AND o.shop_id=p.shop_id",
       "JOIN shops s ON s.id=p.shop_id",
       "WHERE s.public_code=$1 AND o.id=$2 AND o.tracking_token_hash=$3",
-      "AND o.created_at > NOW()-INTERVAL '24 hours'"
+      "AND o.created_at > NOW()-INTERVAL '24 hours'",
+      "AND o.file_deleted_at IS NULL"
     ].join(" "),[req.params.code,req.params.id,hash]);
     return q.rows[0]||null;
   }
@@ -230,7 +232,8 @@ function installUpiPrintPayments(app,pool){
         "JOIN shop_upi_test_payments p ON p.order_id=o.id AND p.shop_id=o.shop_id",
         "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
         "WHERE owner.id=$1 AND o.id=$2 AND o.status='accepted'",
-        "AND p.status='paid_manual' AND o.created_at > NOW()-INTERVAL '24 hours'"
+        "AND p.status='paid_manual' AND o.created_at > NOW()-INTERVAL '24 hours'",
+        "AND o.file_deleted_at IS NULL"
       ].join(" "),[req.session.shopOwnerId,req.params.id]);
       res.set("Cache-Control","private, no-store");
       if(!q.rows.length)return res.status(409).json({
