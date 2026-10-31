@@ -665,6 +665,7 @@
           Math.round(Number(order.fileSizeBytes)/1024) + " KB • " +
           (Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-IN"));
         desc.style.display = "block";
+        if(order.fileDeletedAt)desc.textContent+=" • FILE DELETED (audit only)";
         info.append(heading, desc);
 
         const controls = document.createElement("div");
@@ -683,9 +684,10 @@
         const remove = document.createElement("button");
         remove.className = "btn ghost";
         remove.type = "button";
-        remove.textContent = "Delete";
+        remove.textContent = order.fileDeletedAt?"File Deleted":"Delete File";
+        remove.disabled=!!order.fileDeletedAt;
         remove.addEventListener("click", async () => {
-          if (!window.confirm("Permanently delete this private test file and its record?")) return;
+          if (!window.confirm("Delete this SAMPLE file from R2? Order, payment and bill audit history will remain.")) return;
           remove.disabled = true;
           try {
             const response = await fetch(
@@ -700,10 +702,10 @@
             remove.disabled = false;
           }
         });
-        if(order.status!=="rejected"){
+        if(order.status!=="rejected"&&!order.fileDeletedAt){
           controls.append(review,download);
         }
-        if(order.status==="test_only"){
+        if(order.status==="test_only"&&!order.fileDeletedAt){
           for(const decision of ["accepted","rejected"]){
             const button=document.createElement("button");
             button.className=decision==="accepted"?"btn teal":"btn light";
