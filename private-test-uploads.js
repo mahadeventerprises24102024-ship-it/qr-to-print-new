@@ -464,11 +464,17 @@ function installTestFileUploads(app, pool, env = process.env) {
            WHERE owner.shop_id = o.shop_id AND owner.id = $1
              AND o.id = $2 AND o.status = 'accepted'
              AND o.created_at > NOW() - INTERVAL '24 hours'
+             AND o.file_deleted_at IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM shop_upi_test_payments p
+               WHERE p.order_id = o.id AND p.shop_id = o.shop_id
+                 AND p.status <> 'paid_manual'
+             )
            RETURNING o.id, o.status`,
           [req.session.shopOwnerId, req.params.id]
         );
         if (!result.rows.length) {
-          return res.status(404).json({ error: "Order not accepted, not yours, or test file expired" });
+          return res.status(409).json({ error: "Sample order unavailable, expired, or its UPI payment has not been verified in the bank" });
         }
         res.set("Cache-Control", "no-store");
         return res.json({ testOnly: true, order: result.rows[0] });
