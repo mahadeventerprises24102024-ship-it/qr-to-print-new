@@ -94,6 +94,15 @@
         <div class="actions"><button id="print-local" type="button" disabled>Print selected file</button><button id="clear-local" class="secondary" type="button">Clear file</button></div>
         <p class="local-tip">Image: native Print Dialog खुलेगा। PDF: आपके browser का PDF viewer खुलेगा, वहाँ <strong>Ctrl + P</strong> दबाएँ। हर बार अपनी दुकान का installed Canon, HP, Epson या दूसरा Printer, Copies और Color चुनें।</p>
       </section>
+      <section class="card full" aria-label="UPI payment notices">
+        <div class="queue-head">
+          <div><span class="eyebrow">CUSTOMER PAYMENT • MANUAL BANK CHECK</span><h2>UPI Payment Notices</h2></div>
+          <a class="btn" href="/shop-dashboard.html#wallet">Verify Bank Payment in Shop Dashboard</a>
+        </div>
+        <p class="muted">ग्राहक का "मैंने पेमेंट किया" केवल दावा है। अपने बैंक/UPI ऐप में पैसा आने के बाद ही Shop Dashboard में Payment Received दबाएँ। इससे आपके Shop PC पर TEST Print Dialog खोलने का विकल्प मिलेगा।</p>
+        <p id="payment-count" class="state" role="status">Checking customer UPI notices...</p>
+        <div id="payment-alert-list" class="list" aria-live="polite"></div>
+      </section>
     </div>
   </main>
   <div id="print-image-area" aria-hidden="true"></div>
@@ -107,6 +116,36 @@
     const count=document.getElementById("queue-count");
     const refresh=document.getElementById("refresh-orders");
     const originalTitle=document.title;
+    const paymentCount=document.getElementById("payment-count");
+    const paymentList=document.getElementById("payment-alert-list");
+    async function refreshPayments(){
+      try{
+        const response=await fetch("/api/shop/upi-payment/orders",{
+          credentials:"same-origin",cache:"no-store",headers:{"Accept":"application/json"}
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw Error(data.error||"Payment status unavailable");
+        const payments=Array.isArray(data.payments)?data.payments:[];
+        const claims=payments.filter(p=>p.status==="customer_claimed");
+        paymentCount.textContent=claims.length?
+          claims.length+" customer(s) say paid — verify actual bank credit in Shop Dashboard.":
+          "No unverified customer UPI payment claims.";
+        paymentList.replaceChildren();
+        for(const payment of claims.slice(0,10)){
+          const item=document.createElement("div");item.className="order new";
+          const info=document.createElement("div");
+          info.append(makeText("strong","TEST Order #"+String(payment.orderId)+" • ₹"+String(payment.amountRupees)));
+          info.append(makeText("div","CUSTOMER SAYS PAID — NOT VERIFIED. Check bank credit and the exact amount.","meta"));
+          const link=document.createElement("a");
+          link.className="btn";link.href="/shop-dashboard.html#wallet";
+          link.textContent="Check bank & verify";
+          item.append(info,link);paymentList.append(item);
+        }
+      }catch(error){
+        paymentCount.textContent="UPI notices unavailable: "+error.message;
+        paymentList.replaceChildren();
+      }
+    }
     let firstLoad=true;
     let seenIds=new Set();
     let requestInFlight=false;
@@ -307,13 +346,13 @@
         localMessage.textContent="Native Print dialog opened. After printing, physically check the paper. Local tests do not create shop orders or bills.";
       }
     });
-    refresh.addEventListener("click",refreshOrders);
+    refresh.addEventListener("click",()=>{refreshOrders();refreshPayments();});
     document.addEventListener("visibilitychange",()=>{
-      if(document.visibilityState==="visible")refreshOrders();
+      if(document.visibilityState==="visible"){refreshOrders();refreshPayments();}
     });
     checkStorage();
-    refreshOrders();
-    setInterval(refreshOrders,10000);
+    refreshOrders();refreshPayments();
+    setInterval(()=>{refreshOrders();if(document.visibilityState==="visible")refreshPayments();},10000);
   })();
   </script>
 </body>
