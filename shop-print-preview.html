@@ -273,7 +273,8 @@
       const mode = order.printMode === "color" ? "Colour" : "Black & white";
       details.textContent = [
         "Order #" + id,
-        isDummyCard?"DUMMY Front + Back card layout (one A4 TEST page)":"Standard TEST document",
+        isDummyCard?"DUMMY Front + Back card layout (one A4 TEST page)":
+          order.documentKind==="customer_photo"?"Sanitized CUSTOMER PHOTO (single image, no identity documents)":"Standard TEST document",
         "File type: " + order.fileType.toUpperCase(),
         "Copies requested: " + order.copies,
         "Print mode: " + mode,
