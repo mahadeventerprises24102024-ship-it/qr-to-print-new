@@ -70,6 +70,27 @@
         <strong id="print-rate-card" style="font-size:15px">Loading print rates...</strong>
         <span class="status">B&amp;W per page • Aadhaar B&amp;W per card/copy • Colour per page. No real ID uploads in test mode.</span>
       </div>
+
+      <section id="customer-photo-pilot" style="padding:20px;border:2px solid #9ccab2;background:#f2fff5;border-radius:15px;margin:0 0 26px">
+        <small class="eyebrow">ACTUAL CUSTOMER PHOTO ORDER • LIMITED PILOT</small>
+        <h2>मोबाइल से असली Photo Print भेजें</h2>
+        <p class="subtitle">अभी केवल सामान्य, गैर-संवेदनशील JPG/PNG फोटो (अधिकतम 2 MB, 1 पेज) भेजें। सर्वर फोटो को JPEG में दोबारा बनाकर GPS/EXIF जैसी छिपी जानकारी हटाता है। फाइल 24 घंटे में हटाई जाती है। दुकानदार जांच और पेमेंट पुष्टि के बाद Print करेगा।</p>
+        <p class="info"><strong>इसमें Aadhaar, PAN, पहचान-पत्र, बैंक विवरण या दूसरे निजी दस्तावेज़ अपलोड न करें। PDF अभी उपलब्ध नहीं है।</strong> स्कैनिंग और PDF सुरक्षा पूरी होने तक ये बंद हैं।</p>
+        <form id="customer-photo-form">
+          <label for="customer-photo-file">फोटो चुनें (JPG/PNG)</label>
+          <input id="customer-photo-file" type="file" name="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required>
+          <label for="customer-photo-copies">कितनी Copies?</label>
+          <select id="customer-photo-copies" name="copies"><option value="1">1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option></select>
+          <label for="customer-photo-mode">Printing</label>
+          <select id="customer-photo-mode" name="printMode"><option value="bw">Black &amp; White</option><option value="color">Colour</option></select>
+          <label style="display:flex;gap:10px;align-items:start;font-weight:600;line-height:1.6">
+            <input id="customer-photo-consent" type="checkbox" style="width:auto;min-width:18px;margin-top:2px" required>
+            मैं पुष्टि करता/करती हूँ कि यह मेरी सामान्य फोटो है, इसमें कोई Aadhaar/PAN/निजी पहचान या संवेदनशील जानकारी नहीं है, और मैं इसे दुकान को प्रिंट के लिए भेजने तथा 24 घंटे तक सुरक्षित रखने की सहमति देता/देती हूँ।
+          </label>
+          <button id="customer-photo-submit" class="btn" type="submit" disabled>Upload Photo for Printing →</button>
+          <p id="customer-photo-message" class="response" role="status" aria-live="polite">Verifying secure photo upload availability…</p>
+        </form>
+      </section>
       <h2>Upload PDF / Photo • TEST ONLY</h2>
       <p class="subtitle">बिना Customer Login के एक छोटी टेस्ट PDF/JPG/PNG अपलोड करें (अधिकतम 2 MB)। यह सुविधा सिर्फ दुकान द्वारा Guest Test Upload सक्षम होने पर उपलब्ध होगी। निजी या असली ग्राहक दस्तावेज़ अभी न भेजें।</p>
       <p id="private-upload-status" class="response" role="status" aria-live="polite">Choose DUMMY photos to preview on this device. To submit a TEST order, scan your shop QR and enable private test storage.</p>
@@ -202,6 +223,54 @@
       const submit=document.getElementById("demo-submit");
       const result=document.getElementById("demo-result");
       let verifiedCode=null;
+
+      const realPhotoForm=document.getElementById("customer-photo-form");
+      const realPhotoButton=document.getElementById("customer-photo-submit");
+      const realPhotoMessage=document.getElementById("customer-photo-message");
+      async function prepareRealPhotoUpload(){
+        realPhotoButton.disabled=true;
+        try{
+          const response=await fetch("/api/customer-photo/config",{cache:"no-store"});
+          const settings=await response.json().catch(()=>({}));
+          if(!response.ok||settings.enabled!==true||settings.identityDocumentsAllowed!==false)
+            throw new Error("Photo upload is unavailable. Private storage not ready.");
+          realPhotoButton.disabled=false;
+          realPhotoMessage.textContent="Verified: regular JPG/PNG photos can be submitted to this shop. PDF and identity documents are not accepted.";
+        }catch(error){realPhotoMessage.textContent=error.message;}
+      }
+      realPhotoForm.addEventListener("submit",async event=>{
+        event.preventDefault();
+        if(!verifiedCode||realPhotoButton.disabled)return;
+        const photo=document.getElementById("customer-photo-file").files[0];
+        if(!photo||photo.size>2097152||photo.size<8||
+          !["image/jpeg","image/png"].includes(photo.type)||
+          !document.getElementById("customer-photo-consent").checked){
+          realPhotoMessage.textContent="सामान्य JPG/PNG फोटो (2 MB तक) और सहमति आवश्यक हैं।";
+          return;
+        }
+        realPhotoButton.disabled=true;
+        realPhotoMessage.textContent="Photo सुरक्षित तरीके से प्रोसेस और Upload हो रही है…";
+        try{
+          const data=new FormData(realPhotoForm);
+          data.set("confirmedNonSensitive","yes");
+          const response=await fetch("/api/public/shops/"+verifiedCode+"/customer-photo-orders",{
+            method:"POST",credentials:"same-origin",body:data
+          });
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok||result.photoPilot!==true||!result.order?.id||
+            !/^[a-f0-9]{48}$/.test(result.trackingToken||""))
+            throw new Error(result.error||"Photo upload failed");
+          showTracking("test-file-orders",result.order.id,result.trackingToken);
+          latestUploadedOrder={id:result.order.id,token:result.trackingToken,type:"PHOTO"};
+          document.getElementById("uploaded-order-id").textContent="CUSTOMER PHOTO Order #"+result.order.id;
+          copyTrackingStatus.textContent="Private Tracking Code सुरक्षित रखें और Shopkeeper से Payment/Print Status चेक करें।";
+          successPanel.hidden=false;
+          successPanel.scrollIntoView({behavior:"smooth",block:"start"});
+          realPhotoMessage.textContent="PHOTO Order #"+result.order.id+" सुरक्षित मिला। दुकानदार को Order भेज दिया गया है।";
+          realPhotoForm.reset();
+        }catch(error){realPhotoMessage.textContent=error.message;}
+        finally{realPhotoButton.disabled=false;}
+      });
       const privateForm=document.getElementById("private-upload-form");
       const privateMessage=document.getElementById("private-upload-status");
       const privateButton=document.getElementById("private-upload-button");
@@ -210,7 +279,7 @@
       let latestUploadedOrder=null;
       document.getElementById("copy-tracking").addEventListener("click",async()=>{
         if(!latestUploadedOrder)return;
-        const content="QR-To-Print SAMPLE Order #"+latestUploadedOrder.id+
+        const content="QR-To-Print "+(latestUploadedOrder.type||"SAMPLE")+" Order #"+latestUploadedOrder.id+
           "\\nTracking Code: "+latestUploadedOrder.token+
           "\\nKeep this code private. It grants order status access.";
         try{
@@ -803,13 +872,13 @@
         if(!response.ok) throw new Error(response.status===404?"Shop not found":"Unable to verify shop");
         const data=await response.json();
         title.textContent=data.shop.name;
-        status.textContent="Shop verified • Guest test requests available";
+        status.textContent="Shop verified • Customer photo upload and sample requests available";
         verifiedCode=code;
         upiAvailable=true;
         showUpiForKind(document.getElementById("track-kind").value);
         submit.disabled=false;
         trackSubmit.disabled=false;
-        await Promise.all([preparePrivateUpload(code),loadPublicPricing(code),
+        await Promise.all([preparePrivateUpload(code),prepareRealPhotoUpload(),loadPublicPricing(code),
           fetch("/api/paytm-print/config",{cache:"no-store"})
             .then(r=>r.ok?r.json():{}).then(data=>{
               paytmTestEnabled=data.enabled===true && data.environment==="sandbox";
