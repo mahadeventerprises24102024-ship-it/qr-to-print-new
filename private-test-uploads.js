@@ -125,7 +125,7 @@ async function ensureTestUploadTables(pool) {
   // DUMMY front/back photos become one composite PNG. Real IDs remain unsupported.
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS document_kind VARCHAR(30) NOT NULL DEFAULT 'regular_test'");
   await pool.query("ALTER TABLE test_file_orders DROP CONSTRAINT IF EXISTS test_file_orders_document_kind_check");
-  await pool.query("ALTER TABLE test_file_orders ADD CONSTRAINT test_file_orders_document_kind_check CHECK (document_kind IN ('regular_test','dummy_card_front_back'))");
+  await pool.query("ALTER TABLE test_file_orders ADD CONSTRAINT test_file_orders_document_kind_check CHECK (document_kind IN ('regular_test','dummy_card_front_back','customer_photo'))");
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS test_file_orders_tracking_hash_unique
     ON test_file_orders(tracking_token_hash)
