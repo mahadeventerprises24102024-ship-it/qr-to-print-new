@@ -289,7 +289,7 @@ function installTestFileUploads(app, pool, env = process.env) {
           // Small bounded test quota. The rate limiter additionally controls
           // repeat submissions; this quota is not a transactional billing limit.
           const count = await pool.query(
-            "SELECT COUNT(*)::int AS total FROM test_file_orders WHERE shop_id = $1",
+            "SELECT COUNT(*)::int AS total FROM test_file_orders WHERE shop_id = $1 AND file_deleted_at IS NULL AND created_at > NOW() - INTERVAL '24 hours'",
             [shopId]
           );
           if (count.rows[0].total >= 10) {
@@ -358,7 +358,8 @@ function installTestFileUploads(app, pool, env = process.env) {
       }
       try {
         const result = await pool.query(
-          `SELECT o.id, o.status, o.created_at AS "createdAt"
+          `SELECT o.id, o.status, o.created_at AS "createdAt",
+                  (o.file_deleted_at IS NOT NULL) AS "fileDeleted"
            FROM test_file_orders o JOIN shops s ON s.id = o.shop_id
            WHERE s.public_code = $1 AND o.id = $2 AND o.tracking_token_hash = $3`,
           [code, String(orderId), hash]
@@ -372,6 +373,68 @@ function installTestFileUploads(app, pool, env = process.env) {
       }
     }
   );
+  // A customer holding the private tracking token can delete only the
+  // associated SAMPLE document. Keep necessary order, payment and bill audit
+  // rows; neither R2 object keys nor file contents are returned.
+  app.post("/api/public/shops/:code/test-file-orders/delete",
+    trackLimiter, async (req, res) => {
+      if (!storage) {
+        return res.status(503).json({ error: "Private SAMPLE storage is unavailable" });
+      }
+      const code = req.params.code;
+      const { orderId, trackingToken } = req.body || {};
+      const id = String(orderId || "");
+      const hash = trackingHash(trackingToken);
+      if (!/^[a-f0-9]{32}$/.test(code || "") ||
+          !/^[1-9][0-9]{0,14}$/.test(id) || !hash) {
+        return res.status(400).json({
+          error: "A valid shop QR, order ID and private tracking code are required"
+        });
+      }
+      try {
+        const found = await pool.query(
+          `SELECT o.id, o.storage_key, o.file_deleted_at AS "fileDeletedAt"
+           FROM test_file_orders o
+           JOIN shops s ON s.id = o.shop_id
+           WHERE s.public_code = $1 AND o.id = $2
+             AND o.tracking_token_hash = $3`,
+          [code, id, hash]
+        );
+        if (!found.rows.length) {
+          return res.status(404).json({ error: "Private SAMPLE order not found" });
+        }
+        if (found.rows[0].fileDeletedAt) {
+          res.set("Cache-Control", "private, no-store");
+          return res.json({ deleted: true, alreadyDeleted: true, testOnly: true });
+        }
+        await storage.send(new DeleteObjectCommand({
+          Bucket: cfg.bucket,
+          Key: found.rows[0].storage_key
+        }));
+        const result = await pool.query(
+          `UPDATE test_file_orders o SET file_deleted_at = NOW()
+           FROM shops s
+           WHERE s.id = o.shop_id AND s.public_code = $1
+             AND o.id = $2 AND o.tracking_token_hash = $3
+             AND o.file_deleted_at IS NULL
+           RETURNING o.id`,
+          [code, id, hash]
+        );
+        if (!result.rows.length) {
+          return res.status(409).json({
+            error: "Could not confirm deletion; check order status before retrying"
+          });
+        }
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ deleted: true, testOnly: true, retainedAuditOnly: true });
+      } catch (error) {
+        // Never expose raw scanner, object key, bucket, or credential details.
+        console.error("Customer SAMPLE deletion failed:", error?.name || "error");
+        return res.status(503).json({ error: "SAMPLE file deletion could not be completed" });
+      }
+    }
+  );
+
   // The owner must accept a sample before confirming printed paper.
   app.post("/api/shop/test-file-orders/:id/decision",
     requireShopOwner, async (req, res) => {
