@@ -41,6 +41,8 @@
     <h1>Review &amp; Print <span id="order-heading"></span></h1>
     <p id="state" role="status" aria-live="polite">Checking your shop order...</p>
     <div id="details" class="meta" hidden></div>
+    <p id="payment-release-status" class="help" role="status" aria-live="polite">Checking whether printing is permitted for this SAMPLE order...</p>
+    <button id="refresh-payment-release" type="button" style="background:#285667">Refresh payment / print status</button>
     <p class="help">Only non-sensitive TEST uploads up to 2 MB are allowed. This page prints manually through the browser on <strong>your shop computer</strong>, using any compatible installed printer (Canon, HP, Epson, Brother, etc.). The Windows Agent never receives the document.</p>
     <p id="printer-reminder" class="help" role="status">Choose your own installed printer in the native Print dialog. No automatic printer selection is possible from this page.</p>
   </section>
@@ -73,6 +75,22 @@
   const actions = document.getElementById("actions");
   const printArea = document.getElementById("print-area");
   const imageButton = document.getElementById("print-image");
+  const paymentReleaseStatus=document.getElementById("payment-release-status");
+  let canPrintCurrent=false;
+  async function printPermission(id){
+    const response=await fetch("/api/shop/test-file-orders/"+
+      encodeURIComponent(id)+"/print-permission",{
+        credentials:"same-origin",cache:"no-store",headers:{"Accept":"application/json"}
+      });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok||result.sampleOnly!==true||
+      result.automaticPrinting!==false||
+      typeof result.canPrint!=="boolean"){
+      throw new Error(result.error||"Cannot verify bank payment for this SAMPLE order");
+    }
+    return result;
+  }
+  document.getElementById("refresh-payment-release").addEventListener("click",()=>location.reload());
   const autoPrintRequested=new URLSearchParams(location.search).get("autoPrint")==="1";
   const autoPrintNote=document.getElementById("auto-print-notice");
   let autoPrintAuthorized=false;
@@ -135,6 +153,14 @@
       upiQuoteState.textContent="UPI QR TEST amount ₹"+data.payment.amountRupees+
         ". Ask customer to open shop QR page and check UPI payment with their private Tracking Code. Then verify actual bank credit in Shop Dashboard → Pricing & Bills.";
       upiQuote.hidden=true;
+      // After a UPI quote exists, the print action is locked until bank credit
+      // is manually confirmed. Never keep a stale pre-quote Print button active.
+      canPrintCurrent=false;
+      imageButton.hidden=true;
+      pdfLink.hidden=true;
+      downloadLink.hidden=true;
+      markPrinted.hidden=true;
+      paymentReleaseStatus.textContent="UPI quote created. Print locked until the shop verifies real bank credit. Refresh this page after Payment Received.";
     }catch(error){upiQuoteState.textContent=error.message;upiQuote.disabled=false;}
   });
   const paytmQuote=document.getElementById("paytm-quote");
@@ -220,10 +246,22 @@
       if(order.status==="rejected"){
         throw new Error("This TEST order was rejected and cannot be printed.");
       }
-      const canPrint=order.status==="accepted";
+      const permission=await printPermission(id);
+      const canPrint=order.status==="accepted"&&permission.canPrint===true;
+      canPrintCurrent=canPrint;
+      const hasPendingUpi=permission.upiQuoteExists&&
+        permission.upiStatus!=="paid_manual";
       const isDummyCard=order.documentKind==="dummy_card_front_back";
-      await configurePaytmQuote(canPrint);
-      await configureUpiQuote(canPrint);
+      if(hasPendingUpi){
+        paymentReleaseStatus.textContent="UPI Payment pending ("+permission.upiStatus+
+          "). Print locked. ग्राहक को UPI QR से भुगतान कराएँ; दुकानदार बैंक में पैसा Verify करे। फिर Refresh payment / print status दबाएँ।";
+      }else if(permission.upiQuoteExists&&permission.upiStatus==="paid_manual"){
+        paymentReleaseStatus.textContent="UPI Payment Received — shop owner verified bank credit. SAMPLE Print Dialog allowed.";
+      }else{
+        paymentReleaseStatus.textContent="No UPI quote for this SAMPLE order. Owner-reviewed manual/cash test printing is available after Accept. For UPI first set a quote.";
+      }
+      await configurePaytmQuote(order.status==="accepted"&&!permission.upiQuoteExists);
+      await configureUpiQuote(order.status==="accepted"&&!permission.upiQuoteExists);
       acceptButton.hidden=order.status!=="test_only";
       const types = { pdf: "application/pdf", png: "image/png", jpeg: "image/jpeg" };
       const contentType = types[order.fileType];
@@ -260,6 +298,7 @@
       const extension = order.fileType === "jpeg" ? "jpg" : order.fileType;
       downloadLink.href = objectURL;
       downloadLink.download = "test-order-" + id + "." + extension;
+      downloadLink.hidden=hasPendingUpi;
       actions.hidden = false;
       markPrinted.hidden = !canPrint;
       if(order.status==="test_only"){
@@ -271,11 +310,13 @@
         if(autoPrintRequested&&autoPrintAuthorized){
           autoPrintNote.textContent="UPI payment verified by shop owner. PDF print preview is ready. Browser PDF viewers can block automatic Print Dialog: click Open PDF to Print, then Ctrl+P.";
         }
-        preview.textContent = "PDF is ready. Use Open PDF to Print to review it in your browser.";
+        preview.textContent = hasPendingUpi?
+          "UPI bank payment not verified. PDF print controls are locked; use Refresh after payment confirmation.":
+          "PDF is ready. Use Open PDF to Print to review it in your browser.";
         document.getElementById("pdf-help").hidden = false;
         pdfLink.href = objectURL;
         pdfLink.textContent=canPrint?"Open PDF to Print":"Open PDF for REVIEW ONLY";
-        pdfLink.hidden = false;
+        pdfLink.hidden = hasPendingUpi;
       } else {
         const img = new Image();
         img.alt = "Uploaded test image; review carefully before printing";
@@ -287,7 +328,8 @@
           printArea.replaceChildren(printImg);
           printArea.classList.toggle("bw", order.printMode !== "color");
           imageButton.hidden = !canPrint;
-          status(canPrint?"Accepted TEST image: review and open the print dialog manually.":
+          status(hasPendingUpi?"UPI payment pending. Printing locked until bank confirmation.":
+            canPrint?"Accepted TEST image: review and open the print dialog manually.":
             "Pending shop decision. Review the image; Accept before printing.");
           if(canPrint)openImagePrintDialogOnce();
         }, { once: true });
@@ -299,7 +341,8 @@
         img.src = objectURL;
         return;
       }
-      status(canPrint?"Accepted TEST PDF: review before printing.":
+      status(hasPendingUpi?"UPI bank payment pending — printing locked.":
+        canPrint?"Accepted TEST PDF: review before printing.":
         "Pending shop decision. Open PDF only for review; Accept before printing.");
     } catch (error) {
       status(error.message || "Unable to load this private test order");
@@ -327,12 +370,21 @@
   });
 
   imageButton.addEventListener("click", () => {
-    if (!objectURL || !printArea.querySelector("img")) return;
+    if (!canPrintCurrent || !objectURL || !printArea.querySelector("img")) return;
     if (!window.confirm(
       "Have you checked this TEST image? Continue to the native Print dialog and choose your OWN locally installed shop printer. " +
       "Confirm the copies, paper size and colour. This does not automatically print."
     )) return;
-    window.print();
+    // Refresh the server-side UPI state just before the native dialog, in case
+    // another tab created a new quote after this preview loaded.
+    printPermission(currentOrderId).then(permission=>{
+      if(!permission.canPrint){
+        canPrintCurrent=false;imageButton.hidden=true;
+        paymentReleaseStatus.textContent="Printing locked: UPI quote is awaiting bank verification. Refresh after Payment Received.";
+        return;
+      }
+      window.print();
+    }).catch(error=>status(error.message||"Print authorization unavailable"));
   });
 
   markPrinted.addEventListener("click", async () => {
