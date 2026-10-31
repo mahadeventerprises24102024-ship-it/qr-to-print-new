@@ -164,6 +164,11 @@
         <button id="track-submit" type="submit" class="btn" disabled>Check TEST Order Status</button>
       </form>
       <p id="track-status" class="response" aria-live="polite" role="status" hidden></p>
+      <section id="customer-delete-tools" hidden style="padding:14px;margin:16px 0;border:1px solid #e7cbad;background:#fff9f0;border-radius:12px">
+        <p class="subtitle">Privacy: अपनी TEST फाइल R2 से तुरंत हटा सकते हैं। Order, Payment और Bill का जरूरी रिकॉर्ड बना रहेगा। फाइल हटने के बाद उसे प्रिंट नहीं किया जा सकेगा।</p>
+        <button id="delete-my-sample" class="btn" type="button" style="background:#8f392e">Delete My Uploaded SAMPLE File</button>
+        <p id="delete-my-sample-status" role="status" class="subtitle" style="margin-top:12px"></p>
+      </section>
       <section id="upi-test-actions" hidden style="margin-top:20px;padding:18px;border:1px solid #b1d9bf;background:#f0fbf3;border-radius:13px">
         <h3 style="margin:0 0 8px">UPI QR Payment · TEST files</h3>
         <p class="subtitle">Shop Owner द्वारा TEST ऑर्डर Accept कर कीमत तय करने के बाद नीचे QR दिखाई देगा। <strong>यह असली UPI QR है; पैसे वास्तव में कट सकते हैं।</strong> सिर्फ सुरक्षित TEST फाइलें उपयोग करें। पेमेंट के बाद केवल <strong>मैंने पेमेंट कर दिया</strong> दबाएँ। <strong>दुकानदार बैंक में पैसा देखकर ही Payment Received करेगा।</strong> उसके बाद दुकान के PC पर Print Dialog खुलेगा, लेकिन Print की अंतिम पुष्टि दुकानदार करेगा।</p>
@@ -384,6 +389,39 @@
       const trackForm=document.getElementById("track-form");
       const trackMessage=document.getElementById("track-status");
       const trackSubmit=document.getElementById("track-submit");
+      const customerDeleteTools=document.getElementById("customer-delete-tools");
+      const customerDeleteButton=document.getElementById("delete-my-sample");
+      const customerDeleteStatus=document.getElementById("delete-my-sample-status");
+      customerDeleteButton.addEventListener("click",async()=>{
+        if(!verifiedCode||document.getElementById("track-kind").value!=="test-file-orders")return;
+        const orderId=document.getElementById("track-id").value.trim();
+        const trackingToken=document.getElementById("track-token").value.trim();
+        if(!/^[1-9][0-9]{0,14}$/.test(orderId)||!/^[a-f0-9]{48}$/.test(trackingToken)){
+          customerDeleteStatus.textContent="पहले सही Order ID और Private Tracking Code भरें।";
+          return;
+        }
+        if(!window.confirm("क्या आप अपनी SAMPLE फाइल हमेशा के लिए हटाना चाहते हैं? दुकान के Payment/Bill रिकॉर्ड रहेंगे। फाइल वापस नहीं मिलेगी।"))return;
+        customerDeleteButton.disabled=true;
+        try{
+          const response=await fetch("/api/public/shops/"+verifiedCode+"/test-file-orders/delete",{
+            method:"POST",credentials:"same-origin",cache:"no-store",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({orderId,trackingToken})
+          });
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok||result.deleted!==true)throw new Error(result.error||"SAMPLE file deletion could not be verified");
+          customerDeleteStatus.textContent="SAMPLE फाइल हटा दी गई। Order, Payment और Bill का जरूरी रिकॉर्ड रहेगा। अब इस फाइल का Print उपलब्ध नहीं है।";
+          successPanel.hidden=true;latestUploadedOrder=null;
+          document.getElementById("upi-test-actions").hidden=true;
+          document.getElementById("paytm-test-actions").hidden=true;
+          document.getElementById("upi-payment-details").hidden=true;
+          trackMessage.hidden=false;
+          trackMessage.textContent="TEST Order #"+orderId+" • File deleted by customer; printing disabled.";
+        }catch(error){
+          customerDeleteStatus.textContent=error.message;
+          customerDeleteButton.disabled=false;
+        }
+      });
       const paytmActions=document.getElementById("paytm-test-actions");
       const paytmStatus=document.getElementById("paytm-test-status");
       const paytmPay=document.getElementById("paytm-test-pay");
@@ -398,6 +436,8 @@
       const upiSummary=document.getElementById("upi-payment-summary");
       const upiMessage=document.getElementById("upi-payment-message");
       function showUpiForKind(kind){
+        customerDeleteTools.hidden=kind!=="test-file-orders"||!verifiedCode;
+        if(kind==="test-file-orders")customerDeleteButton.disabled=false;
         upiActions.hidden=!upiAvailable||kind!=="test-file-orders";
         if(kind!=="test-file-orders")upiDetails.hidden=true;
       }
@@ -564,8 +604,14 @@
           if(!response.ok)throw new Error(data.error||"Tracking status unavailable");
           trackMessage.classList.remove("error");
           trackMessage.textContent="TEST Order #"+data.order.id+" • "+
-            (labels[data.order.status]||"Status unavailable")+
+            (data.order.fileDeleted?"Uploaded file deleted — printing unavailable.":
+              (labels[data.order.status]||"Status unavailable"))+
             " • No automatic printing/payment is implied.";
+          if(kind==="test-file-orders"&&data.order.fileDeleted){
+            customerDeleteButton.disabled=true;
+            customerDeleteStatus.textContent="इस SAMPLE ऑर्डर की फाइल पहले ही हटाई जा चुकी है।";
+            upiActions.hidden=true;paytmActions.hidden=true;
+          }
         }catch(error){
           trackMessage.classList.add("error");
           trackMessage.textContent=error.message;
