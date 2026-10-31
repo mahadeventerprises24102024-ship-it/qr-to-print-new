@@ -385,6 +385,7 @@ function installTestFileUploads(app, pool, env = process.env) {
            FROM shop_owners owner
            WHERE owner.shop_id = o.shop_id AND owner.id = $1 AND o.id = $2
              AND o.status = 'test_only'
+             AND o.file_deleted_at IS NULL
              AND o.created_at > NOW() - INTERVAL '24 hours'
            RETURNING o.id, o.status`,
           [req.session.shopOwnerId, req.params.id, req.body.decision]
@@ -540,6 +541,8 @@ function installTestFileUploads(app, pool, env = process.env) {
     }
   );
 
+  // Delete the underlying file, but retain the non-sensitive order/payment
+  // audit trail. Never remove billing/payment records on a privacy request.
   app.delete("/api/shop/test-file-orders/:id", requireShopOwner,
     async (req, res) => {
       if (!storage) return res.status(503).json({ error: "Storage not configured" });
@@ -548,24 +551,31 @@ function installTestFileUploads(app, pool, env = process.env) {
       }
       try {
         const result = await pool.query(
-          `SELECT o.storage_key
+          `SELECT o.storage_key,o.file_deleted_at
            FROM test_file_orders o
            JOIN shop_owners owner ON owner.shop_id = o.shop_id
            WHERE owner.id = $1 AND o.id = $2`,
           [req.session.shopOwnerId, req.params.id]
         );
         if (!result.rows.length) return res.status(404).json({ error: "Not found" });
+        if (result.rows[0].file_deleted_at) {
+          res.set("Cache-Control", "private, no-store");
+          return res.json({ deleted: true, alreadyDeleted: true, testOnly: true });
+        }
         await storage.send(new DeleteObjectCommand({
           Bucket: cfg.bucket, Key: result.rows[0].storage_key
         }));
+        // If the DB write fails, the record remains and is retried; the R2
+        // object is already gone. The download endpoint will safely fail.
         await pool.query(
-          `DELETE FROM test_file_orders
-           WHERE id = $1 AND shop_id IN
-             (SELECT shop_id FROM shop_owners WHERE id = $2)`,
-          [req.params.id, req.session.shopOwnerId]
+          `UPDATE test_file_orders o SET file_deleted_at = NOW()
+           FROM shop_owners owner
+           WHERE owner.shop_id=o.shop_id AND owner.id=$1 AND o.id=$2
+             AND o.file_deleted_at IS NULL`,
+          [req.session.shopOwnerId, req.params.id]
         );
-        res.set("Cache-Control", "no-store");
-        return res.json({ deleted: true, testOnly: true });
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ deleted: true, testOnly: true, retainedAuditOnly: true });
       } catch (error) {
         console.error("Test file deletion failed:", error);
         return res.status(503).json({ error: "Unable to delete test file" });
