@@ -13,6 +13,7 @@ const { installTestFileUploads, ensureTestUploadTables, purgeExpiredTestFiles } 
 const { checkR2Connectivity } = require("./r2-connectivity");
 const { installCustomerPhotoUploads } = require("./customer-photo-uploads");
 const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
+const { ensureAutoPrintTables, installAutoPrint } = require("./auto-print-queue");
 const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
 const { installShopBilling, ensureShopBillingTables } = require("./shop-billing");
 const { installPlatformAdmin, ensurePlatformTables, shopApiGate, shopPageGate, publicShopGate } = require("./platform-admin");
@@ -50,7 +51,10 @@ app.use(express.json({ limit: "20kb" }));
 app.use("/api", (req, res, next) => {
   // The local Windows test agent authenticates with a secret bearer token,
   // not browser cookies. Allow only that exact endpoint without Origin.
-  if (req.method === "POST" && req.path === "/agent/heartbeat" &&
+  if (req.method === "POST" &&
+      (req.path === "/agent/heartbeat" ||
+       req.path === "/agent/auto-print/claim" ||
+       /^\/agent\/auto-print\/ack\/[1-9][0-9]{0,14}$/.test(req.path)) &&
       !req.get("origin")) {
     return next();
   }
@@ -296,6 +300,7 @@ installDemoOrderApis(app, pool);
 installTestFileUploads(app, pool);
 installCustomerPhotoUploads(app,pool);
 installAgentApis(app, pool);
+installAutoPrint(app,pool);
 installCanonTestPrintApis(app, pool);
 installShopBilling(app, pool);
 installPaytmTestPayments(app, pool);
@@ -447,6 +452,7 @@ async function start() {
   await ensureTestUploadTables(pool);
   await ensureShopBillingTables(pool);
   await ensureAgentTables(pool);
+  await ensureAutoPrintTables(pool);
   await ensureCanonTestPrintTables(pool);
   await ensurePaytmTestTables(pool);
   await ensureUpiPrintTables(pool);
