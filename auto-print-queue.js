@@ -149,6 +149,8 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
             AND o.document_kind='customer_photo' AND o.file_type='jpeg'
             AND o.created_at>NOW()-INTERVAL '24 hours'
             AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
+            AND a.auto_print_enabled_at IS NOT NULL
+            AND p.confirmed_at>=a.auto_print_enabled_at
           ORDER BY j.id ASC FOR UPDATE OF j SKIP LOCKED LIMIT 1
         )
         UPDATE shop_auto_print_jobs j
