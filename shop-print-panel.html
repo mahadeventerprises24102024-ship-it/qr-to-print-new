@@ -199,7 +199,7 @@
         const item=document.createElement("article");
         item.className="order"+(arrivals.some(o=>String(o.id)===id)?" new":"");
         const info=document.createElement("div");
-        info.append(makeText("strong","Order #"+id+" · "+String(order.fileType||"").toUpperCase()));
+        info.append(makeText("strong",(order.documentKind==="customer_photo"?"CUSTOMER PHOTO #":"TEST Order #")+id+" · "+String(order.fileType||"").toUpperCase()));
         const mode=order.printMode==="color"?"Colour":"Black & White";
         const copies=Number(order.copies);
         const details=(Number.isInteger(copies)?copies:"?")+" copies · "+mode+
