@@ -2,7 +2,7 @@
 # Windows 10/11 PowerShell 5.1+, Node.js 20+
 # Run as normal Windows user, not as Administrator.
 [CmdletBinding()]
-param([switch]$Uninstall)
+param([switch]$Uninstall,[switch]$PhotoAutoPrint)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'Windows only.' }
@@ -41,6 +41,10 @@ if ($Uninstall) {
 }
 
 $sourceAgent = Join-Path $PSScriptRoot 'windows-print-agent.js'
+$sourceAutoAgent = Join-Path $PSScriptRoot 'windows-auto-print-agent.js'
+if ($PhotoAutoPrint -and -not (Test-Path -LiteralPath $sourceAutoAgent -PathType Leaf)) {
+  throw 'windows-auto-print-agent.js must be next to this installer.'
+}
 if (-not (Test-Path -LiteralPath $sourceAgent -PathType Leaf)) {
   throw 'windows-print-agent.js must be next to this setup script in the GitHub ZIP.'
 }
@@ -58,8 +62,13 @@ if ([int]$Matches[1] -lt 20) { throw 'Please install Node.js version 20 or newer
 
 Write-Host ''
 Write-Host 'QR-To-Print: Connect automatically after Windows sign-in'
-Write-Host 'Only printer discovery and heartbeat start automatically.'
-Write-Host 'No automatic printing or customer file downloads.'
+if ($PhotoAutoPrint) {
+  Write-Host 'Photo Auto Print Agent: only consented customer JPG, after owner-verified UPI and opt-in.'
+  Write-Host 'Setup alone does NOT turn on Auto Print. Enable it explicitly on the shop dashboard.'
+} else {
+  Write-Host 'Only printer discovery and heartbeat start automatically.'
+}
+if (-not $PhotoAutoPrint) { Write-Host 'No automatic printing or customer file downloads.' }
 Write-Host 'First generate and COPY a new pairing key in Shop Dashboard > Printers.'
 Write-Host 'Your pairing key will never be printed to logs or task arguments.'
 Write-Host ''
@@ -131,15 +140,20 @@ if ($clipboardUsed) {
 }
 $secureKey.Dispose()
 Copy-Item -LiteralPath $sourceAgent -Destination $installedAgent -Force
+if ($PhotoAutoPrint) {
+  Copy-Item -LiteralPath $sourceAutoAgent -Destination (Join-Path $installDir 'windows-auto-print-agent.js') -Force
+}
 
 # The task is hidden and always runs under the same interactive Windows user.
 # Launcher contains no secrets; the Node agent reads the DPAPI-encrypted file.
+$agentFileName = if ($PhotoAutoPrint) { 'windows-auto-print-agent.js' } else { 'windows-print-agent.js' }
 $launcher = @'
 $ErrorActionPreference = "Stop"
-$agent = Join-Path $PSScriptRoot "windows-print-agent.js"
+$agent = Join-Path $PSScriptRoot "__AGENT_FILE__"
 $node = (Get-Command node.exe -ErrorAction Stop).Source
 & $node $agent "--auto-start"
 '@
+$launcher = $launcher.Replace('__AGENT_FILE__',$agentFileName)
 [System.IO.File]::WriteAllText($launcherPath, $launcher, [System.Text.Encoding]::UTF8)
 
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $windowsUser
@@ -167,7 +181,9 @@ $registration = @{
   Trigger = $trigger
   Principal = $taskPrincipal
   Settings = $settings
-  Description = 'QR-To-Print printer discovery heartbeat (no automatic customer printing)'
+  Description = if ($PhotoAutoPrint) {
+    'QR-To-Print private payment-verified photo auto-print agent (shop owner opt-in required)'
+  } else { 'QR-To-Print printer discovery heartbeat (no automatic customer printing)' }
   Force = $true
   ErrorAction = 'Stop'
 }
@@ -178,6 +194,8 @@ Write-Host ''
 Write-Host 'Auto-start task registered; initial launch requested. Confirm ONLINE in Shop Dashboard.'
 Write-Host 'After network outages it retries automatically.'
 Write-Host 'Shop Dashboard > Printers > Refresh status should show Online.'
-Write-Host 'Customer document auto-printing remains OFF.'
+if ($PhotoAutoPrint) {
+  Write-Host 'Auto Print default OFF. Shop owner must select printer and enable in dashboard.'
+} else { Write-Host 'Customer document auto-printing remains OFF.' }
 Write-Host 'Use Uninstall-QR-To-Print-Agent.cmd to remove local setup.'
 Write-Host ''
