@@ -429,6 +429,7 @@ function installTestFileUploads(app, pool, env = process.env) {
         `SELECT o.id, o.document_kind AS "documentKind", o.file_type AS "fileType",
                 o.file_size_bytes AS "fileSizeBytes", o.copies,
                 o.print_mode AS "printMode", o.status,
+                o.file_deleted_at AS "fileDeletedAt",
                 o.created_at AS "createdAt"
          FROM test_file_orders o
          JOIN shop_owners owner ON owner.shop_id = o.shop_id
