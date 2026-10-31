@@ -76,14 +76,14 @@
       <form id="private-upload-form">
         <label for="private-kind">किस प्रकार का Print?</label>
         <select id="private-kind" name="documentKind" aria-describedby="aadhaar-dummy-warning">
-          <option value="dummy_card_front_back" selected>Aadhaar Front + Back Layout • DUMMY TEST ONLY</option>
-          <option value="regular_test">PDF / Photo • TEST</option>
+          <option value="regular_test" selected>PDF / Photo • TEST SAMPLE</option>
+          <option value="dummy_card_front_back">Front + Back Card Layout • DUMMY TEST ONLY</option>
         </select>
-        <div id="regular-test-file" hidden>
+        <div id="regular-test-file">
           <label for="private-file">Non-sensitive test file (max 2 MB)</label>
           <input id="private-file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg" required>
         </div>
-        <section id="dummy-card-test-files" style="background:#effaf3;border:1px solid #cce8d4;border-radius:13px;padding:16px;margin:14px 0">
+        <section id="dummy-card-test-files" hidden style="background:#effaf3;border:1px solid #cce8d4;border-radius:13px;padding:16px;margin:14px 0">
           <strong>Aadhaar-style Front / Back — 2 Upload Boxes</strong>
           <p id="aadhaar-dummy-warning" class="subtitle"><strong>सिर्फ DUMMY / SAMPLE कार्ड</strong> की फोटो चुनें। असली Aadhaar Card, Aadhaar Number, QR, पता या किसी की निजी पहचान अभी Upload न करें। दोनों फोटो इस डिवाइस पर एक TEST print page में जुड़ती हैं।</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">
@@ -120,9 +120,22 @@
         <p id="private-estimate" class="response" role="status" aria-live="polite">Checking prices...</p>
         <button id="private-upload-button" class="btn" type="submit" disabled>Upload TEST file privately →</button>
       </form>
+      <section id="upload-success" class="shop" hidden aria-live="polite" style="max-width:none;margin-top:18px">
+        <small>YOUR SAMPLE ORDER • UPLOADED</small>
+        <strong id="uploaded-order-id" style="font-size:19px">Order ready</strong>
+        <p class="subtitle" style="margin:9px 0">निजी Tracking Code नीचे वाले फॉर्म में भर दिया है। इसे सुरक्षित रखें। दुकानदार Accept और Rate तय करने के बाद UPI QR दिखेगा।</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button type="button" id="copy-tracking" class="btn" style="flex:1;min-width:150px;margin:4px 0">Copy Order Details</button>
+          <button type="button" id="check-upload-status" class="btn" style="flex:1;min-width:150px;margin:4px 0">Check Order Status</button>
+          <button type="button" id="check-upload-upi" class="btn" style="flex:1;min-width:150px;margin:4px 0">UPI QR / Payment</button>
+        </div>
+        <p id="copy-tracking-status" role="status" class="subtitle" style="margin:8px 0 0">Tracking Code किसी और को न भेजें।</p>
+      </section>
       <div class="info">After a successful private TEST upload, your shop owner will see the file in their secured <strong>Quick Print Panel</strong> within about 10 seconds while the panel is open. They must review and accept it before manually printing on their own printer. No automatic printing or payment occurs. Download access ends after 24 hours; the private bucket needs a 1-day expiry lifecycle. Do not upload personal or sensitive documents.</div>
       <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
-      <h2>Demo request (file stays on your device)</h2>
+      <details id="demo-details" style="margin:15px 0 25px">
+        <summary style="cursor:pointer;font-weight:800;color:#087d68;padding:12px 0">Optional: send request details WITHOUT uploading a file</summary>
+        <h2>Demo request (file stays on your device)</h2>
       <p class="subtitle">वैकल्पिक डेमो: फाइल सिर्फ आपके फोन में रहेगी। दुकान को केवल प्रकार, आकार और कॉपी की जानकारी भेजी जाएगी।</p>
       <form id="demo-form">
         <label for="file">Choose a sample file (stays on your device)</label>
@@ -134,6 +147,7 @@
       </form>
       <p id="demo-result" class="response" role="status" aria-live="polite" hidden></p>
       <div class="info">⚠ ऊपर वाला फॉर्म केवल फाइल की जानकारी भेजता है; फाइल स्वयं नहीं भेजता। यह डेमो है, असली प्रिंट ऑर्डर नहीं।</div>
+      </details>
       <hr style="border:0;border-top:1px solid #dce7df;margin:30px 0">
       <h2>Track your TEST order</h2>
       <p class="subtitle">Order भेजने के बाद मिला <strong>Order ID</strong> और <strong>Private Tracking Code</strong> सुरक्षित रखें। बिना Tracking Code के guest status नहीं देख सकता।</p>
@@ -186,6 +200,29 @@
       const privateForm=document.getElementById("private-upload-form");
       const privateMessage=document.getElementById("private-upload-status");
       const privateButton=document.getElementById("private-upload-button");
+      const successPanel=document.getElementById("upload-success");
+      const copyTrackingStatus=document.getElementById("copy-tracking-status");
+      let latestUploadedOrder=null;
+      document.getElementById("copy-tracking").addEventListener("click",async()=>{
+        if(!latestUploadedOrder)return;
+        const content="QR-To-Print SAMPLE Order #"+latestUploadedOrder.id+
+          "\\nTracking Code: "+latestUploadedOrder.token+
+          "\\nKeep this code private. It grants order status access.";
+        try{
+          await navigator.clipboard.writeText(content);
+          copyTrackingStatus.textContent="Order ID और Private Tracking Code Copy हो गया। इसे सुरक्षित रखें।";
+        }catch{
+          copyTrackingStatus.textContent="Copy blocked by your browser. नीचे Track Your Order से ID और Code सुरक्षित लिख लें।";
+        }
+      });
+      document.getElementById("check-upload-status").addEventListener("click",()=>{
+        document.getElementById("track-submit").click();
+        document.getElementById("track-form").scrollIntoView({behavior:"smooth",block:"center"});
+      });
+      document.getElementById("check-upload-upi").addEventListener("click",()=>{
+        document.getElementById("upi-payment-check").click();
+        document.getElementById("upi-test-actions").scrollIntoView({behavior:"smooth",block:"center"});
+      });
       const privateKind=document.getElementById("private-kind");
       const normalFileBox=document.getElementById("regular-test-file");
       const normalFileInput=document.getElementById("private-file");
@@ -610,7 +647,7 @@
             privateNotice("Guest TEST uploads are not enabled by this shop yet. You can still send the demo request above.");
             return;
           }
-          privateNotice("Guest TEST upload ready — no login. Only disposable PDF/JPG/PNG and DUMMY card samples up to 2 MB; real Aadhaar not allowed.");
+          privateNotice("Mobile SAMPLE upload ON — बिना Login के PDF/JPG/PNG (max 2 MB) भेजें। Shopkeeper को ऑर्डर मिलेगा। Real Aadhaar या निजी दस्तावेज़ न भेजें।");
           privateButton.disabled=false;
         } catch(error) {
           privateNotice(error.message,true);
@@ -646,6 +683,11 @@
           }
           privateNotice("TEST #"+result.order.id+" stored privately. Your shop will see a Review & Print option in its Quick Print Panel soon. Tracking Code is shown below; shop approval is required.");
           showTracking("test-file-orders",result.order.id,result.trackingToken);
+          latestUploadedOrder={id:result.order.id,token:result.trackingToken};
+          document.getElementById("uploaded-order-id").textContent="SAMPLE Order #"+result.order.id;
+          copyTrackingStatus.textContent="Order ID और Tracking Code नीचे सुरक्षित हैं। Copy Order Details दबाएँ।";
+          successPanel.hidden=false;
+          successPanel.scrollIntoView({behavior:"smooth",block:"start"});
           privateForm.reset();
           updateDummyKind();
         }catch(error){
