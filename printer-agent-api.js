@@ -71,6 +71,8 @@ function installAgentApis(app, pool) {
                        printer_count = 0,
                        printer_names = '[]'::jsonb,
                        preferred_printer_name = NULL,
+                       auto_print_enabled = FALSE,
+                       auto_print_enabled_at = NULL,
                        last_seen_at = NULL
          RETURNING shop_id`,
         [req.session.shopOwnerId, sha256(token)]
