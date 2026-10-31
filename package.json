@@ -8,7 +8,7 @@
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9.0"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -21,6 +21,7 @@
     "multer": "^2.5.0",
     "qrcode": "^1.5.4",
     "@aws-sdk/client-s3": "^3.1140.0",
-    "paytmchecksum": "^1.5.1"
+    "paytmchecksum": "^1.5.1",
+    "sharp": "^0.35.5"
   }
 }
