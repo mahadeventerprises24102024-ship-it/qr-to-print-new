@@ -194,13 +194,14 @@ function installUpiPrintPayments(app,pool){
     try{
       const q=await pool.query([
         "SELECT p.order_id,p.payment_reference,p.amount_paise,p.pages_per_copy,",
-        "p.status,p.claimed_at,p.confirmed_at",
+        "p.status,p.claimed_at,p.confirmed_at,",
+        "(SELECT f.document_kind FROM test_file_orders f WHERE f.id=p.order_id) AS \"documentKind\"",
         "FROM shop_upi_test_payments p JOIN shop_owners o ON o.shop_id=p.shop_id",
         "WHERE o.id=$1 ORDER BY p.id DESC LIMIT 50"
       ].join(" "),[req.session.shopOwnerId]);
       res.set("Cache-Control","private, no-store");
       res.json({manualVerification:true,automaticPrinting:false,
-        payments:q.rows.map(p=>({...publicPayment(p),
+        payments:q.rows.map(p=>({...publicPayment(p),documentKind:p.documentKind||null,
           claimedAt:p.claimed_at||null,
           confirmedAt:p.confirmed_at||null}))});
     }catch(e){console.error("UPI inbox",e);res.status(503).json({error:"UPI TEST inbox unavailable"});}
