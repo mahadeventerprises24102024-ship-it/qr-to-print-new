@@ -626,7 +626,7 @@
             // avoids pop-up blocker rejection after the async bank confirmation.
             // Never navigate it to an order until the server confirms ownership
             // and the exact bank-credit amount. Only this Windows shop PC prints.
-            const popup=decision==="paid_manual"&&!ownerAutoPrintEnabled ?
+            const popup=decision==="paid_manual"&&(!ownerAutoPrintEnabled||p.documentKind!=="customer_photo") ?
               window.open("about:blank","_blank") : null;
             if(popup){
               popup.document.title="Waiting for shop verification";
@@ -642,7 +642,7 @@
               });
               const result=await response.json().catch(()=>({}));
               if(!response.ok)throw new Error(result.error||"Could not update UPI payment");
-              if(decision==="paid_manual"&&result.payment?.status==="paid_manual"&&ownerAutoPrintEnabled){
+              if(decision==="paid_manual"&&result.payment?.status==="paid_manual"&&ownerAutoPrintEnabled&&result.payment.documentKind==="customer_photo"){
                 upiState.textContent="Payment confirmed. Eligible CUSTOMER PHOTO will enter Windows Auto Print Queue. Check Printers → Refresh Queue. No automatic retry on uncertain jobs.";
                 await loadAutoPrintState();
               }else if(decision==="paid_manual"&&result.payment?.status==="paid_manual"){
