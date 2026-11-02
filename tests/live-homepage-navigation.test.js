@@ -39,10 +39,10 @@ test("all live homepage feature links resolve to explicit backend assets",()=>{
 });
 
 test("homepage does not misrepresent sensitive document workflow as production ready",()=>{
-  assert.match(html,/SAMPLE\/TEST/);
-  assert.match(html,/Private customer file uploads/);
-  assert.match(html,/R2 TEST Storage/);
-  assert.match(html,/असली ग्राहक के निजी दस्तावेज़ अपलोड न करें/);
+  assert.match(html,/PDF के लिए Malware Scanner/);
+  assert.match(html,/JPG\/PNG फाइलें सुरक्षित सर्वर स्टोरेज/);
+  assert.match(html,/स्कैनर उपलब्ध न होने पर PDF Upload बंद रहेगा/);
+  assert.match(html,/असली Aadhaar\/PAN और संवेदनशील पहचान-पत्र अपलोड न करें/);
   assert.match(html,/Production Printing अभी शुरू नहीं हुई है/);
   assert.match(html,/Admin अपने बैंक में रकम देखकर ही Activation करेगा/);
   assert.match(html,/href="#generator"/);
