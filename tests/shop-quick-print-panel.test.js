@@ -36,7 +36,7 @@ test("Customer's TEST file order appears in shop-only inbox with poll, manual Re
   assert.match(panel,/Review & Accept to Print/);
   assert.match(panel,/Print Now · Manual/);
   assert.match(panel,/\/shop-print-preview\.html\?order=/);
-  assert.match(panel,/valid=orders\.filter\(o=>ORDER_ID\.test\(String\(o\.id\)\)\)\.slice\(0,20\)/);
+  assert.match(panel,/\["customer_photo","customer_pdf"\]\.includes\(o\.documentKind\)/);
   assert.match(upload,/app\.get\("\/api\/shop\/test-file-orders", requireShopOwner/);
   assert.match(upload,/JOIN shop_owners owner ON owner\.shop_id = o\.shop_id/);
   assert.match(upload,/WHERE owner\.id = \$1/);
