@@ -53,7 +53,7 @@ test("photo pilot route uses private R2, consent, shop-scoped token and no raw P
   assert.match(source,/customer_photo/);
   assert.match(source,/sharp\.concurrency\(1\)/);
   assert.match(source,/sharp\.cache\(false\)/);
-  assert.match(migration,/document_kind IN \('regular_test','dummy_card_front_back','customer_photo'\)/);
+  assert.match(migration,/document_kind IN \('regular_test','dummy_card_front_back','customer_photo','customer_pdf'\)/);
   assert.match(server,/installCustomerPhotoUploads\(app,pool\)/);
   assert.match(page,/id="customer-photo-form"/);
   assert.match(page,/confirmedNonSensitive/);
