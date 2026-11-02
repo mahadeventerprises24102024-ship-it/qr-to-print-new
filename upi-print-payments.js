@@ -277,13 +277,14 @@ function installUpiPrintPayments(app,pool){
         "FROM shop_owners o WHERE o.id=$1 AND o.shop_id=p.shop_id AND p.order_id=$2",
         "AND p.status='customer_claimed'",
         paid?"AND p.amount_paise=$3":"",
-        "RETURNING p.order_id,p.amount_paise,p.pages_per_copy,p.payment_reference,p.status"
+        "RETURNING p.order_id,p.amount_paise,p.pages_per_copy,p.payment_reference,p.status,",
+        "(SELECT f.document_kind FROM test_file_orders f WHERE f.id=p.order_id) AS \"documentKind\""
       ];
       const args=paid?[req.session.shopOwnerId,req.params.id,req.body.confirmedAmountPaise]:[req.session.shopOwnerId,req.params.id];
       const q=await pool.query(parts.join(" "),args);
       if(!q.rows.length)return res.status(409).json({error:"Claim not found, wrong amount, or already reviewed"});
       res.set("Cache-Control","private, no-store");
-      res.json({payment:publicPayment(q.rows[0]),automaticPrinting:false,
+      res.json({payment:{...publicPayment(q.rows[0]),documentKind:q.rows[0].documentKind},automaticPrinting:false,
         printDialogUrl: paid ? "/shop-print-preview.html?order="+
           encodeURIComponent(req.params.id)+"&autoPrint=1" : null,
         message:paid?"Shop verified bank credit. Open the print preview; only the browser print dialog is triggered, not the printer itself.":"Customer payment claim rejected"});
