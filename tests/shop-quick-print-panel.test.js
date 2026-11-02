@@ -88,7 +88,7 @@ test("Quick Print Panel strictly parses JavaScript and renders untrusted order m
 test("Shop Dashboard links authenticated Quick Print Panel from overview and orders section",()=>{
   assert.match(shop,/id="open-quick-print"/);
   assert.match(shop,/href="\/shop-print-panel\.html"/);
-  assert.match(shop,/Quick Print Panel — Auto-refresh incoming TEST files/);
+  assert.match(shop,/Quick Print Panel — Incoming Orders/);
   assert.match(shop,/target="_blank" rel="noopener noreferrer"/);
   new vm.Script(shop.match(/<script>([\s\S]*?)<\/script>/)[1]);
 });
