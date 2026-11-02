@@ -258,7 +258,7 @@ test("customer QR page has no customer login requirement or login links",()=>{
   const path=require("node:path");
   const page=fs.readFileSync(path.join(__dirname,"..","print.html"),"utf8");
   assert.ok(page.includes("config.guestTestUploadsEnabled"));
-  assert.ok(page.includes("privateForm.hidden=false"));
+  assert.ok(page.includes("privateForm.hidden=true"));
   assert.ok(!page.includes('id="customer-login"'));
   assert.ok(!page.includes('id="private-login-link"'));
   assert.ok(!page.includes('fetch("/api/me"'));
