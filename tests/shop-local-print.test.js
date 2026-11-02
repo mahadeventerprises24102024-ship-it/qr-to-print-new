@@ -57,5 +57,5 @@ test("Print Now is clearly linked on public, shop dashboard and sample panel",()
   assert.match(quick,/href="\/shop-local-print\.html"/);
   assert.match(home,/href="\/shop-local-print\.html"/);
   assert.match(quick,/CUSTOMER FILE ORDERS/);
-  assert.match(home,/असली ग्राहक के निजी दस्तावेज़ अपलोड न करें/);
+  assert.match(home,/असली Aadhaar\/PAN और संवेदनशील पहचान-पत्र अपलोड न करें/);
 });
