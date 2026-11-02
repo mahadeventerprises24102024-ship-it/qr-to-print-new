@@ -14,7 +14,8 @@ test("customer QR defaults to real SAMPLE file transfer, not the dummy Aadhaar l
   assert.match(customer,/<section id="dummy-card-test-files" hidden/);
   assert.match(customer,/id="private-upload-form"/);
   assert.match(customer,/\/api\/public\/shops\/.*test-file-orders/);
-  assert.match(customer,/No automatic printing or payment occurs/);
+  assert.match(customer,/id="legacy-test-upload" hidden/);
+  assert.match(customer,/Upload Document →/);
   assert.match(customer,/असली Aadhaar/);
 });
 test("successful mobile SAMPLE upload shows a private receipt and easy tracking/UPI steps",()=>{
