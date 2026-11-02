@@ -482,7 +482,7 @@
           customerDeleteStatus.textContent="पहले सही Order ID और Private Tracking Code भरें।";
           return;
         }
-        if(!window.confirm("क्या आप अपनी SAMPLE फाइल हमेशा के लिए हटाना चाहते हैं? दुकान के Payment/Bill रिकॉर्ड रहेंगे। फाइल वापस नहीं मिलेगी।"))return;
+        if(!window.confirm("क्या आप अपनी Upload की गई फाइल हटाना चाहते हैं? दुकान के Payment/Bill रिकॉर्ड रहेंगे। फाइल वापस नहीं मिलेगी।"))return;
         customerDeleteButton.disabled=true;
         try{
           const response=await fetch("/api/public/shops/"+verifiedCode+"/test-file-orders/delete",{
@@ -492,13 +492,13 @@
           });
           const result=await response.json().catch(()=>({}));
           if(!response.ok||result.deleted!==true)throw new Error(result.error||"SAMPLE file deletion could not be verified");
-          customerDeleteStatus.textContent="SAMPLE फाइल हटा दी गई। Order, Payment और Bill का जरूरी रिकॉर्ड रहेगा। अब इस फाइल का Print उपलब्ध नहीं है।";
+          customerDeleteStatus.textContent="आपकी फाइल हटा दी गई। Order, Payment और Bill का जरूरी रिकॉर्ड रहेगा। अब इस फाइल का Print उपलब्ध नहीं है।";
           successPanel.hidden=true;latestUploadedOrder=null;
           document.getElementById("upi-test-actions").hidden=true;
           document.getElementById("paytm-test-actions").hidden=true;
           document.getElementById("upi-payment-details").hidden=true;
           trackMessage.hidden=false;
-          trackMessage.textContent="TEST Order #"+orderId+" • File deleted by customer; printing disabled.";
+          trackMessage.textContent="Order #"+orderId+" • File deleted by customer; printing disabled.";
         }catch(error){
           customerDeleteStatus.textContent=error.message;
           customerDeleteButton.disabled=false;
@@ -584,7 +584,7 @@
         const token=document.getElementById("track-token").value.trim();
         if(!verifiedCode||!/^[1-9][0-9]{0,14}$/.test(id)||!/^[a-f0-9]{48}$/.test(token)||
            document.getElementById("track-kind").value!=="test-file-orders")
-          throw new Error("Enter your TEST file Order ID and full private Tracking Code first.");
+          throw new Error("Enter your Order ID and Tracking Code first.");
         return {id,trackingToken:token};
       };
       async function paytmRequest(action){
@@ -648,7 +648,7 @@
         showUpiForKind(kind);
         trackMessage.hidden=false;
         trackMessage.classList.remove("error");
-        trackMessage.textContent="TEST Order #"+orderId+" • Tracking Code: "+token+
+        trackMessage.textContent="Order #"+orderId+" • Tracking Code: "+token+
           " • कृपया यह कोड अभी सुरक्षित रख लें।";
       }
       const labels={
@@ -656,9 +656,9 @@
         reviewed:"Shop reviewed demo details; file NOT uploaded",
         closed:"Demo request closed; file NOT uploaded",
         test_only:"Received • shop decision pending",
-        accepted:"Accepted by shop • manual TEST review only",
+        accepted:"Accepted by shop • waiting for payment / printing",
         rejected:"Rejected by shop • not for printing",
-        printed:"Shop owner confirmed physical TEST paper output"
+        printed:"Shop owner confirmed paper output"
       };
       trackForm.addEventListener("submit",async(event)=>{
         event.preventDefault();
@@ -685,13 +685,13 @@
           const data=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(data.error||"Tracking status unavailable");
           trackMessage.classList.remove("error");
-          trackMessage.textContent="TEST Order #"+data.order.id+" • "+
+          trackMessage.textContent="Order #"+data.order.id+" • "+
             (data.order.fileDeleted?"Uploaded file deleted — printing unavailable.":
               (labels[data.order.status]||"Status unavailable"))+
-            " • No automatic printing/payment is implied.";
+            " • Payment is only confirmed when shop owner verifies bank credit.";
           if(kind==="test-file-orders"&&data.order.fileDeleted){
             customerDeleteButton.disabled=true;
-            customerDeleteStatus.textContent="इस SAMPLE ऑर्डर की फाइल पहले ही हटाई जा चुकी है।";
+            customerDeleteStatus.textContent="इस ऑर्डर की फाइल पहले ही हटाई जा चुकी है।";
             upiActions.hidden=true;paytmActions.hidden=true;
           }
         }catch(error){
@@ -759,7 +759,7 @@
       async function preparePrivateUpload(shopCode) {
         // Show the category selector and FRONT/BACK DUMMY TEST pickers even
         // before private storage is configured. Fail CLOSED on actual submit.
-        privateForm.hidden=false;
+        privateForm.hidden=true;
         privateButton.disabled=true;
         try {
           const configResponse=await fetch("/api/test-upload/config",{
@@ -889,9 +889,9 @@
         verifiedCode=code;
         upiAvailable=true;
         showUpiForKind(document.getElementById("track-kind").value);
-        submit.disabled=false;
+        submit.disabled=true;
         trackSubmit.disabled=false;
-        await Promise.all([preparePrivateUpload(code),prepareRealPhotoUpload(),loadPublicPricing(code),
+        await Promise.all([prepareRealPhotoUpload(),loadPublicPricing(code),
           fetch("/api/paytm-print/config",{cache:"no-store"})
             .then(r=>r.ok?r.json():{}).then(data=>{
               paytmTestEnabled=data.enabled===true && data.environment==="sandbox";
