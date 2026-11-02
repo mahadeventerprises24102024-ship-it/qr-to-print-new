@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="Shop-owner-only quick print panel for safe QR-To-Print testing.">
+  <meta name="description" content="Shopkeeper customer print orders and local printing.">
   <title>Quick Print Panel | QR-To-Print</title>
   <style>
     :root { color-scheme:light; font-family:Inter,system-ui,"Segoe UI",Arial,sans-serif; --ink:#17302d;--muted:#5f786d;--green:#06775d;--line:#dae9df;--bg:#f3f8f5; }
@@ -62,35 +62,35 @@
     <a href="/shop-dashboard.html#orders">← Shop Dashboard</a>
   </div></header>
   <main>
-    <span class="eyebrow">Shop owners · TEST PRINTING</span>
+    <span class="eyebrow">SHOPKEEPER PRINT PANEL</span>
     <h1>Document आया? Print विकल्प तैयार.</h1>
-    <p class="muted">ग्राहक का Private TEST Upload आने पर यहाँ ऑर्डर सूची अपने-आप अपडेट होगी। दुकान का मालिक Review और Accept करने के बाद अपने कंप्यूटर से प्रिंट करेगा।</p>
-    <div class="notice"><strong>स्थानीय कंप्यूटर से प्रिंटिंग:</strong> PDF/Photo या Aadhaar Front/Back को इस PC पर ही प्रिंट करने के लिए <a href="/shop-local-print.html" style="font-weight:800">🖨 Print Now — Shop PC</a> खोलें। वहाँ चुनी गई फाइल वेबसाइट या क्लाउड पर अपलोड नहीं होती। नीचे वाला Customer Order Inbox अभी SAMPLE/TEST मोड में है।</div>
-    <div class="notice"><strong>सुरक्षित टेस्ट मोड:</strong> अभी केवल गैर-संवेदनशील, छोटी TEST PDF/Photo (अधिकतम 2 MB) इस्तेमाल करें। असली ग्राहक के निजी दस्तावेज़, Aadhaar, या भुगतान विवरण अपलोड न करें। प्रिंटर अपने-आप नहीं चलेगा; दुकानदार को Print Dialog में पुष्टि करनी होगी।</div>
+    <p class="muted">ग्राहक के JPG/PNG ऑर्डर यहाँ अपने-आप दिखाई देंगे। सुरक्षा स्कैन उपलब्ध होने पर PDF भी आएगा। दुकानदार Review, Accept और Payment Verify करने के बाद Print करेगा।</p>
+    <div class="notice"><strong>स्थानीय कंप्यूटर से प्रिंटिंग:</strong> PDF/Photo या Aadhaar Front/Back को इस PC पर ही प्रिंट करने के लिए <a href="/shop-local-print.html" style="font-weight:800">🖨 Print Now — Shop PC</a> खोलें। वहाँ चुनी गई फाइल वेबसाइट या क्लाउड पर अपलोड नहीं होती। नीचे Customer Upload Orders की सूची है।</div>
+    <div class="notice"><strong>Customer Upload:</strong> सामान्य JPG/PNG फाइलें उपलब्ध हैं। PDF केवल सक्रिय सुरक्षा स्कैनर के बाद स्वीकार होगा। असली Aadhaar/PAN या निजी पहचान दस्तावेज़ न भेजें। PDF मैन्युअल Print होगा; Photo Auto Print के लिए अलग Owner अनुमति जरूरी है।</div>
     <div class="grid">
       <section class="card" aria-labelledby="queue-title">
         <div class="queue-head">
-          <div><span class="eyebrow">CUSTOMER TEST FILES</span><h2 id="queue-title">Incoming Print Orders</h2><span class="pill" id="queue-count">Checking orders…</span></div>
+          <div><span class="eyebrow">CUSTOMER FILE ORDERS</span><h2 id="queue-title">Incoming Print Orders</h2><span class="pill" id="queue-count">Checking orders…</span></div>
           <button class="secondary" id="refresh-orders" type="button">Refresh now</button>
         </div>
         <p class="muted">पैनल खुला रहने पर लगभग हर 10 सेकंड में नई टेस्ट फाइल दिखाई देगी। केवल इसी दुकान के ऑर्डर दिखेंगे।</p>
-        <p id="storage-note" class="state" role="status">Checking private TEST upload availability…</p>
+        <p id="storage-note" class="state" role="status">Checking customer upload availability…</p>
         <div id="queue-list" class="list" aria-live="polite" aria-relevant="additions text">
           <div class="empty">Loading shop orders…</div>
         </div>
-        <p id="queue-message" class="muted" role="status" aria-live="polite">Only accepted TEST orders can be marked Printed after physically checking paper.</p>
+        <p id="queue-message" class="muted" role="status" aria-live="polite">Only accepted customer orders can be marked Printed after checking paper.</p>
       </section>
       <section class="card" aria-labelledby="local-title">
         <span class="eyebrow">NO CLOUD STORAGE NEEDED</span>
         <h2 id="local-title">Upload from shop PC &amp; Print</h2>
-        <p class="muted">दुकानदार अपने कंप्यूटर पर कोई सुरक्षित, गैर-संवेदनशील टेस्ट PDF/JPG/PNG चुने। फाइल वेबसाइट पर Upload नहीं होगी; चुनते ही Print का बटन चालू होगा।</p>
-        <label for="local-file">Choose local TEST PDF or Photo (up to 2 MB)</label>
+        <p class="muted">दुकानदार अपने कंप्यूटर पर PDF/JPG/PNG चुन सकता है। यह फाइल वेबसाइट पर Upload नहीं होगी। ग्राहक की फाइल के लिए ऊपर Customer Order Inbox का उपयोग करें।</p>
+        <label for="local-file">Choose local PDF or Photo (up to 2 MB)</label>
         <input id="local-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/png,image/jpeg">
         <label for="local-mode">Printing mode</label>
         <select id="local-mode"><option value="bw">Black &amp; White</option><option value="color">Colour</option></select>
         <label for="local-copies">Copies requested (select again in Print dialog)</label>
         <select id="local-copies"><option value="1">1 copy</option><option value="2">2 copies</option><option value="3">3 copies</option><option value="5">5 copies</option><option value="10">10 copies</option></select>
-        <p id="local-file-state" class="state" role="status" aria-live="polite">Choose a safe test file. Print will be available immediately.</p>
+        <p id="local-file-state" class="state" role="status" aria-live="polite">Choose a local file. Print will be available immediately.</p>
         <div class="actions"><button id="print-local" type="button" disabled>Print selected file</button><button id="clear-local" class="secondary" type="button">Clear file</button></div>
         <p class="local-tip">Image: native Print Dialog खुलेगा। PDF: आपके browser का PDF viewer खुलेगा, वहाँ <strong>Ctrl + P</strong> दबाएँ। हर बार अपनी दुकान का installed Canon, HP, Epson या दूसरा Printer, Copies और Color चुनें।</p>
       </section>
@@ -134,7 +134,7 @@
         for(const payment of claims.slice(0,10)){
           const item=document.createElement("div");item.className="order new";
           const info=document.createElement("div");
-          info.append(makeText("strong","TEST Order #"+String(payment.orderId)+" • ₹"+String(payment.amountRupees)));
+          info.append(makeText("strong","Order #"+String(payment.orderId)+" • ₹"+String(payment.amountRupees)));
           info.append(makeText("div","CUSTOMER SAYS PAID — NOT VERIFIED. Check bank credit and the exact amount.","meta"));
           const link=document.createElement("a");
           link.className="btn";link.href="/shop-dashboard.html#wallet";
@@ -166,7 +166,7 @@
         "_blank","noopener,noreferrer");
     }
     function renderOrders(orders){
-      const valid=orders.filter(o=>ORDER_ID.test(String(o.id))).slice(0,20);
+      const valid=orders.filter(o=>ORDER_ID.test(String(o.id))&&["customer_photo","customer_pdf"].includes(o.documentKind)).slice(0,20);
       const pending=valid.filter(o=>o.status==="test_only"||o.status==="accepted");
       const incoming=valid.filter(o=>o.status==="test_only");
       count.textContent=pending.length+" Ready to review · "+incoming.length+" New";
@@ -175,16 +175,16 @@
       firstLoad=false;
       seenIds=newIds;
       if(arrivals.length){
-        document.title="("+arrivals.length+" new TEST orders) "+originalTitle;
-        note.textContent=arrivals.length+" new private TEST file order(s) arrived. Use Review & Print after verifying the file.";
+        document.title="("+arrivals.length+" new orders) "+originalTitle;
+        note.textContent=arrivals.length+" new customer file order(s) arrived. Use Review & Print after verifying the file.";
       }else{
         document.title=originalTitle;
-        note.textContent="Only accepted TEST orders can be marked Printed after physically checking paper.";
+        note.textContent="Only accepted customer orders can be marked Printed after checking paper.";
       }
       list.replaceChildren();
       if(!valid.length){
         list.append(makeText("div",
-          "No private TEST file orders yet. Customer file uploads are available only if private R2 TEST storage and the guest TEST opt-in are enabled.",
+          "No customer orders yet. Customers can scan QR and upload JPG/PNG. PDF requires a scanner.",
           "empty"));
         return;
       }
@@ -199,7 +199,7 @@
         const item=document.createElement("article");
         item.className="order"+(arrivals.some(o=>String(o.id)===id)?" new":"");
         const info=document.createElement("div");
-        info.append(makeText("strong",(order.documentKind==="customer_photo"?"CUSTOMER PHOTO #":"TEST Order #")+id+" · "+String(order.fileType||"").toUpperCase()));
+        info.append(makeText("strong",(order.documentKind==="customer_pdf"?"CUSTOMER PDF #":"CUSTOMER PHOTO #")+id+" · "+String(order.fileType||"").toUpperCase()));
         const mode=order.printMode==="color"?"Colour":"Black & White";
         const copies=Number(order.copies);
         const details=(Number.isInteger(copies)?copies:"?")+" copies · "+mode+
@@ -247,17 +247,17 @@
     }
     async function checkStorage(){
       try{
-        const response=await fetch("/api/test-upload/config",{
+        const response=await fetch("/api/customer-photo/config",{
           credentials:"same-origin",cache:"no-store"
         });
         const data=await response.json().catch(()=>({}));
-        if(!response.ok)throw Error("Unable to check test storage");
-        if(data.enabled&&data.guestTestUploadsEnabled){
-          storageNote.textContent="Private TEST uploads enabled. New customer test files appear here after submission. No automatic printing.";
-        }else{
-          storageNote.textContent="Customer file uploads are currently OFF: private R2 TEST storage and guest test-upload opt-in must be configured. Local shop-PC test printing on the right is available without storage.";
-        }
-      }catch(error){storageNote.textContent="Storage status unavailable. Local TEST printing still works.";}
+        if(!response.ok)throw Error("Unable to check customer upload storage");
+        const pdfResponse=await fetch("/api/customer-document/config",{credentials:"same-origin",cache:"no-store"});
+        const pdf=pdfResponse.ok?await pdfResponse.json().catch(()=>({})):{};
+        storageNote.textContent=data.enabled?
+          ("JPG/PNG Customer Upload available. PDF "+(pdf.pdfUploadEnabled?"available with malware scanner.":"requires security scanner; not enabled yet.")+" Payment verification remains manual."):
+          "Customer upload storage unavailable. Local PC printing remains available.";
+      }catch(error){storageNote.textContent="Customer upload status unavailable. Local printing still works";}
     }
 
     const fileInput=document.getElementById("local-file");
@@ -275,7 +275,7 @@
       if(currentUrl)URL.revokeObjectURL(currentUrl);
       currentUrl=null;
       printArea.replaceChildren();
-      localMessage.textContent="Choose a safe test file. Print will be available immediately.";
+      localMessage.textContent="Choose a local file. Print will be available immediately.";
       localMessage.classList.remove("error");
     }
     clear.addEventListener("click",clearLocal);
