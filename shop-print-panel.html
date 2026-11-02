@@ -99,7 +99,7 @@
           <div><span class="eyebrow">CUSTOMER PAYMENT • MANUAL BANK CHECK</span><h2>UPI Payment Notices</h2></div>
           <a class="btn" href="/shop-dashboard.html#wallet">Verify Bank Payment in Shop Dashboard</a>
         </div>
-        <p class="muted">ग्राहक का "मैंने पेमेंट किया" केवल दावा है। अपने बैंक/UPI ऐप में पैसा आने के बाद ही Shop Dashboard में Payment Received दबाएँ। इससे आपके Shop PC पर TEST Print Dialog खोलने का विकल्प मिलेगा।</p>
+        <p class="muted">ग्राहक का "मैंने पेमेंट किया" केवल दावा है। अपने बैंक/UPI ऐप में पैसा आने के बाद ही Shop Dashboard में Payment Received दबाएँ। इसके बाद Shop PC पर Print Dialog खोलने का विकल्प मिलेगा।</p>
         <p id="payment-count" class="state" role="status">Checking customer UPI notices...</p>
         <div id="payment-alert-list" class="list" aria-live="polite"></div>
       </section>
@@ -297,7 +297,7 @@
       };
       if(!kinds[ext]||file.type!==kinds[ext]||file.size<8||
           file.size>2*1024*1024){
-        localMessage.textContent="Only safe small TEST PDF/JPG/PNG files up to 2 MB are allowed. Do not use real customer documents.";
+        localMessage.textContent="Only non-sensitive local PDF/JPG/PNG files up to 2 MB are allowed. Do not use identity documents.";
         localMessage.classList.add("error");
         return;
       }
@@ -305,7 +305,7 @@
       currentUrl=URL.createObjectURL(file);
       if(currentKind!=="pdf"){
         const img=document.createElement("img");
-        img.alt="Locally selected TEST image";
+        img.alt="Locally selected image";
         img.addEventListener("error",()=>{
           localMessage.textContent="Image could not be opened for printing.";
           localMessage.classList.add("error");
@@ -317,7 +317,7 @@
       }
       localButton.disabled=false;
       localMessage.classList.remove("error");
-      localMessage.textContent="TEST file ready: "+file.name+
+      localMessage.textContent="Local file ready: "+file.name+
         ". Press Print to open your own computer's Print dialog. No file was uploaded to QR-To-Print.";
     });
     localButton.addEventListener("click",()=>{
@@ -325,7 +325,7 @@
       const copies=document.getElementById("local-copies").value;
       const color=modeSelect.value==="color"?"Colour":"Black & white";
       if(!window.confirm(
-        "Print this LOCAL TEST file on your shop's own installed printer?"+
+        "Print this local file on your shop's installed printer?"+
         "\nSelect "+copies+" copy/copies, "+color+", paper size and your printer in the native Print dialog. No file is sent to the server."
       ))return;
       if(currentKind==="pdf"){
@@ -335,15 +335,15 @@
         pdf.target="_blank";
         pdf.rel="noopener noreferrer";
         pdf.click();
-        localMessage.textContent="PDF viewer opened. Review the TEST document and press Ctrl + P there. Select your shop printer and the correct copies/colour.";
+        localMessage.textContent="PDF viewer opened. Review the document and press Ctrl + P there. Select your shop printer and the correct copies/colour.";
       }else{
         const img=printArea.querySelector("img");
         if(!img||!img.complete||img.naturalWidth===0){
-          localMessage.textContent="Photo is still loading or invalid. Choose a valid TEST image.";
+          localMessage.textContent="Photo is still loading or invalid. Choose a valid image.";
           return;
         }
         window.print();
-        localMessage.textContent="Native Print dialog opened. After printing, physically check the paper. Local tests do not create shop orders or bills.";
+        localMessage.textContent="Native Print dialog opened. After printing, physically check the paper. Local prints do not create customer orders or bills.";
       }
     });
     refresh.addEventListener("click",()=>{refreshOrders();refreshPayments();});
