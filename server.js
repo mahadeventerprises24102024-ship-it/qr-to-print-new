@@ -12,6 +12,7 @@ const { installDemoOrderApis, ensureDemoOrderTables } = require("./demo-print-or
 const { installTestFileUploads, ensureTestUploadTables, purgeExpiredTestFiles } = require("./private-test-uploads");
 const { checkR2Connectivity } = require("./r2-connectivity");
 const { installCustomerPhotoUploads } = require("./customer-photo-uploads");
+const { installCustomerPdfUploads } = require("./customer-pdf-uploads");
 const { installAgentApis, ensureAgentTables } = require("./printer-agent-api");
 const { ensureAutoPrintTables, installAutoPrint } = require("./auto-print-queue");
 const { installCanonTestPrintApis, ensureCanonTestPrintTables } = require("./canon-test-print-api");
@@ -301,6 +302,7 @@ installShopAuth(app, pool);
 installDemoOrderApis(app, pool);
 installTestFileUploads(app, pool);
 installCustomerPhotoUploads(app,pool);
+installCustomerPdfUploads(app,pool);
 installAgentApis(app, pool);
 installAutoPrint(app,pool);
 installCanonTestPrintApis(app, pool);
