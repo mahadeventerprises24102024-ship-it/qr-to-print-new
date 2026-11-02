@@ -175,7 +175,7 @@ test("customer page never asks for sensitive files or advertises automatic print
   assert.match(html,/Non-sensitive test file/);
   new vm.Script(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
   const shop=fs.readFileSync(path.join(__dirname,"..","shop-dashboard.html"),"utf8");
-  assert.match(shop,/Accept test order/);
+  assert.match(shop,/Accept order/);
   assert.match(shop,/Close demo request/);
   new vm.Script(shop.match(/<script>([\s\S]*?)<\/script>/)[1]);
   const preview=fs.readFileSync(path.join(__dirname,"..","shop-print-preview.html"),"utf8");
