@@ -64,7 +64,7 @@
   <main>
     <span class="eyebrow">SHOPKEEPER PRINT PANEL</span>
     <h1>Document आया? Print विकल्प तैयार.</h1>
-    <p class="muted">ग्राहक के JPG/PNG ऑर्डर यहाँ अपने-आप दिखाई देंगे। सुरक्षा स्कैन उपलब्ध होने पर PDF भी आएगा। दुकानदार Review, Accept और Payment Verify करने के बाद Print करेगा।</p>
+    <p class="muted">ग्राहक के नए JPG/PNG ऑर्डर यहाँ अपने-आप आएँगे। <strong>Cash / Online</strong> दोनों में एक बार 🖨 Print दबाएँ—चुने हुए Windows Printer पर Agent प्रिंट भेजेगा। भुगतान का रिकॉर्ड अलग रहेगा। PDF मैन्युअल रहेगा।</p>
     <div class="notice"><strong>स्थानीय कंप्यूटर से प्रिंटिंग:</strong> PDF/Photo या Aadhaar Front/Back को इस PC पर ही प्रिंट करने के लिए <a href="/shop-local-print.html" style="font-weight:800">🖨 Print Now — Shop PC</a> खोलें। वहाँ चुनी गई फाइल वेबसाइट या क्लाउड पर अपलोड नहीं होती। नीचे Customer Upload Orders की सूची है।</div>
     <div class="notice"><strong>Customer Upload:</strong> सामान्य JPG/PNG फाइलें उपलब्ध हैं। PDF केवल सक्रिय सुरक्षा स्कैनर के बाद स्वीकार होगा। असली Aadhaar/PAN या निजी पहचान दस्तावेज़ न भेजें। PDF मैन्युअल Print होगा; Photo Auto Print के लिए अलग Owner अनुमति जरूरी है।</div>
     <div class="grid">
@@ -73,12 +73,13 @@
           <div><span class="eyebrow">CUSTOMER FILE ORDERS</span><h2 id="queue-title">Incoming Print Orders</h2><span class="pill" id="queue-count">Checking orders…</span></div>
           <button class="secondary" id="refresh-orders" type="button">Refresh now</button>
         </div>
-        <p class="muted">पैनल खुला रहने पर लगभग हर 10 सेकंड में नई टेस्ट फाइल दिखाई देगी। केवल इसी दुकान के ऑर्डर दिखेंगे।</p>
+        <p class="muted">पैनल खुला रखें। लगभग हर 4 सेकंड में नई फाइल दिखेगी। केवल आपकी दुकान के ऑर्डर यहाँ आएँगे। Windows Agent और पसंदीदा Printer सेट होना चाहिए।</p>
         <p id="storage-note" class="state" role="status">Checking customer upload availability…</p>
+        <p id="agent-print-state" class="state" role="status" aria-live="polite">Checking Windows Agent and printer…</p>
         <div id="queue-list" class="list" aria-live="polite" aria-relevant="additions text">
           <div class="empty">Loading shop orders…</div>
         </div>
-        <p id="queue-message" class="muted" role="status" aria-live="polite">Only accepted customer orders can be marked Printed after checking paper.</p>
+        <p id="queue-message" class="muted" role="status" aria-live="polite">🖨 Print दबाने से एक बार Windows Agent पर Job जाएगी; Cash / UPI भुगतान अपने-आप Confirmed नहीं होगा। कागज़ निकला है या नहीं, दुकानदार जाँचे।</p>
       </section>
       <section class="card" aria-labelledby="local-title">
         <span class="eyebrow">NO CLOUD STORAGE NEEDED</span>
@@ -149,6 +150,48 @@
     let firstLoad=true;
     let seenIds=new Set();
     let requestInFlight=false;
+    let agentReady=false;
+    let savedPrinter="";
+    let queueStates=new Map();
+    const printerState=document.getElementById("agent-print-state");
+    async function fetchAgentPrintStatus(){
+      try{
+        const response=await fetch("/api/shop/auto-print/status",{credentials:"same-origin",cache:"no-store"});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw Error(data.error||"Print Agent status unavailable");
+        agentReady=data.settings?.agentOnline===true&&!!data.settings?.preferredPrinter;
+        savedPrinter=data.settings?.preferredPrinter||"";
+        queueStates=new Map((Array.isArray(data.jobs)?data.jobs:[])
+          .map(j=>[String(j.orderId),String(j.status)]));
+        printerState.textContent=agentReady?
+          "🟢 Windows Agent connected • Printer: "+savedPrinter+" • One-click Photo Print ready.":
+          "🔴 Windows Print Agent offline or printer not selected. Pair Agent and select printer in Dashboard → Printers.";
+      }catch(error){
+        agentReady=false;queueStates=new Map();
+        printerState.textContent="Printer status unavailable: "+error.message;
+      }
+    }
+    async function printOrderNow(id,button){
+      if(!ORDER_ID.test(String(id))||button.disabled)return;
+      button.disabled=true;
+      button.textContent="Sending to Windows Printer…";
+      note.textContent="Sending Order #"+id+" to your paired Windows Printer. Payment stays pending unless separately confirmed.";
+      try{
+        const response=await fetch("/api/shop/print-orders/"+encodeURIComponent(id)+"/print-now",{
+          method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({confirmedImmediatePrint:true})
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw Error(data.error||"Unable to send order to printer");
+        button.textContent="Queued for Windows Printer ✓";
+        note.textContent="Order #"+id+" sent. Windows will spool it once; Cash/Online payment remains separately tracked. Check actual paper output.";
+        queueStates.set(String(id),"queued");
+        await refreshOrders();
+      }catch(error){
+        button.disabled=false;button.textContent="🖨 Print";
+        note.textContent=error.message;
+      }
+    }
 
     function makeText(tag,text,className){
       const element=document.createElement(tag);
@@ -176,7 +219,7 @@
       seenIds=newIds;
       if(arrivals.length){
         document.title="("+arrivals.length+" new orders) "+originalTitle;
-        note.textContent=arrivals.length+" new customer file order(s) arrived. Use Review & Print after verifying the file.";
+        note.textContent=arrivals.length+" new customer order(s). Cash or Online—press 🖨 Print once to send normal photos to the Windows printer.";
       }else{
         document.title=originalTitle;
         note.textContent="Only accepted customer orders can be marked Printed after checking paper.";
@@ -202,20 +245,41 @@
         info.append(makeText("strong",(order.documentKind==="customer_pdf"?"CUSTOMER PDF #":"CUSTOMER PHOTO #")+id+" · "+String(order.fileType||"").toUpperCase()));
         const mode=order.printMode==="color"?"Colour":"Black & White";
         const copies=Number(order.copies);
-        const details=(Number.isInteger(copies)?copies:"?")+" copies · "+mode+
+        const paymentMethod=order.paymentMethod==="cash"?"CASH":
+          order.paymentMethod==="online"?"ONLINE UPI":"OLD ORDER";
+        const details=paymentMethod+" · "+(Number.isInteger(copies)?copies:"?")+" copies · "+mode+
           (Number(order.photoLayout)>1?" · "+Number(order.photoLayout)+" photos / A4":" · Full page")+
           " · "+Math.round(Number(order.fileSizeBytes)/1024)+" KB · "+formatWhen(order.createdAt);
         info.append(makeText("div",details,"meta"));
         info.append(makeText("span",labels[order.status]||"Status unknown",
           "order-status"+(order.status==="rejected"?" rejected":"")));
+        const jobStatus=queueStates.get(id);
+        if(jobStatus)info.append(makeText("span","Windows Job: "+jobStatus.toUpperCase()+
+          " — Not proof of physical paper or payment.","meta"));
         item.append(info);
         if(["test_only","accepted"].includes(order.status)){
-          const printButton=document.createElement("button");
-          printButton.type="button";
-          printButton.textContent=order.status==="test_only"?
-            "Review & Accept to Print":"Print Now · Manual";
-          printButton.addEventListener("click",()=>openOrder(id));
-          item.append(printButton);
+          if(order.documentKind==="customer_photo"&&["cash","online"].includes(order.paymentMethod)){
+            const printButton=document.createElement("button");
+            printButton.type="button";
+            printButton.textContent=jobStatus?"Windows job: "+jobStatus.toUpperCase():"🖨 Print";
+            printButton.disabled=!!jobStatus||!agentReady;
+            printButton.title=agentReady?"One-click Print on "+savedPrinter:
+              "Pair Windows Agent and select printer in Dashboard → Printers";
+            printButton.addEventListener("click",()=>printOrderNow(id,printButton));
+            item.append(printButton);
+          }else{
+            const printButton=document.createElement("button");
+            printButton.type="button";
+            printButton.textContent=order.documentKind==="customer_pdf"?
+              "Open PDF · Manual Print":"Review / Manual Print";
+            printButton.addEventListener("click",()=>openOrder(id));
+            item.append(printButton);
+          }
+          const review=document.createElement("button");
+          review.className="secondary";review.type="button";
+          review.textContent="Review Order";
+          review.addEventListener("click",()=>openOrder(id));
+          item.append(review);
         }else{
           item.append(makeText("span","No new print action","muted"));
         }
@@ -238,6 +302,7 @@
           }
           throw new Error(data.error||"Unable to load shop orders");
         }
+        await fetchAgentPrintStatus();
         renderOrders(Array.isArray(data.orders)?data.orders:[]);
       }catch(error){
         note.textContent=error.message||"Unable to refresh shop orders";
@@ -353,7 +418,7 @@
     });
     checkStorage();
     refreshOrders();refreshPayments();
-    setInterval(refreshOrders,10000);
+    setInterval(refreshOrders,4000);
     setInterval(()=>{if(document.visibilityState==="visible")refreshPayments();},10000);
   })();
   </script>
