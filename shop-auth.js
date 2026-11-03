@@ -82,6 +82,10 @@ async function ensureShopTables(pool) {
   // Existing shops are assigned a permanent public QR identifier.
   // gen_random_uuid() is built into PostgreSQL 18 on Render.
   await pool.query("ALTER TABLE shops ADD COLUMN IF NOT EXISTS public_code VARCHAR(32)");
+  await pool.query("ALTER TABLE shops ADD COLUMN IF NOT EXISTS phone VARCHAR(20)");
+  await pool.query("ALTER TABLE shops ADD COLUMN IF NOT EXISTS address VARCHAR(500)");
+  await pool.query("ALTER TABLE shops ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100)");
+  await pool.query("ALTER TABLE shops ADD COLUMN IF NOT EXISTS opening_hours VARCHAR(120)");
   await pool.query(`
     UPDATE shops
     SET public_code = replace(gen_random_uuid()::text, '-', '')
@@ -273,7 +277,7 @@ function installShopAuth(app, pool) {
     try {
       const result = await pool.query(
         `SELECT o.id AS owner_id, o.name AS owner_name, o.email,
-                s.id AS shop_id, s.name AS shop_name, s.public_code
+                s.id AS shop_id, s.name AS shop_name, s.public_code, s.phone, s.address, s.upi_id, s.opening_hours
          FROM shop_owners AS o
          JOIN shops AS s ON s.id = o.shop_id
          WHERE o.id = $1`,
@@ -285,7 +289,7 @@ function installShopAuth(app, pool) {
       }
       return res.json({
         shop: { id: account.shop_id, name: account.shop_name,
-          publicCode: account.public_code },
+          publicCode: account.public_code, phone: account.phone || "", address: account.address || "", upiId: account.upi_id || "", openingHours: account.opening_hours || "" },
         owner: {
           id: account.owner_id,
           name: account.owner_name,
@@ -295,6 +299,43 @@ function installShopAuth(app, pool) {
     } catch (error) {
       console.error("Shop profile failed:", error);
       return res.status(500).json({ error: "Unable to load shop profile" });
+    }
+  });
+
+
+  app.put("/api/shop/profile", sameOriginOnly, requireShopOwner, async (req, res) => {
+    const { shopName, ownerName, phone, address, upiId, openingHours } = req.body || {};
+    const clean = value => typeof value === "string" ? value.trim() : null;
+    const p = clean(phone), a = clean(address), u = clean(upiId), h = clean(openingHours);
+    if (!validName(shopName, 120) || !validName(ownerName, 100) ||
+        p === null || !/^(|[+0-9 ()-]{10,20})$/.test(p) ||
+        a === null || a.length > 500 ||
+        u === null || u.length > 100 || (u && !/^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9.-]{2,}$/.test(u)) ||
+        h === null || h.length > 120) {
+      return res.status(400).json({ error: "कृपया सही दुकान का नाम, मालिक, मोबाइल नंबर, पता और UPI ID भरें।" });
+    }
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query("BEGIN");
+      const owner = await client.query("SELECT shop_id FROM shop_owners WHERE id=$1 FOR UPDATE", [req.session.shopOwnerId]);
+      if (!owner.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(401).json({ error: "Shop account not found" });
+      }
+      await client.query(
+        "UPDATE shops SET name=$1,phone=$2,address=$3,upi_id=$4,opening_hours=$5 WHERE id=$6",
+        [shopName.trim(), p, a, u, h, owner.rows[0].shop_id]
+      );
+      await client.query("UPDATE shop_owners SET name=$1 WHERE id=$2", [ownerName.trim(), req.session.shopOwnerId]);
+      await client.query("COMMIT");
+      return res.json({ message: "Shop profile saved successfully" });
+    } catch (error) {
+      if (client) await client.query("ROLLBACK").catch(()=>{});
+      console.error("Shop profile update failed:", error);
+      return res.status(500).json({ error: "Could not save shop details" });
+    } finally {
+      if (client) client.release();
     }
   });
 
