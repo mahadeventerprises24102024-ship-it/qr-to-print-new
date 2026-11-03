@@ -712,7 +712,8 @@
         const heading = document.createElement("strong");
         heading.textContent = (order.documentKind==="customer_pdf"?"CUSTOMER PDF #":"CUSTOMER PHOTO #") + id + " • " +
           String(order.fileType).toUpperCase() + " • " +
-          order.copies + " copies • " +
+          (Number(order.photoLayout)>1?Number(order.photoLayout)+" photos / A4 • ":"Full page • ") +
+          order.copies + " copies • "
           (order.printMode === "color" ? "Color" : "B&W");
         const desc = document.createElement("span");
         const date = new Date(order.createdAt);
