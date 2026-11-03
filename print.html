@@ -802,8 +802,7 @@
         }
         const mode=document.getElementById("private-mode").value;
         const dummy=privateKind.value==="dummy_card_front_back";
-        const rate=dummy&&mode==="bw"?publicRates.aadhaarBw:
-          (mode==="color"?publicRates.color:publicRates.bw);
+        const rate=dummy?publicRates.aadhaarFront:publicRates.document;
         estimate.textContent="Estimated total: "+money((dummy?copies:pages*copies)*rate)+
           (dummy?" (one DUMMY front/back test card layout × "+copies+" copies × "+money(rate)+")":
           " ("+pages+" page(s) × "+copies+" copies × "+money(rate)+")")+
@@ -821,12 +820,13 @@
           const data=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(data.error||"Rates unavailable");
           const rates=data.ratesRupees;
-          if(!rates || ![rates.bw,rates.aadhaarBw,rates.color].every(v=>
+          if(!rates || ![rates.aadhaarFront,rates.aadhaarBack,rates.document,rates.photo4,rates.photo2,rates.fullPage].every(v=>
             Number.isInteger(v)&&v>=1&&v<=1000))throw new Error("Invalid shop rates");
           publicRates=rates;
           document.getElementById("print-rate-card").textContent=
-            "B&W "+money(rates.bw)+" / page • Aadhaar B&W "+money(rates.aadhaarBw)+
-            " / copy • Colour "+money(rates.color)+" / page";
+            "Aadhaar Front "+money(rates.aadhaarFront)+" • Aadhaar Back "+money(rates.aadhaarBack)+
+            " • JPG/PNG/PDF "+money(rates.document)+"/page • 4 Photos/A4 "+money(rates.photo4)+
+            " • 2 Photos/A4 "+money(rates.photo2)+" • Full Page "+money(rates.fullPage);
           updatePriceEstimate();
         }catch(error){
           document.getElementById("print-rate-card").textContent="Price list temporarily unavailable";
