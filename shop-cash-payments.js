@@ -18,7 +18,7 @@ const publicCash=p=>({orderId:p.order_id,pagesPerCopy:Number(p.pages_per_copy),
   amountRupees:(Number(p.amount_paise)/100).toFixed(2),
   status:p.status,verifiedByShopkeeper:p.status==="paid",automaticPaymentVerification:false});
 async function ensureCashPrintTables(pool){
-  await pool.query(\`CREATE TABLE IF NOT EXISTS shop_cash_print_payments(
+  await pool.query(`CREATE TABLE IF NOT EXISTS shop_cash_print_payments(
     id BIGSERIAL PRIMARY KEY,
     shop_id BIGINT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     order_id BIGINT NOT NULL UNIQUE REFERENCES test_file_orders(id) ON DELETE CASCADE,
@@ -29,7 +29,7 @@ async function ensureCashPrintTables(pool){
     confirmed_by_owner_id BIGINT REFERENCES shop_owners(id) ON DELETE SET NULL,
     confirmed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )\`);
+  )`);
   await pool.query("CREATE INDEX IF NOT EXISTS shop_cash_recent ON shop_cash_print_payments(shop_id,id DESC)");
 }
 function installCashPrintPayments(app,pool){
