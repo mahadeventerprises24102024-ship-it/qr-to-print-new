@@ -55,6 +55,32 @@ async function ensureUpiPrintTables(pool){
   await pool.query("ALTER TABLE shop_upi_payment_accounts ADD COLUMN IF NOT EXISTS payment_channel VARCHAR(20) NOT NULL DEFAULT 'regular_upi'");
   await pool.query("ALTER TABLE shop_upi_payment_accounts ADD COLUMN IF NOT EXISTS soundbox_mapping_declared BOOLEAN NOT NULL DEFAULT FALSE");
 }
+// Immediately prepare a price-bound UPI QR for a safely sanitized, non-ID
+// customer photo. No need for the shopkeeper to type the rate before the
+// customer can PAY. This only creates a quote, never confirms bank receipt.
+async function createOnlinePhotoQuote(pool,shopId,orderId){
+  const paymentRef=reference();
+  const q=await pool.query([
+    "INSERT INTO shop_upi_test_payments",
+    "(shop_id,order_id,payment_reference,vpa_snapshot,payee_name_snapshot,pages_per_copy,amount_paise)",
+    "SELECT o.shop_id,o.id,$3,a.vpa,a.payee_name,1,",
+    "(o.copies*CASE WHEN o.print_mode='color' THEN",
+    "COALESCE(r.color_paise,1000) ELSE COALESCE(r.bw_paise,300) END)",
+    "FROM test_file_orders o",
+    "JOIN shop_upi_payment_accounts a ON a.shop_id=o.shop_id AND a.enabled=TRUE",
+    "LEFT JOIN shop_print_rates r ON r.shop_id=o.shop_id",
+    "WHERE o.id=$1 AND o.shop_id=$2 AND o.payment_method='online'",
+    "AND o.document_kind='customer_photo' AND o.file_type='jpeg'",
+    "AND o.status='test_only' AND o.file_deleted_at IS NULL",
+    "AND o.created_at>NOW()-INTERVAL '24 hours'",
+    "AND (o.copies*CASE WHEN o.print_mode='color' THEN",
+    "COALESCE(r.color_paise,1000) ELSE COALESCE(r.bw_paise,300) END)",
+    "BETWEEN 100 AND 250000",
+    "ON CONFLICT(order_id) DO NOTHING",
+    "RETURNING order_id,amount_paise,pages_per_copy,payment_reference,status"
+  ].join(" "),[orderId,shopId,paymentRef]);
+  return q.rows[0]?publicPayment(q.rows[0]):null;
+}
 function installUpiPrintPayments(app,pool){
   app.get("/api/shop/upi-payment/account",ownerOnly,async(req,res)=>{
     try{
@@ -295,6 +321,16 @@ function installUpiPrintPayments(app,pool){
       const args=paid?[req.session.shopOwnerId,req.params.id,req.body.confirmedAmountPaise]:[req.session.shopOwnerId,req.params.id];
       const q=await pool.query(parts.join(" "),args);
       if(!q.rows.length)return res.status(409).json({error:"Claim not found, wrong amount, or already reviewed"});
+      if(paid&&q.rows[0].documentKind==="customer_photo"){
+        await pool.query([
+          "UPDATE test_file_orders o SET status='accepted'",
+          "FROM shop_owners owner",
+          "WHERE owner.id=$1 AND owner.shop_id=o.shop_id AND o.id=$2",
+          "AND o.payment_method='online' AND o.document_kind='customer_photo'",
+          "AND o.status='test_only' AND o.file_deleted_at IS NULL",
+          "AND o.created_at>NOW()-INTERVAL '24 hours'"
+        ].join(" "),[req.session.shopOwnerId,req.params.id]);
+      }
       res.set("Cache-Control","private, no-store");
       res.json({payment:{...publicPayment(q.rows[0]),documentKind:q.rows[0].documentKind},automaticPrinting:false,
         printDialogUrl: paid ? "/shop-print-preview.html?order="+
@@ -303,4 +339,4 @@ function installUpiPrintPayments(app,pool){
     }catch(e){console.error("UPI decision",e);res.status(503).json({error:"Unable to review UPI claim"});}
   });
 }
-module.exports={validVpa,validPayee,rupees,reference,upiUrl,hashToken,publicPayment,ensureUpiPrintTables,installUpiPrintPayments};
+module.exports={validVpa,validPayee,rupees,reference,upiUrl,hashToken,publicPayment,createOnlinePhotoQuote,ensureUpiPrintTables,installUpiPrintPayments};
