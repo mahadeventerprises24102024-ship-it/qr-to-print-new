@@ -39,9 +39,13 @@ function installCashPrintPayments(app,pool){
       return res.status(400).json({error:"Enter pages per copy (1–20)"});
     try{
       const q=await pool.query([
-        "SELECT o.shop_id,o.copies,o.print_mode,",
+        "SELECT o.shop_id,o.copies,o.print_mode,o.print_service,o.photo_layout,",
         "COALESCE(r.bw_paise,300) AS bw_paise,",
-        "COALESCE(r.color_paise,1000) AS color_paise",
+        "COALESCE(r.color_paise,1000) AS color_paise,",
+        "COALESCE(r.document_paise,r.bw_paise,300) AS document_paise,",
+        "COALESCE(r.photo_4_paise,r.color_paise,1000) AS photo_4_paise,",
+        "COALESCE(r.photo_2_paise,r.color_paise,1000) AS photo_2_paise,",
+        "COALESCE(r.full_page_paise,r.color_paise,1000) AS full_page_paise",
         "FROM test_file_orders o",
         "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
         "LEFT JOIN shop_print_rates r ON r.shop_id=o.shop_id",
@@ -52,7 +56,12 @@ function installCashPrintPayments(app,pool){
       if(!q.rows.length)return res.status(409).json({
         error:"Only fresh, accepted Cash orders from your own shop can be quoted"});
       const o=q.rows[0];
-      const unit=Number(o.print_mode==="color"?o.color_paise:o.bw_paise);
+      const service=o.print_service||
+        (Number(o.photo_layout)===4?"photo_4":
+         Number(o.photo_layout)===2?"photo_2":"document");
+      if(service!=="document"&&pages!==1)
+        return res.status(400).json({error:"Photo sheet is one A4 page per copy"});
+      const unit=Number(o[service+"_paise"]??o.document_paise);
       const amount=Number(o.copies)*pages*unit;
       if(!Number.isSafeInteger(amount)||amount<100||amount>250000)
         return res.status(400).json({error:"Cash amount must be ₹1–₹2500"});
