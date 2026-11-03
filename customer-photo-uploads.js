@@ -83,6 +83,7 @@ function installCustomerPhotoUploads(app,pool,env=process.env,dependencies={}){
           !Number.isInteger(copies)||copies<1||copies>10||
           !["bw","color"].includes(printMode)||
           body.confirmedNonSensitive!=="yes"||
+          !["document","full_page"].includes(body.printService)||
           !["cash","online"].includes(body.paymentMethod)){
           return res.status(400).json({error:
             "Select print options and confirm that your photo contains no Aadhaar/PAN or other sensitive identity information"});
@@ -114,11 +115,11 @@ function installCustomerPhotoUploads(app,pool,env=process.env,dependencies={}){
           const result=await pool.query(
             `INSERT INTO test_file_orders
               (shop_id,customer_id,storage_key,file_type,file_size_bytes,file_sha256,
-               copies,print_mode,tracking_token_hash,document_kind,payment_method)
-             VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo',$9)
+               copies,print_mode,tracking_token_hash,document_kind,payment_method,print_service)
+             VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo',$9,$10)
              RETURNING id,status,created_at AS "createdAt"`,
             [shopId,req.session?.userId||null,key,bytes.length,hash,
-              copies,printMode,trackingHash,body.paymentMethod]);
+              copies,printMode,trackingHash,body.paymentMethod,body.printService]);
           let customerUpiQuote=null;
           if(body.paymentMethod==="online"){
             try{
