@@ -101,12 +101,24 @@
           <select id="customer-photo-copies" name="copies"><option value="1">1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option></select>
           <label for="customer-photo-mode">Printing</label>
           <select id="customer-photo-mode" name="printMode"><option value="bw">Black &amp; White</option><option value="color">Colour</option></select>
+          <fieldset style="margin:18px 0;padding:13px;border:1px solid #b1d9bf;border-radius:12px">
+            <legend style="font-weight:800">Payment Method चुनें</legend>
+            <div style="display:flex;gap:18px;flex-wrap:wrap">
+              <label style="display:flex;gap:8px;align-items:center;font-weight:700">
+                <input type="radio" name="paymentMethod" value="cash" checked required style="width:auto"> Cash (दुकान पर)
+              </label>
+              <label style="display:flex;gap:8px;align-items:center;font-weight:700">
+                <input type="radio" name="paymentMethod" value="online" required style="width:auto"> Online UPI
+              </label>
+            </div>
+            <p class="subtitle">Cash/Online केवल भुगतान का तरीका है; ग्राहक की पसंद को Paid नहीं माना जाएगा।</p>
+          </fieldset>
           <label style="display:flex;gap:10px;align-items:start;font-weight:600;line-height:1.6">
             <input id="customer-photo-consent" type="checkbox" style="width:auto;min-width:18px;margin-top:2px" required>
             मैं पुष्टि करता/करती हूँ कि यह मेरी गैर-संवेदनशील फाइल है, इसमें Aadhaar/PAN/निजी पहचान या बैंक विवरण नहीं है। मैं इसे दुकान को प्रिंट के लिए भेजने तथा 24 घंटे तक सुरक्षित रखने की सहमति देता/देती हूँ।
           </label>
           <button id="customer-photo-submit" class="btn" type="submit" disabled>🖨 Print →</button>
-          <p class="subtitle" style="margin:10px 0 0"><strong>ध्यान दें:</strong> Print दबाने पर पहले Order भेजा जाएगा। दुकानदार द्वारा Order स्वीकारने और बैंक में UPI भुगतान Verify करने के बाद ही Windows Agent से Photo Auto Print होगा। Shop PC, Printer, Agent और Auto Print ON होना जरूरी है। PDF की Printing मैन्युअल है।</p>
+          <p class="subtitle" style="margin:10px 0 0"><strong>ध्यान दें:</strong> Print दबाने पर पहले Order दुकानदार के PC पर दिखेगा। दुकानदार एक बार 🖨 Print दबाकर चुने हुए Windows Printer पर JPG फोटो भेजेगा। Cash/UPI भुगतान अलग Pending रहेगा; उसे Confirm करना आवश्यक है। Agent और PC चालू हों। PDF की Printing मैन्युअल है।</p>
           <p id="customer-photo-message" class="response" role="status" aria-live="polite">Checking secure document upload…</p>
         </form>
       </section>
@@ -293,6 +305,11 @@
       realPhotoForm.addEventListener("submit",async event=>{
         event.preventDefault();
         if(!verifiedCode||realPhotoButton.disabled)return;
+        const paymentMethod=realPhotoForm.querySelector('input[name="paymentMethod"]:checked')?.value;
+        if(!["cash","online"].includes(paymentMethod)){
+          realPhotoMessage.textContent="Cash या Online UPI चुनें।";
+          return;
+        }
         const isMulti=selectedPrintLayout==="two"||selectedPrintLayout==="four";
         const needed=selectedPrintLayout==="two"?2:4;
         const files=isMulti?Array.from(multiInput.files):[singleInput.files[0]];
@@ -328,13 +345,18 @@
           if(!response.ok||(!isPdf&&result.photoPilot!==true)||!result.order?.id||
             !/^[a-f0-9]{48}$/.test(result.trackingToken||""))
             throw new Error(result.error||"Photo upload failed");
+          latestUploadedOrder={id:result.order.id,token:result.trackingToken,
+            type:isPdf?"PDF":"PHOTO",paymentMethod};
           showTracking("test-file-orders",result.order.id,result.trackingToken);
-          latestUploadedOrder={id:result.order.id,token:result.trackingToken,type:isPdf?"PDF":"PHOTO"};
+          document.getElementById("check-upload-upi").hidden=paymentMethod==="cash";
+          if(paymentMethod==="cash")document.getElementById("upi-test-actions").hidden=true;
           document.getElementById("uploaded-order-id").textContent="CUSTOMER "+(isPdf?"PDF":"PHOTO")+" Order #"+result.order.id;
           copyTrackingStatus.textContent="Private Tracking Code सुरक्षित रखें और Shopkeeper से Payment/Print Status चेक करें।";
           successPanel.hidden=false;
           successPanel.scrollIntoView({behavior:"smooth",block:"start"});
-          realPhotoMessage.textContent="Print Request #"+result.order.id+" भेज दी गई है। Payment और दुकानदार की पुष्टि के बाद Photo Auto Print होगा; PDF मैन्युअल रहेगा।";
+          realPhotoMessage.textContent="Order #"+result.order.id+" • "+
+            (paymentMethod==="cash"?"Cash at Shop":"Online UPI")+
+            " • दुकानदार के Desktop पर 🖨 Print बटन उपलब्ध होगा। सिर्फ Print करने से भुगतान Paid नहीं माना जाएगा।";
           realPhotoForm.reset();
         }catch(error){realPhotoMessage.textContent=error.message;}
         finally{realPhotoButton.disabled=false;}
@@ -575,7 +597,7 @@
       function showUpiForKind(kind){
         customerDeleteTools.hidden=kind!=="test-file-orders"||!verifiedCode;
         if(kind==="test-file-orders")customerDeleteButton.disabled=false;
-        upiActions.hidden=!upiAvailable||kind!=="test-file-orders";
+        upiActions.hidden=!upiAvailable||kind!=="test-file-orders"||latestUploadedOrder?.paymentMethod==="cash";
         if(kind!=="test-file-orders")upiDetails.hidden=true;
       }
       upiCheck.addEventListener("click",async()=>{
