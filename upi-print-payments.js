@@ -55,6 +55,14 @@ async function ensureUpiPrintTables(pool){
   await pool.query("ALTER TABLE shop_upi_payment_accounts ADD COLUMN IF NOT EXISTS payment_channel VARCHAR(20) NOT NULL DEFAULT 'regular_upi'");
   await pool.query("ALTER TABLE shop_upi_payment_accounts ADD COLUMN IF NOT EXISTS soundbox_mapping_declared BOOLEAN NOT NULL DEFAULT FALSE");
 }
+const perServiceRateSql=[
+  "CASE COALESCE(o.print_service,CASE WHEN o.photo_layout=4 THEN 'photo_4'",
+  "WHEN o.photo_layout=2 THEN 'photo_2' ELSE 'document' END)",
+  "WHEN 'photo_4' THEN COALESCE(r.photo_4_paise,r.color_paise,1000)",
+  "WHEN 'photo_2' THEN COALESCE(r.photo_2_paise,r.color_paise,1000)",
+  "WHEN 'full_page' THEN COALESCE(r.full_page_paise,r.color_paise,1000)",
+  "ELSE COALESCE(r.document_paise,r.bw_paise,300) END"
+].join(" ");
 // Immediately prepare a price-bound UPI QR for a safely sanitized, non-ID
 // customer photo. No need for the shopkeeper to type the rate before the
 // customer can PAY. This only creates a quote, never confirms bank receipt.
@@ -64,8 +72,7 @@ async function createOnlinePhotoQuote(pool,shopId,orderId){
     "INSERT INTO shop_upi_test_payments",
     "(shop_id,order_id,payment_reference,vpa_snapshot,payee_name_snapshot,pages_per_copy,amount_paise)",
     "SELECT o.shop_id,o.id,$3,a.vpa,a.payee_name,1,",
-    "(o.copies*CASE WHEN o.print_mode='color' THEN",
-    "COALESCE(r.color_paise,1000) ELSE COALESCE(r.bw_paise,300) END)",
+    "(o.copies*"+perServiceRateSql+")",
     "FROM test_file_orders o",
     "JOIN shop_upi_payment_accounts a ON a.shop_id=o.shop_id AND a.enabled=TRUE",
     "LEFT JOIN shop_print_rates r ON r.shop_id=o.shop_id",
@@ -73,8 +80,7 @@ async function createOnlinePhotoQuote(pool,shopId,orderId){
     "AND o.document_kind='customer_photo' AND o.file_type='jpeg'",
     "AND o.status='test_only' AND o.file_deleted_at IS NULL",
     "AND o.created_at>NOW()-INTERVAL '24 hours'",
-    "AND (o.copies*CASE WHEN o.print_mode='color' THEN",
-    "COALESCE(r.color_paise,1000) ELSE COALESCE(r.bw_paise,300) END)",
+    "AND (o.copies*"+perServiceRateSql+")",
     "BETWEEN 100 AND 250000",
     "ON CONFLICT(order_id) DO NOTHING",
     "RETURNING order_id,amount_paise,pages_per_copy,payment_reference,status"
@@ -130,9 +136,13 @@ function installUpiPrintPayments(app,pool){
     if(!idPattern.test(id||"")||!Number.isInteger(pages)||pages<1||pages>20)return res.status(400).json({error:"Enter actual pages per copy (1–20)"});
     try{
       const q=await pool.query([
-        "SELECT o.id,o.shop_id,o.copies,o.print_mode,o.document_kind,o.payment_method,",
+        "SELECT o.id,o.shop_id,o.copies,o.print_mode,o.document_kind,o.payment_method,o.print_service,o.photo_layout,",
         "COALESCE(r.bw_paise,300) AS bw_paise,COALESCE(r.color_paise,1000) AS color_paise,",
         "COALESCE(r.aadhaar_bw_paise,500) AS aadhaar_bw_paise,",
+        "COALESCE(r.document_paise,r.bw_paise,300) AS document_paise,",
+        "COALESCE(r.photo_4_paise,r.color_paise,1000) AS photo_4_paise,",
+        "COALESCE(r.photo_2_paise,r.color_paise,1000) AS photo_2_paise,",
+        "COALESCE(r.full_page_paise,r.color_paise,1000) AS full_page_paise,",
         "a.vpa,a.payee_name FROM test_file_orders o",
         "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
         "JOIN shop_upi_payment_accounts a ON a.shop_id=o.shop_id AND a.enabled=TRUE",
@@ -151,7 +161,14 @@ function installUpiPrintPayments(app,pool){
       if(dummyCard&&pages!==1)return res.status(400).json({
         error:"DUMMY front/back card is one combined TEST layout. Enter exactly 1 page per copy."
       });
-      const unitRate=order.print_mode==="color"?Number(order.color_paise):
+      const service=order.print_service||
+        (Number(order.photo_layout)===4?"photo_4":
+         Number(order.photo_layout)===2?"photo_2":"document");
+      if(order.document_kind==="customer_photo"&&service!=="document"&&pages!==1)
+        return res.status(400).json({error:"Photo sheet has one A4 page per copy"});
+      const unitRate=order.document_kind==="customer_photo"||order.document_kind==="customer_pdf"?
+        Number(order[service+"_paise"]??order.document_paise):
+        order.print_mode==="color"?Number(order.color_paise):
         (dummyCard?Number(order.aadhaar_bw_paise):Number(order.bw_paise));
       const amount=Number(order.copies)*pages*unitRate;
       if(!Number.isSafeInteger(amount)||amount<100||amount>250000)return res.status(400).json({error:"Total TEST amount must be ₹1–₹2500"});
