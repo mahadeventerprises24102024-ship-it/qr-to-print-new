@@ -68,7 +68,7 @@ async function form(n,options={}){
   }
   fd.set("layout",String(n));
   fd.set("copies","3");
-  fd.set("printMode","bw");
+  fd.set("printMode","bw");fd.set("paymentMethod","cash");
   if(!options.noConsent)fd.set("confirmedNonSensitive","yes");
   return fd;
 }
@@ -86,7 +86,8 @@ test("actual customer POST composes 4 photos into one order, never prints before
     assert.equal(h.objects.length,1);
     assert.match(h.objects[0].input.Key,/^test-uploads\/17\/customer-photo-layout-/);
     assert.equal(h.objects[0].input.ContentType,"image/jpeg");
-    assert.equal(h.calls.at(-1).args.at(-1),4);
+    assert.equal(h.calls.at(-1).args.at(-2),4);
+    assert.equal(h.calls.at(-1).args.at(-1),"cash");
     assert.match(h.calls.at(-1).sql,/customer_photo/);
     assert.match(h.calls.at(-1).sql,/photo_layout/);
   });
