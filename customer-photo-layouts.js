@@ -56,7 +56,7 @@ function installCustomerPhotoLayoutOrders(app,pool,env=process.env,deps={}){
     credentials:{accessKeyId:cfg.accessKeyId,secretAccessKey:cfg.secretAccessKey}
   })):null;
   const upload=multer({storage:multer.memoryStorage(),limits:{
-    fileSize:MAX_BYTES,files:4,fields:4,parts:8,fieldSize:64
+    fileSize:MAX_BYTES,files:4,fields:5,parts:9,fieldSize:64
   }});
   const limiter=rateLimit({windowMs:60*60*1000,limit:4,
     standardHeaders:"draft-7",legacyHeaders:false,
