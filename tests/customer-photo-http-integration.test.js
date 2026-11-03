@@ -39,6 +39,7 @@ function photoForm(buffer,hasConsent=true){
   form.set("file",new Blob([buffer],{type:"image/png"}),"normal.png");
   form.set("copies","2");
   form.set("printMode","bw");
+  form.set("printService","document");
   form.set("paymentMethod","cash");
   if(hasConsent)form.set("confirmedNonSensitive","yes");
   return form;
@@ -79,7 +80,7 @@ test("customer must explicitly confirm no sensitive identity data; PDFs fail clo
     assert.equal(denied.status,400);
     const form=new FormData();
     form.set("file",new Blob(["%PDF-1.4 test %%EOF"],{type:"application/pdf"}),"private.pdf");
-    form.set("copies","1");form.set("printMode","bw");form.set("paymentMethod","cash");form.set("confirmedNonSensitive","yes");
+    form.set("copies","1");form.set("printMode","bw");form.set("printService","document");form.set("paymentMethod","cash");form.set("confirmedNonSensitive","yes");
     const pdf=await fetch(h.root+"/api/public/shops/"+code+"/customer-photo-orders",{
       method:"POST",body:form});
     assert.equal(pdf.status,415);
