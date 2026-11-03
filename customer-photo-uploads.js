@@ -81,7 +81,8 @@ function installCustomerPhotoUploads(app,pool,env=process.env,dependencies={}){
         if(!/^[a-f0-9]{32}$/.test(code||"")||
           !Number.isInteger(copies)||copies<1||copies>10||
           !["bw","color"].includes(printMode)||
-          body.confirmedNonSensitive!=="yes"){
+          body.confirmedNonSensitive!=="yes"||
+          !["cash","online"].includes(body.paymentMethod)){
           return res.status(400).json({error:
             "Select print options and confirm that your photo contains no Aadhaar/PAN or other sensitive identity information"});
         }
@@ -112,14 +113,14 @@ function installCustomerPhotoUploads(app,pool,env=process.env,dependencies={}){
           const result=await pool.query(
             `INSERT INTO test_file_orders
               (shop_id,customer_id,storage_key,file_type,file_size_bytes,file_sha256,
-               copies,print_mode,tracking_token_hash,document_kind)
-             VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo')
+               copies,print_mode,tracking_token_hash,document_kind,payment_method)
+             VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo',$9)
              RETURNING id,status,created_at AS "createdAt"`,
             [shopId,req.session?.userId||null,key,bytes.length,hash,
-              copies,printMode,trackingHash]);
+              copies,printMode,trackingHash,body.paymentMethod]);
           res.set("Cache-Control","private, no-store");
           return res.status(201).json({
-            photoPilot:true,identityDocumentsAllowed:false,automaticPrinting:false,
+            photoPilot:true,identityDocumentsAllowed:false,automaticPrinting:false,paymentMethod:body.paymentMethod,
             message:"Private sanitized customer photo received. Shop review and payment verification required.",
             order:result.rows[0],trackingToken
           });
