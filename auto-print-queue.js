@@ -71,7 +71,7 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
             AND o.file_size_bytes BETWEEN 8 AND 2097152
             AND o.file_deleted_at IS NULL
             AND o.created_at>NOW()-INTERVAL '24 hours'
-            AND o.payment_method IN ('cash','online')
+            AND o.payment_method='cash'
             AND a.last_seen_at>NOW()-INTERVAL '100 seconds'
             AND a.preferred_printer_name IS NOT NULL
             AND a.printer_names ? a.preferred_printer_name
@@ -94,7 +94,7 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
         error:"Already sent to printer, invalid order, or Windows Agent is offline. Check Queue before retrying."});
       return res.status(201).json({job:q.rows[0],
         printRequested:true,paymentAutomaticallyConfirmed:false,
-        message:"Print sent to your paired Windows Agent. Cash/Online payment is still pending until separately verified."});
+        message:"Cash order sent to Windows Agent. Cash remains pending until you record its receipt in person."});
     }catch(e){
       console.error("Owner one-click printing",e?.name);
       res.status(503).json({error:"Could not submit print request to Windows Agent"});
@@ -170,7 +170,7 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
         FROM shop_print_agents a
         WHERE a.shop_id=j.shop_id AND a.token_hash=$1
           AND j.status='claimed' AND j.claim_expires_at<NOW()`,[tokenHash]);
-      // Queue ONLY new shopkeeper-confirmed Cash or bank-verified UPI payments after explicit opt-in.
+      // Queue ONLY bank-verified UPI PHOTO payments for unattended Auto Print. Cash is owner-click only.
       await pool.query(`
         INSERT INTO shop_auto_print_jobs(shop_id,order_id,status)
         SELECT o.shop_id,o.id,'queued' FROM test_file_orders o
@@ -179,12 +179,9 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
         JOIN shop_print_agents a ON a.shop_id=o.shop_id
         WHERE a.token_hash=$1 AND a.auto_print_enabled=TRUE
           AND a.auto_print_enabled_at IS NOT NULL
-          AND (
-            (o.payment_method='online' AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
-             AND p.confirmed_at>=a.auto_print_enabled_at) OR
-            (o.payment_method='cash' AND c.status='paid' AND c.confirmed_by_owner_id IS NOT NULL
-             AND c.confirmed_at>=a.auto_print_enabled_at)
-          )
+          AND o.payment_method='online'
+          AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
+          AND p.confirmed_at>=a.auto_print_enabled_at
           AND o.document_kind='customer_photo' AND o.file_type='jpeg'
           AND o.file_size_bytes BETWEEN 8 AND 2097152
           AND o.status='accepted' AND o.file_deleted_at IS NULL
@@ -207,13 +204,11 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
             AND o.document_kind='customer_photo' AND o.file_type='jpeg'
             AND o.created_at>NOW()-INTERVAL '24 hours'
             AND (
-              (j.request_mode='owner_click' AND j.requested_by_owner_id IS NOT NULL)
+              (j.request_mode='owner_click' AND o.payment_method='cash' AND j.requested_by_owner_id IS NOT NULL)
               OR
               (j.request_mode='auto_paid' AND a.auto_print_enabled=TRUE AND a.auto_print_enabled_at IS NOT NULL AND (
                 (o.payment_method='online' AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
-                 AND p.confirmed_at>=a.auto_print_enabled_at) OR
-                (o.payment_method='cash' AND c.status='paid' AND c.confirmed_by_owner_id IS NOT NULL
-                 AND c.confirmed_at>=a.auto_print_enabled_at)
+                 AND p.confirmed_at>=a.auto_print_enabled_at)
               ))
             )
           ORDER BY j.id ASC FOR UPDATE OF j SKIP LOCKED LIMIT 1
@@ -252,13 +247,11 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
         WHERE a.token_hash=$1 AND j.id=$2 AND j.claim_hash=$3
           AND j.status='claimed' AND j.claim_expires_at>NOW()
           AND (
-            (j.request_mode='owner_click' AND j.requested_by_owner_id IS NOT NULL)
+            (j.request_mode='owner_click' AND o.payment_method='cash' AND j.requested_by_owner_id IS NOT NULL)
             OR
             (j.request_mode='auto_paid' AND a.auto_print_enabled=TRUE AND a.auto_print_enabled_at IS NOT NULL AND (
               (o.payment_method='online' AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
-               AND p.confirmed_at>=a.auto_print_enabled_at) OR
-              (o.payment_method='cash' AND c.status='paid' AND c.confirmed_by_owner_id IS NOT NULL
-               AND c.confirmed_at>=a.auto_print_enabled_at)
+               AND p.confirmed_at>=a.auto_print_enabled_at)
             ))
           )
           AND o.status='accepted' AND o.document_kind='customer_photo'
