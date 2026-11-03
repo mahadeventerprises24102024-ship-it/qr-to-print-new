@@ -40,6 +40,10 @@ async function ensureAutoPrintTables(pool){
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   await pool.query("CREATE INDEX IF NOT EXISTS shop_auto_print_jobs_recent ON shop_auto_print_jobs(shop_id, created_at DESC)");
+  // Existing owner-verified auto jobs remain payment gated. New owner-click
+  // jobs are deliberately distinct and do not mark an order as paid.
+  await pool.query("ALTER TABLE shop_auto_print_jobs ADD COLUMN IF NOT EXISTS request_mode VARCHAR(16) NOT NULL DEFAULT 'auto_paid' CHECK (request_mode IN ('auto_paid','owner_click'))");
+  await pool.query("ALTER TABLE shop_auto_print_jobs ADD COLUMN IF NOT EXISTS requested_by_owner_id BIGINT REFERENCES shop_owners(id) ON DELETE SET NULL");
 }
 function installAutoPrint(app,pool,env=process.env,providedStorage=null){
   const cfg=storageSettings(env);
@@ -48,6 +52,54 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
     requestChecksumCalculation:"WHEN_REQUIRED",
     credentials:{accessKeyId:cfg.accessKeyId,secretAccessKey:cfg.secretAccessKey}
   }):null);
+  // Desktop one-click Print is an explicit, authenticated shop decision.
+  // It can dispatch a normal sanitized JPG even while Cash / UPI is pending.
+  // The order remains payment-pending; this endpoint never records money.
+  app.post("/api/shop/print-orders/:id/print-now",authOwner,limiter,async(req,res)=>{
+    if(!idPattern.test(req.params.id||"")||req.body?.confirmedImmediatePrint!==true)
+      return res.status(400).json({error:"Valid print order and explicit shopkeeper click required"});
+    if(!storage)return res.status(503).json({error:"Secure customer file storage unavailable"});
+    try{
+      const q=await pool.query(`
+        WITH eligible AS (
+          SELECT o.id,o.shop_id FROM test_file_orders o
+          JOIN shop_owners owner ON owner.shop_id=o.shop_id
+          JOIN shop_print_agents a ON a.shop_id=o.shop_id
+          WHERE owner.id=$1 AND o.id=$2
+            AND o.status IN ('test_only','accepted')
+            AND o.document_kind='customer_photo' AND o.file_type='jpeg'
+            AND o.file_size_bytes BETWEEN 8 AND 2097152
+            AND o.file_deleted_at IS NULL
+            AND o.created_at>NOW()-INTERVAL '24 hours'
+            AND o.payment_method IN ('cash','online')
+            AND a.last_seen_at>NOW()-INTERVAL '100 seconds'
+            AND a.preferred_printer_name IS NOT NULL
+            AND a.printer_names ? a.preferred_printer_name
+          FOR UPDATE OF o
+        ), approved AS (
+          UPDATE test_file_orders o SET status='accepted'
+          FROM eligible e WHERE o.id=e.id
+          RETURNING o.id,o.shop_id
+        ), dispatched AS (
+          INSERT INTO shop_auto_print_jobs
+            (shop_id,order_id,status,request_mode,requested_by_owner_id)
+          SELECT shop_id,id,'queued','owner_click',$1 FROM approved
+          ON CONFLICT(order_id) DO NOTHING
+          RETURNING id,order_id,status
+        )
+        SELECT id,order_id AS "orderId",status FROM dispatched`,
+        [req.session.shopOwnerId,req.params.id]);
+      res.set("Cache-Control","private, no-store");
+      if(!q.rows.length)return res.status(409).json({
+        error:"Already sent to printer, invalid order, or Windows Agent is offline. Check Queue before retrying."});
+      return res.status(201).json({job:q.rows[0],
+        printRequested:true,paymentAutomaticallyConfirmed:false,
+        message:"Print sent to your paired Windows Agent. Cash/Online payment is still pending until separately verified."});
+    }catch(e){
+      console.error("Owner one-click printing",e?.name);
+      res.status(503).json({error:"Could not submit print request to Windows Agent"});
+    }
+  });
   app.get("/api/shop/auto-print/status",authOwner,async(req,res)=>{
     try{
       const query=await pool.query(`
@@ -59,7 +111,7 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
         WHERE owner.id=$1`,[req.session.shopOwnerId]);
       const jobs=await pool.query(`
         SELECT j.id,j.order_id AS "orderId",j.status,
-          j.printer_name AS "printerName",j.created_at AS "createdAt"
+          j.printer_name AS "printerName",j.request_mode AS "requestMode",j.created_at AS "createdAt"
         FROM shop_auto_print_jobs j JOIN shop_owners owner ON owner.shop_id=j.shop_id
         WHERE owner.id=$1 ORDER BY j.id DESC LIMIT 15`,[req.session.shopOwnerId]);
       res.set("Cache-Control","private, no-store");
@@ -146,7 +198,7 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
           JOIN test_file_orders o ON o.id=j.order_id AND o.shop_id=j.shop_id
           LEFT JOIN shop_upi_test_payments p ON p.order_id=o.id AND p.shop_id=j.shop_id
           LEFT JOIN shop_cash_print_payments c ON c.order_id=o.id AND c.shop_id=j.shop_id
-          WHERE a.token_hash=$1 AND a.auto_print_enabled=TRUE
+          WHERE a.token_hash=$1
             AND a.last_seen_at>NOW()-INTERVAL '100 seconds'
             AND a.preferred_printer_name IS NOT NULL
             AND a.printer_names ? a.preferred_printer_name
@@ -154,12 +206,15 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
             AND o.status='accepted' AND o.file_deleted_at IS NULL
             AND o.document_kind='customer_photo' AND o.file_type='jpeg'
             AND o.created_at>NOW()-INTERVAL '24 hours'
-            AND a.auto_print_enabled_at IS NOT NULL
             AND (
-              (o.payment_method='online' AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
-               AND p.confirmed_at>=a.auto_print_enabled_at) OR
-              (o.payment_method='cash' AND c.status='paid' AND c.confirmed_by_owner_id IS NOT NULL
-               AND c.confirmed_at>=a.auto_print_enabled_at)
+              (j.request_mode='owner_click' AND j.requested_by_owner_id IS NOT NULL)
+              OR
+              (j.request_mode='auto_paid' AND a.auto_print_enabled=TRUE AND a.auto_print_enabled_at IS NOT NULL AND (
+                (o.payment_method='online' AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
+                 AND p.confirmed_at>=a.auto_print_enabled_at) OR
+                (o.payment_method='cash' AND c.status='paid' AND c.confirmed_by_owner_id IS NOT NULL
+                 AND c.confirmed_at>=a.auto_print_enabled_at)
+              ))
             )
           ORDER BY j.id ASC FOR UPDATE OF j SKIP LOCKED LIMIT 1
         )
@@ -196,13 +251,15 @@ function installAutoPrint(app,pool,env=process.env,providedStorage=null){
         LEFT JOIN shop_cash_print_payments c ON c.order_id=o.id AND c.shop_id=o.shop_id
         WHERE a.token_hash=$1 AND j.id=$2 AND j.claim_hash=$3
           AND j.status='claimed' AND j.claim_expires_at>NOW()
-          AND a.auto_print_enabled=TRUE
-          AND a.auto_print_enabled_at IS NOT NULL
           AND (
-            (o.payment_method='online' AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
-             AND p.confirmed_at>=a.auto_print_enabled_at) OR
-            (o.payment_method='cash' AND c.status='paid' AND c.confirmed_by_owner_id IS NOT NULL
-             AND c.confirmed_at>=a.auto_print_enabled_at)
+            (j.request_mode='owner_click' AND j.requested_by_owner_id IS NOT NULL)
+            OR
+            (j.request_mode='auto_paid' AND a.auto_print_enabled=TRUE AND a.auto_print_enabled_at IS NOT NULL AND (
+              (o.payment_method='online' AND p.status='paid_manual' AND p.confirmed_by_owner_id IS NOT NULL
+               AND p.confirmed_at>=a.auto_print_enabled_at) OR
+              (o.payment_method='cash' AND c.status='paid' AND c.confirmed_by_owner_id IS NOT NULL
+               AND c.confirmed_at>=a.auto_print_enabled_at)
+            ))
           )
           AND o.status='accepted' AND o.document_kind='customer_photo'
           AND o.file_type='jpeg' AND o.file_deleted_at IS NULL
