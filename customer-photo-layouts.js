@@ -70,7 +70,8 @@ function installCustomerPhotoLayoutOrders(app,pool,env=process.env,deps={}){
       const printMode=req.body?.printMode;
       if(!validShopCode(req.params.code)||![2,4].includes(layout)||
          !Number.isInteger(copies)||copies<1||copies>10||
-         !validMode(printMode)||req.body?.confirmedNonSensitive!=="yes"||
+         !validMode(printMode)||!["cash","online"].includes(req.body?.paymentMethod)||
+         req.body?.confirmedNonSensitive!=="yes"||
          !Array.isArray(req.files)||req.files.length!==layout){
         return res.status(400).json({
           error:"Choose exactly 2 or 4 normal JPG/PNG photos, print options and consent"});
@@ -108,15 +109,15 @@ function installCustomerPhotoLayoutOrders(app,pool,env=process.env,deps={}){
         const result=await pool.query(
           "INSERT INTO test_file_orders "+
           "(shop_id,customer_id,storage_key,file_type,file_size_bytes,file_sha256,"+
-          "copies,print_mode,tracking_token_hash,document_kind,photo_layout) "+
-          "VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo',$9) "+
+          "copies,print_mode,tracking_token_hash,document_kind,photo_layout,payment_method) "+
+          "VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo',$9,$10) "+
           'RETURNING id,status,created_at AS "createdAt"',
           [shopId,req.session?.userId||null,key,bytes.length,hash,
-            copies,printMode,trackingHash,layout]);
+            copies,printMode,trackingHash,layout,req.body.paymentMethod]);
         res.set("Cache-Control","private, no-store");
         return res.status(201).json({
           photoPilot:true,order:result.rows[0],trackingToken,
-          photoLayout:layout,automaticPrinting:false,
+          photoLayout:layout,paymentMethod:req.body.paymentMethod,automaticPrinting:false,
           message:"A4 photo print request created. Shop acceptance, verified UPI bank receipt, and enabled Windows Agent are required."
         });
       }catch(e){
