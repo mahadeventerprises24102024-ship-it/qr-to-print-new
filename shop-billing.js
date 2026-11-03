@@ -185,13 +185,16 @@ function installShopBilling(app, pool) {
     const pages = req.body && req.body.pagesPerCopy;
     if (!BILL_TYPES.includes(category) ||
         !Number.isInteger(pages) || pages < 1 || pages > 200 ||
-        (category === "aadhaar_bw" && pages !== 1)) {
-      return res.status(400).json({ error: "Choose print type and actual pages (1–200). Aadhaar B&W counts as one card per copy." });
+        (["aadhaar_front","aadhaar_back","photo_2","photo_4","full_page","aadhaar_bw"].includes(category) && pages!==1)) {
+      return res.status(400).json({error:"Choose print service and actual pages; Aadhaar and photo sheets use exactly one page/copy"});
+    }
     }
     try {
       const found = await pool.query([
-        "SELECT o.id, o.copies, o.print_mode, o.status, s.name AS shop_name,",
-        "r.bw_paise, r.aadhaar_bw_paise, r.color_paise",
+        "SELECT o.id,o.copies,o.print_mode,o.status,o.document_kind,o.photo_layout,o.print_service,",
+        "s.name AS shop_name,r.bw_paise,r.aadhaar_bw_paise,r.color_paise,",
+        "r.aadhaar_front_paise,r.aadhaar_back_paise,r.document_paise,",
+        "r.photo_4_paise,r.photo_2_paise,r.full_page_paise",
         "FROM test_file_orders o",
         "JOIN shop_owners owner ON owner.shop_id = o.shop_id",
         "JOIN shops s ON s.id = o.shop_id",
@@ -205,12 +208,35 @@ function installShopBilling(app, pool) {
       if (order.status !== "printed") {
         return res.status(409).json({ error: "First print and confirm paper output, then issue the bill" });
       }
-      if ((order.print_mode === "color" && category !== "color") ||
-          (order.print_mode === "bw" && category === "color")) {
-        return res.status(400).json({ error: "Bill type must match the order colour mode" });
-      }
-      const key = category + "_paise";
-      const ratePaise = Number(order[key] == null ? DEFAULT_RATES_PAISE[category] : order[key]);
+      // Do not allow customer orders to be billed as unrelated print types.
+      const service=order.print_service||
+        (order.document_kind==="customer_pdf"?"document":
+          order.document_kind==="customer_photo"?
+            (Number(order.photo_layout)===4?"photo_4":
+             Number(order.photo_layout)===2?"photo_2":"full_page"):null);
+      if(service&&category!==service)return res.status(400).json({
+        error:"Bill type must match the customer order print service"});
+      if(order.document_kind==="dummy_card_front_back"&&
+        !["aadhaar_front","aadhaar_back","aadhaar_bw"].includes(category))
+        return res.status(400).json({error:"Card print type is required"});
+      if(!service&&order.document_kind!=="dummy_card_front_back"&&
+        SERVICE_TYPES.includes(category)&&category!=="document")
+        return res.status(400).json({error:"This order is not an Aadhaar/photo-layout print"});
+      if(SERVICE_TYPES.includes(category)===false&&
+        (order.document_kind==="customer_photo"||order.document_kind==="customer_pdf"))
+        return res.status(400).json({error:"Choose one of the six print services"});
+      if(!SERVICE_TYPES.includes(category)&&
+        ((order.print_mode==="color"&&category!=="color")||
+         (order.print_mode==="bw"&&category==="color")))
+        return res.status(400).json({error:"Legacy bill type must match colour mode"});
+      const key=category+"_paise";
+      const legacyRate={
+        aadhaar_front:"aadhaar_bw_paise",aadhaar_back:"aadhaar_bw_paise",
+        document:"bw_paise",photo_4:"color_paise",photo_2:"color_paise",
+        full_page:"color_paise"
+      }[category];
+      const ratePaise=Number(order[key]!=null?order[key]:
+        legacyRate&&order[legacyRate]!=null?order[legacyRate]:DEFAULT_RATES_PAISE[category]);
       const copies = Number(order.copies);
       const calculated = calculateBill(category, pages, copies, ratePaise);
       const saved = await pool.query([
