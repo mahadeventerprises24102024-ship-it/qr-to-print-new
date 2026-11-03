@@ -12,6 +12,7 @@ const {
   S3Client,PutObjectCommand,DeleteObjectCommand
 }=require("@aws-sdk/client-s3");
 const {storageSettings,detectSafeFile}=require("./private-test-uploads");
+const {createOnlinePhotoQuote}=require("./upi-print-payments");
 
 const MAX_BYTES=2*1024*1024;
 const MAX_PIXELS=8*1024*1024;
@@ -118,9 +119,18 @@ function installCustomerPhotoUploads(app,pool,env=process.env,dependencies={}){
              RETURNING id,status,created_at AS "createdAt"`,
             [shopId,req.session?.userId||null,key,bytes.length,hash,
               copies,printMode,trackingHash,body.paymentMethod]);
+          let customerUpiQuote=null;
+          if(body.paymentMethod==="online"){
+            try{
+              customerUpiQuote=await (deps.createUpiQuote||createOnlinePhotoQuote)(
+                pool,shopId,result.rows[0].id);
+            }catch(e){
+              console.warn("UPI QR not available immediately for customer order",e?.name);
+            }
+          }
           res.set("Cache-Control","private, no-store");
           return res.status(201).json({
-            photoPilot:true,identityDocumentsAllowed:false,automaticPrinting:false,paymentMethod:body.paymentMethod,
+            photoPilot:true,identityDocumentsAllowed:false,automaticPrinting:false,paymentMethod:body.paymentMethod,upiQrPrepared:!!customerUpiQuote,
             message:"Private sanitized customer photo received. Shop review and payment verification required.",
             order:result.rows[0],trackingToken
           });
