@@ -15,7 +15,7 @@ test("customer QR displays six print choices and Print initiates paid, reviewed 
   assert.match(customer,/data-print-layout="aadhaar-back" disabled/);
   assert.match(customer,/id="customer-photo-submit"[^>]*>🖨 Print/);
   assert.match(customer,/customer-photo-layout-orders/);
-  assert.match(customer,/isMulti\?\/customer-photo-layout-orders"/);
+  assert.match(customer,/isMulti\?"\/customer-photo-layout-orders"/);
   assert.match(customer,/Print दबाने पर पहले Order भेजा जाएगा/);
   assert.match(customer,/बैंक में UPI भुगतान Verify/);
   assert.match(customer,/id="legacy-test-upload" hidden/);
