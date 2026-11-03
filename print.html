@@ -118,7 +118,7 @@
             मैं पुष्टि करता/करती हूँ कि यह मेरी गैर-संवेदनशील फाइल है, इसमें Aadhaar/PAN/निजी पहचान या बैंक विवरण नहीं है। मैं इसे दुकान को प्रिंट के लिए भेजने तथा 24 घंटे तक सुरक्षित रखने की सहमति देता/देती हूँ।
           </label>
           <button id="customer-photo-submit" class="btn" type="submit" disabled>🖨 Print →</button>
-          <p class="subtitle" style="margin:10px 0 0"><strong>ध्यान दें:</strong> Print दबाने पर पहले Order दुकानदार के PC पर दिखेगा। दुकानदार एक बार 🖨 Print दबाकर चुने हुए Windows Printer पर JPG फोटो भेजेगा। Cash/UPI भुगतान अलग Pending रहेगा; उसे Confirm करना आवश्यक है। Agent और PC चालू हों। PDF की Printing मैन्युअल है।</p>
+          <p class="subtitle" style="margin:10px 0 0"><strong>ध्यान दें:</strong> Online चुनकर Print दबाने पर पहले UPI QR खुलेगा। वास्तविक UPI भुगतान के बाद दुकानदार बैंक में पैसा Verify करेगा, तभी चुने हुए Windows Agent से फोटो Auto Print होगी। Cash पर दुकानदार के खुले Desktop Panel में नया ऑर्डर पॉप-अप होगा और वह 🖨 Print दबा सकेगा। PDF मैन्युअल रहेगा।</p>
           <p id="customer-photo-message" class="response" role="status" aria-live="polite">Checking secure document upload…</p>
         </form>
       </section>
@@ -355,8 +355,15 @@
           successPanel.hidden=false;
           successPanel.scrollIntoView({behavior:"smooth",block:"start"});
           realPhotoMessage.textContent="Order #"+result.order.id+" • "+
-            (paymentMethod==="cash"?"Cash at Shop":"Online UPI")+
-            " • दुकानदार के Desktop पर 🖨 Print बटन उपलब्ध होगा। सिर्फ Print करने से भुगतान Paid नहीं माना जाएगा।";
+            (paymentMethod==="cash"?
+              "Cash चुना गया है — दुकानदार के खुले Desktop Print Panel में Print पॉप-अप आएगा।":
+              (result.upiQrPrepared?
+                "UPI QR तैयार है — भुगतान करें। दुकानदार बैंक-पुष्टि करेगा, तभी Photo Auto Print होगी।":
+                "Online चुना गया है, लेकिन दुकान का UPI QR अभी उपलब्ध नहीं है। दुकानदार से UPI ID सेट करने को कहें।"));
+          if(paymentMethod==="online"){
+            document.getElementById("upi-test-actions").hidden=false;
+            if(result.upiQrPrepared)document.getElementById("upi-payment-check").click();
+          }
           realPhotoForm.reset();
         }catch(error){realPhotoMessage.textContent=error.message;}
         finally{realPhotoButton.disabled=false;}
@@ -626,11 +633,11 @@
               "UPI QR तैयार है। असली पेमेंट के बाद मैंने पेमेंट कर दिया दबाएँ। दुकानदार बैंक में पैसा Verify करेगा।";
           }else{
             upiDetails.hidden=true;
-            upiMessage.textContent="UPI TEST Order #"+p.orderId+" • ₹"+p.amountRupees+
+            upiMessage.textContent="UPI Order #"+p.orderId+" • ₹"+p.amountRupees+
               " • "+(p.status==="paid_manual"?
               "Payment Received — shop owner manually verified bank credit.":
               "ग्राहक ने पेमेंट करने की सूचना दी है; दुकानदार की बैंक जाँच बाकी है।")+
-              " No automatic printing.";
+              " Eligible photo Auto Print will follow verified bank payment when the shop has enabled its Windows Agent.";
           }
         }catch(error){upiDetails.hidden=true;upiMessage.textContent=error.message;}
         finally{upiCheck.disabled=false;}
