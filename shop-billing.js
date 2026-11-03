@@ -1,15 +1,28 @@
 "use strict";
 
-// Owner-managed shop pricing and simple, non-GST test bills.
-// This module does not collect payments, store Aadhaar documents, or print files.
-const DEFAULT_RATES_PAISE = Object.freeze({ bw: 300, aadhaar_bw: 500, color: 1000 });
-const BILL_TYPES = Object.freeze(["bw", "aadhaar_bw", "color"]);
-
-function ratesFromRow(row) {
+// Six editable shop prices. Historical bills retain the old bw/color labels.
+const DEFAULT_RATES_PAISE=Object.freeze({
+  bw:300,aadhaar_bw:500,color:1000,
+  aadhaar_front:500,aadhaar_back:500,document:300,
+  photo_4:1000,photo_2:1000,full_page:1000
+});
+const SERVICE_TYPES=Object.freeze(["aadhaar_front","aadhaar_back","document","photo_4","photo_2","full_page"]);
+const BILL_TYPES=Object.freeze([...SERVICE_TYPES,"bw","aadhaar_bw","color"]);
+const FIELD_TO_CATEGORY=Object.freeze({
+  aadhaarFront:"aadhaar_front",aadhaarBack:"aadhaar_back",
+  document:"document",photo4:"photo_4",photo2:"photo_2",fullPage:"full_page"
+});
+function ratesFromRow(row){
+  const r=row||{};
+  const value=(column,legacy)=>Number(r[column]!=null?r[column]:
+    r[legacy]!=null?r[legacy]:DEFAULT_RATES_PAISE[column.replace("_paise","")])/100;
   return {
-    bw: Number(row && row.bw_paise != null ? row.bw_paise : DEFAULT_RATES_PAISE.bw) / 100,
-    aadhaarBw: Number(row && row.aadhaar_bw_paise != null ? row.aadhaar_bw_paise : DEFAULT_RATES_PAISE.aadhaar_bw) / 100,
-    color: Number(row && row.color_paise != null ? row.color_paise : DEFAULT_RATES_PAISE.color) / 100
+    aadhaarFront:value("aadhaar_front_paise","aadhaar_bw_paise"),
+    aadhaarBack:value("aadhaar_back_paise","aadhaar_bw_paise"),
+    document:value("document_paise","bw_paise"),
+    photo4:value("photo_4_paise","color_paise"),
+    photo2:value("photo_2_paise","color_paise"),
+    fullPage:value("full_page_paise","color_paise")
   };
 }
 
@@ -25,8 +38,9 @@ function calculateBill(category, pagesPerCopy, copies, ratePaise) {
       !Number.isInteger(ratePaise) || ratePaise < 100 || ratePaise > 100000) {
     throw new Error("Invalid bill settings");
   }
-  // Aadhaar B&W: flat price per card/copy. Others: price per printed page.
-  const quantity = category === "aadhaar_bw" ? copies : pagesPerCopy * copies;
+  const oneSheet=["aadhaar_front","aadhaar_back","photo_2","photo_4","full_page","aadhaar_bw"].includes(category);
+  if(oneSheet&&pagesPerCopy!==1)throw new Error("Single-sheet service requires one page per copy");
+  const quantity=oneSheet?copies:pagesPerCopy*copies;
   return { quantity, totalPaise: quantity * ratePaise };
 }
 
@@ -40,6 +54,11 @@ async function ensureShopBillingTables(pool) {
     "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")"
   ].join(" "));
+  for(const column of [
+    "aadhaar_front_paise","aadhaar_back_paise","document_paise",
+    "photo_4_paise","photo_2_paise","full_page_paise"
+  ])await pool.query("ALTER TABLE shop_print_rates ADD COLUMN IF NOT EXISTS "+
+    column+" INTEGER CHECK ("+column+" BETWEEN 100 AND 100000)");
   await pool.query([
     "CREATE TABLE IF NOT EXISTS shop_print_bills (",
     "id BIGSERIAL PRIMARY KEY,",
@@ -47,7 +66,7 @@ async function ensureShopBillingTables(pool) {
     "order_id BIGINT UNIQUE REFERENCES test_file_orders(id) ON DELETE SET NULL,",
     "order_reference_id BIGINT NOT NULL,",
     "shop_name VARCHAR(120) NOT NULL,",
-    "category VARCHAR(16) NOT NULL CHECK (category IN ('bw','aadhaar_bw','color')),",
+    "category VARCHAR(16) NOT NULL CHECK (category IN ('bw','aadhaar_bw','color','aadhaar_front','aadhaar_back','document','photo_4','photo_2','full_page')),",
     "pages_per_copy SMALLINT NOT NULL CHECK (pages_per_copy BETWEEN 1 AND 200),",
     "copies SMALLINT NOT NULL CHECK (copies BETWEEN 1 AND 10),",
     "quantity SMALLINT NOT NULL CHECK (quantity BETWEEN 1 AND 2000),",
@@ -59,9 +78,10 @@ async function ensureShopBillingTables(pool) {
     "issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")"
   ].join(" "));
-  await pool.query(
-    "CREATE INDEX IF NOT EXISTS shop_print_bills_shop_recent ON shop_print_bills(shop_id, issued_at DESC, id DESC)"
-  );
+  await pool.query("ALTER TABLE shop_print_bills DROP CONSTRAINT IF EXISTS shop_print_bills_category_check");
+  await pool.query("ALTER TABLE shop_print_bills ADD CONSTRAINT shop_print_bills_category_check "+
+    "CHECK (category IN ('bw','aadhaar_bw','color','aadhaar_front','aadhaar_back','document','photo_4','photo_2','full_page'))");
+  await pool.query("CREATE INDEX IF NOT EXISTS shop_print_bills_shop_recent ON shop_print_bills(shop_id, issued_at DESC, id DESC)");
 }
 
 function installShopBilling(app, pool) {
@@ -275,5 +295,5 @@ function installShopBilling(app, pool) {
   });
 }
 
-module.exports = { DEFAULT_RATES_PAISE, ratesFromRow, validRupee, calculateBill,
+module.exports = { DEFAULT_RATES_PAISE,SERVICE_TYPES,FIELD_TO_CATEGORY,ratesFromRow,validRupee,calculateBill,
   ensureShopBillingTables, installShopBilling };
