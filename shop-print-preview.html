@@ -276,6 +276,7 @@
         isDummyCard?"DUMMY Front + Back card layout (one A4 TEST page)":
           order.documentKind==="customer_pdf"?"Customer PDF (malware-scanned, manual printing)":order.documentKind==="customer_photo"?"Customer Photo (sanitized image)":"Legacy document",
         "File type: " + order.fileType.toUpperCase(),
+        "Layout: " + (Number(order.photoLayout)>1?Number(order.photoLayout)+" photos on A4":"Full page"),
         "Copies requested: " + order.copies,
         "Print mode: " + mode,
         "Printer: manually select your own installed printer in the native print dialog"
