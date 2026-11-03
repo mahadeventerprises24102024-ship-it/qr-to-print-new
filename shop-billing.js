@@ -188,7 +188,6 @@ function installShopBilling(app, pool) {
         (["aadhaar_front","aadhaar_back","photo_2","photo_4","full_page","aadhaar_bw"].includes(category) && pages!==1)) {
       return res.status(400).json({error:"Choose print service and actual pages; Aadhaar and photo sheets use exactly one page/copy"});
     }
-    }
     try {
       const found = await pool.query([
         "SELECT o.id,o.copies,o.print_mode,o.status,o.document_kind,o.photo_layout,o.print_service,",
