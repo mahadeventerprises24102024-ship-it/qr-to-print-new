@@ -22,6 +22,7 @@
     p { line-height:1.7;margin:9px 0 }
     .muted { color:var(--muted);font-size:13px }
     .notice { background:#fff5df;border:1px solid #f3dfae;padding:14px 16px;border-radius:12px;color:#7a5720;font-size:13px;line-height:1.65;margin:20px 0 }
+    [hidden]{display:none!important}
     .grid { display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:18px;align-items:start }
     .card { background:white;border:1px solid var(--line);border-radius:17px;padding:23px;box-shadow:0 8px 26px #17462f0d }
     .full { grid-column:1/-1 }
@@ -64,14 +65,15 @@
   <main>
     <span class="eyebrow">SHOPKEEPER PRINT PANEL</span>
     <h1>Document आया? Print विकल्प तैयार.</h1>
-    <p class="muted">ग्राहक के नए JPG/PNG ऑर्डर यहाँ अपने-आप आएँगे। <strong>Cash / Online</strong> दोनों में एक बार 🖨 Print दबाएँ—चुने हुए Windows Printer पर Agent प्रिंट भेजेगा। भुगतान का रिकॉर्ड अलग रहेगा। PDF मैन्युअल रहेगा।</p>
+    <p class="muted"><strong>Cash:</strong> नया Order आते ही इस Desktop Print Panel में Pop-up और 🖨 Print बटन दिखाई देगा। <strong>Online:</strong> ग्राहक को UPI QR मिलेगा; बैंक में पैसा आने की दुकानदार द्वारा पुष्टि के बाद ही Photo Auto Print होगा। PDF मैन्युअल रहेगा।</p>
     <div class="notice"><strong>स्थानीय कंप्यूटर से प्रिंटिंग:</strong> PDF/Photo या Aadhaar Front/Back को इस PC पर ही प्रिंट करने के लिए <a href="/shop-local-print.html" style="font-weight:800">🖨 Print Now — Shop PC</a> खोलें। वहाँ चुनी गई फाइल वेबसाइट या क्लाउड पर अपलोड नहीं होती। नीचे Customer Upload Orders की सूची है।</div>
     <div class="notice"><strong>Customer Upload:</strong> सामान्य JPG/PNG फाइलें उपलब्ध हैं। PDF केवल सक्रिय सुरक्षा स्कैनर के बाद स्वीकार होगा। असली Aadhaar/PAN या निजी पहचान दस्तावेज़ न भेजें। PDF मैन्युअल Print होगा; Photo Auto Print के लिए अलग Owner अनुमति जरूरी है।</div>
     <div class="grid">
       <section class="card" aria-labelledby="queue-title">
         <div class="queue-head">
           <div><span class="eyebrow">CUSTOMER FILE ORDERS</span><h2 id="queue-title">Incoming Print Orders</h2><span class="pill" id="queue-count">Checking orders…</span></div>
-          <button class="secondary" id="refresh-orders" type="button">Refresh now</button>
+          <div class="actions"><button class="secondary" id="refresh-orders" type="button">Refresh now</button>
+            <button class="secondary" id="enable-desktop-alerts" type="button">Enable Windows Alerts</button></div>
         </div>
         <p class="muted">पैनल खुला रखें। लगभग हर 4 सेकंड में नई फाइल दिखेगी। केवल आपकी दुकान के ऑर्डर यहाँ आएँगे। Windows Agent और पसंदीदा Printer सेट होना चाहिए।</p>
         <p id="storage-note" class="state" role="status">Checking customer upload availability…</p>
@@ -106,6 +108,16 @@
       </section>
     </div>
   </main>
+  <div id="cash-order-popup" hidden style="position:fixed;inset:0;background:rgba(7,30,22,.65);z-index:10000;display:flex;justify-content:center;align-items:center;padding:20px">
+    <section role="dialog" aria-modal="true" aria-labelledby="cash-popup-title" style="background:white;border-radius:18px;padding:24px;max-width:480px;width:100%;color:#12392b;box-shadow:0 18px 65px #071c17">
+      <span class="eyebrow">NEW CUSTOMER CASH PRINT ORDER</span>
+      <h2 id="cash-popup-title" style="margin:9px 0">Cash Payment • New Order</h2>
+      <p id="cash-popup-details" style="line-height:1.65">Customer Cash order received.</p>
+      <p style="font-size:13px">ग्राहक ने Cash चुना है। आप 🖨 Print दबाकर चुने हुए Printer पर फोटो भेज सकते हैं। इससे Cash अपने-आप Paid नहीं होगा।</p>
+      <div class="actions"><button id="cash-popup-print" type="button">🖨 Print</button>
+        <button id="cash-popup-dismiss" class="secondary" type="button">Later</button></div>
+    </section>
+  </div>
   <div id="print-image-area" aria-hidden="true"></div>
   <script>
   "use strict";
@@ -150,6 +162,51 @@
     let firstLoad=true;
     let seenIds=new Set();
     let requestInFlight=false;
+    const cashPopup=document.getElementById("cash-order-popup");
+    const cashPopupDetails=document.getElementById("cash-popup-details");
+    const cashPopupPrint=document.getElementById("cash-popup-print");
+    const cashPopupDismiss=document.getElementById("cash-popup-dismiss");
+    const desktopAlerts=document.getElementById("enable-desktop-alerts");
+    const seenCashNotifications=new Set();
+    let currentCashOrder=null;
+    cashPopupDismiss.addEventListener("click",()=>{cashPopup.hidden=true;});
+    cashPopupPrint.addEventListener("click",()=>{
+      if(!currentCashOrder)return;
+      if(currentCashOrder.documentKind==="customer_pdf"){
+        openOrder(currentCashOrder.id);cashPopup.hidden=true;return;
+      }
+      if(!agentReady){
+        note.textContent="Windows Agent offline. Pair Agent and save printer, then use the Cash Print button.";
+        cashPopup.hidden=true;return;
+      }
+      printOrderNow(currentCashOrder.id,cashPopupPrint);
+    });
+    document.addEventListener("keydown",e=>{if(e.key==="Escape")cashPopup.hidden=true;});
+    desktopAlerts.addEventListener("click",async()=>{
+      if(!("Notification" in window)){note.textContent="Browser notifications not supported; in-page Cash popup still works.";return;}
+      const permission=await Notification.requestPermission();
+      note.textContent=permission==="granted"?"Desktop Cash alerts enabled. Keep this panel open.":
+        "Desktop alerts not permitted; in-page Cash popup still works while panel is open.";
+    });
+    function announceCashOrder(order){
+      const id=String(order.id);
+      if(seenCashNotifications.has(id))return;
+      seenCashNotifications.add(id);
+      currentCashOrder=order;
+      cashPopupDetails.textContent="Order #"+id+" • CASH • "+
+        String(order.copies)+" copies • "+
+        (order.printMode==="color"?"Colour":"B&W")+
+        (Number(order.photoLayout)>1?" • "+Number(order.photoLayout)+" photos on A4":" • Full page");
+      cashPopupPrint.textContent=order.documentKind==="customer_pdf"?
+        "Open PDF (Manual Print)":"🖨 Print";
+      cashPopupPrint.disabled=false;
+      cashPopup.hidden=false;
+      if("Notification" in window&&Notification.permission==="granted"){
+        try{new Notification("Cash Print Order #"+id,{
+          body:"Cash order received. Open QR-To-Print desktop panel to print."
+        });}catch{/* In-page popup remains visible. */}
+      }
+    }
     let agentReady=false;
     let savedPrinter="";
     let queueStates=new Map();
@@ -184,7 +241,8 @@
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw Error(data.error||"Unable to send order to printer");
         button.textContent="Queued for Windows Printer ✓";
-        note.textContent="Order #"+id+" sent. Windows will spool it once; Cash/Online payment remains separately tracked. Check actual paper output.";
+        cashPopup.hidden=true;
+        note.textContent="Cash order #"+id+" sent to Windows Printer. Payment remains Pending until separately recorded; check paper output.";
         queueStates.set(String(id),"queued");
         await refreshOrders();
       }catch(error){
@@ -214,15 +272,18 @@
       const incoming=valid.filter(o=>o.status==="test_only");
       count.textContent=pending.length+" Ready to review · "+incoming.length+" New";
       const newIds=new Set(valid.map(o=>String(o.id)));
-      const arrivals=firstLoad?[]:incoming.filter(o=>!seenIds.has(String(o.id)));
+      const wasFirstLoad=firstLoad;
+      const arrivals=wasFirstLoad?[]:incoming.filter(o=>!seenIds.has(String(o.id)));
+      const cashArrivals=(wasFirstLoad?incoming:arrivals).filter(o=>o.paymentMethod==="cash");
       firstLoad=false;
       seenIds=newIds;
+      if(cashPopup.hidden&&cashArrivals.length)announceCashOrder(cashArrivals[0]);
       if(arrivals.length){
         document.title="("+arrivals.length+" new orders) "+originalTitle;
-        note.textContent=arrivals.length+" new customer order(s). Cash or Online—press 🖨 Print once to send normal photos to the Windows printer.";
+        note.textContent=arrivals.length+" new customer order(s). Cash orders pop up; Online photos Auto Print only after verified UPI payment.";
       }else{
         document.title=originalTitle;
-        note.textContent="Only accepted customer orders can be marked Printed after checking paper.";
+        note.textContent="Cash: Desktop Pop-up + Print. Online: Verify UPI bank credit for Photo Auto Print.";
       }
       list.replaceChildren();
       if(!valid.length){
@@ -258,15 +319,20 @@
           " — Not proof of physical paper or payment.","meta"));
         item.append(info);
         if(["test_only","accepted"].includes(order.status)){
-          if(order.documentKind==="customer_photo"&&["cash","online"].includes(order.paymentMethod)){
+          if(order.documentKind==="customer_photo"&&order.paymentMethod==="cash"){
             const printButton=document.createElement("button");
             printButton.type="button";
             printButton.textContent=jobStatus?"Windows job: "+jobStatus.toUpperCase():"🖨 Print";
             printButton.disabled=!!jobStatus||!agentReady;
-            printButton.title=agentReady?"One-click Print on "+savedPrinter:
+            printButton.title=agentReady?"One-click Cash Print on "+savedPrinter:
               "Pair Windows Agent and select printer in Dashboard → Printers";
             printButton.addEventListener("click",()=>printOrderNow(id,printButton));
             item.append(printButton);
+          }else if(order.documentKind==="customer_photo"&&order.paymentMethod==="online"){
+            item.append(makeText("span",jobStatus?
+              "Online • Windows job: "+jobStatus.toUpperCase():
+              "Online UPI • Auto Print after bank confirmation (Agent ON)",
+              "meta"));
           }else{
             const printButton=document.createElement("button");
             printButton.type="button";
@@ -287,7 +353,7 @@
       });
     }
     async function refreshOrders(){
-      if(requestInFlight||document.visibilityState==="hidden")return;
+      if(requestInFlight)return;
       requestInFlight=true;
       refresh.disabled=true;
       try{
