@@ -99,7 +99,9 @@ function installShopBilling(app, pool) {
     }
     try {
       const result = await pool.query([
-        "SELECT s.name, r.bw_paise, r.aadhaar_bw_paise, r.color_paise",
+        "SELECT s.name, r.bw_paise, r.aadhaar_bw_paise, r.color_paise,",
+        "r.aadhaar_front_paise,r.aadhaar_back_paise,r.document_paise,",
+        "r.photo_4_paise,r.photo_2_paise,r.full_page_paise",
         "FROM shops s LEFT JOIN shop_print_rates r ON r.shop_id = s.id",
         "WHERE s.public_code = $1"
       ].join(" "), [req.params.code]);
@@ -120,7 +122,9 @@ function installShopBilling(app, pool) {
   app.get("/api/shop/pricing", ownerOnly, async (req, res) => {
     try {
       const result = await pool.query([
-        "SELECT s.name, r.bw_paise, r.aadhaar_bw_paise, r.color_paise",
+        "SELECT s.name, r.bw_paise, r.aadhaar_bw_paise, r.color_paise,",
+        "r.aadhaar_front_paise,r.aadhaar_back_paise,r.document_paise,",
+        "r.photo_4_paise,r.photo_2_paise,r.full_page_paise",
         "FROM shop_owners o JOIN shops s ON s.id = o.shop_id",
         "LEFT JOIN shop_print_rates r ON r.shop_id = s.id WHERE o.id = $1"
       ].join(" "), [req.session.shopOwnerId]);
@@ -139,20 +143,28 @@ function installShopBilling(app, pool) {
 
   app.put("/api/shop/pricing", ownerOnly, async (req, res) => {
     const rates = req.body && req.body.ratesRupees;
-    if (!rates || !validRupee(rates.bw) ||
-        !validRupee(rates.aadhaarBw) || !validRupee(rates.color)) {
+    if (!rates || !Object.keys(FIELD_TO_CATEGORY).every(k=>validRupee(rates[k]))) {
       return res.status(400).json({ error: "Enter whole-rupee rates from ₹1 to ₹1000" });
     }
     try {
       const result = await pool.query([
-        "INSERT INTO shop_print_rates (shop_id, bw_paise, aadhaar_bw_paise, color_paise)",
-        "SELECT o.shop_id, $2, $3, $4 FROM shop_owners o WHERE o.id = $1",
+        "INSERT INTO shop_print_rates (shop_id,bw_paise,aadhaar_bw_paise,color_paise,",
+        "aadhaar_front_paise,aadhaar_back_paise,document_paise,photo_4_paise,photo_2_paise,full_page_paise)",
+        "SELECT o.shop_id,$4,$2,$7,$2,$3,$4,$5,$6,$7 FROM shop_owners o WHERE o.id=$1",
         "ON CONFLICT (shop_id) DO UPDATE SET",
-        "bw_paise = EXCLUDED.bw_paise, aadhaar_bw_paise = EXCLUDED.aadhaar_bw_paise,",
-        "color_paise = EXCLUDED.color_paise, updated_at = NOW()",
-        "RETURNING bw_paise, aadhaar_bw_paise, color_paise"
+        "bw_paise=EXCLUDED.bw_paise,aadhaar_bw_paise=EXCLUDED.aadhaar_bw_paise,",
+        "color_paise=EXCLUDED.color_paise,",
+        "aadhaar_front_paise=EXCLUDED.aadhaar_front_paise,",
+        "aadhaar_back_paise=EXCLUDED.aadhaar_back_paise,",
+        "document_paise=EXCLUDED.document_paise,photo_4_paise=EXCLUDED.photo_4_paise,",
+        "photo_2_paise=EXCLUDED.photo_2_paise,full_page_paise=EXCLUDED.full_page_paise,",
+        "updated_at=NOW()",
+        "RETURNING bw_paise,aadhaar_bw_paise,color_paise,",
+        "aadhaar_front_paise,aadhaar_back_paise,document_paise,",
+        "photo_4_paise,photo_2_paise,full_page_paise"
       ].join(" "), [
-        req.session.shopOwnerId, rates.bw * 100, rates.aadhaarBw * 100, rates.color * 100
+        req.session.shopOwnerId,rates.aadhaarFront*100,rates.aadhaarBack*100,
+        rates.document*100,rates.photo4*100,rates.photo2*100,rates.fullPage*100
       ]);
       if (!result.rows.length) return res.status(404).json({ error: "Shop not found" });
       res.set("Cache-Control", "no-store");
