@@ -7,15 +7,18 @@ const root=path.join(__dirname,"..");
 const customer=fs.readFileSync(path.join(root,"print.html"),"utf8");
 const shop=fs.readFileSync(path.join(root,"shop-print-panel.html"),"utf8");
 
-test("customer QR defaults to real SAMPLE file transfer, not the dummy Aadhaar layout",()=>{
-  assert.match(customer,/<option value="regular_test" selected>PDF \/ Photo/);
-  assert.match(customer,/<option value="dummy_card_front_back">/);
-  assert.match(customer,/<div id="regular-test-file">/);
-  assert.match(customer,/<section id="dummy-card-test-files" hidden/);
-  assert.match(customer,/id="private-upload-form"/);
-  assert.match(customer,/\/api\/public\/shops\/.*test-file-orders/);
+test("customer QR displays six print choices and Print initiates paid, reviewed workflow",()=>{
+  for(const layout of ["aadhaar-front","aadhaar-back","document","four","two","full"]){
+    assert.ok(customer.includes('data-print-layout="'+layout+'"'),"Missing "+layout);
+  }
+  assert.match(customer,/data-print-layout="aadhaar-front" disabled/);
+  assert.match(customer,/data-print-layout="aadhaar-back" disabled/);
+  assert.match(customer,/id="customer-photo-submit"[^>]*>🖨 Print/);
+  assert.match(customer,/customer-photo-layout-orders/);
+  assert.match(customer,/isMulti\?\/customer-photo-layout-orders"/);
+  assert.match(customer,/Print दबाने पर पहले Order भेजा जाएगा/);
+  assert.match(customer,/बैंक में UPI भुगतान Verify/);
   assert.match(customer,/id="legacy-test-upload" hidden/);
-  assert.match(customer,/Upload Document →/);
   assert.match(customer,/असली Aadhaar/);
 });
 test("successful mobile SAMPLE upload shows a private receipt and easy tracking/UPI steps",()=>{
