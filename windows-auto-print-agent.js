@@ -144,8 +144,8 @@ async function run(){
   if(process.platform!=="win32")throw Error("Use the Windows print-shop PC");
   const secret=readSavedKey();
   if(!TOKEN.test(secret||""))throw Error("Install paired agent for this Windows user first");
-  console.log("QR-To-Print Auto Print Agent: server-verified UPI, sanitized customer JPG only");
-  console.log("Auto Print defaults OFF; enable in Shop Dashboard > Printers.");
+  console.log("QR-To-Print Agent: Cash owner-click or bank-verified Online photo, sanitized JPG only");
+  console.log("Online Auto Print defaults OFF; owner must enable it under Shop Dashboard > Printers. Cash owner-click remains separate.");
   while(true){
     try{
       const p=listWindowsPrinters();
@@ -161,7 +161,7 @@ async function run(){
       if(error.fatal)throw error;
       console.warn("Agent retry: "+error.message);
     }
-    await sleep(30000);
+    await sleep(8000);
   }
 }
 if(require.main===module){
