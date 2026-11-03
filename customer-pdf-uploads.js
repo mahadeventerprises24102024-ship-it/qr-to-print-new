@@ -58,6 +58,7 @@ function installCustomerPdfUploads(app,pool,env=process.env,deps={}){
          !Number.isInteger(copies)||copies<1||copies>10||
          !["bw","color"].includes(body.printMode)||
          body.confirmedNonSensitive!=="yes"||
+         !["cash","online"].includes(body.paymentMethod)||
          !validCustomerPdf(req.file))return res.status(400).json({
            error:"Choose a valid non-sensitive, non-encrypted PDF (up to 2 MB) and printing options"});
       try{
@@ -88,13 +89,13 @@ function installCustomerPdfUploads(app,pool,env=process.env,deps={}){
         const result=await pool.query(
           "INSERT INTO test_file_orders "+
           "(shop_id,customer_id,storage_key,file_type,file_size_bytes,file_sha256,"+
-          "copies,print_mode,tracking_token_hash,document_kind) "+
-          "VALUES ($1,$2,$3,'pdf',$4,$5,$6,$7,$8,'customer_pdf') "+
+          "copies,print_mode,tracking_token_hash,document_kind,payment_method) "+
+          "VALUES ($1,$2,$3,'pdf',$4,$5,$6,$7,$8,'customer_pdf',$9) "+
           'RETURNING id,status,created_at AS "createdAt"',
           [shopId,req.session?.userId||null,key,bytes.length,hash,
-            copies,body.printMode,tokenHash]);
+            copies,body.printMode,tokenHash,body.paymentMethod]);
         res.set("Cache-Control","private, no-store");
-        return res.status(201).json({order:result.rows[0],trackingToken,
+        return res.status(201).json({order:result.rows[0],trackingToken,paymentMethod:body.paymentMethod,
           identityDocumentsAllowed:false,automaticallyVerified:false,
           automaticPrinting:false,
           message:"Customer PDF received. Only shopkeeper-reviewed, bank-verified manual printing is allowed."});
