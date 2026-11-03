@@ -89,8 +89,8 @@ function installCustomerPdfUploads(app,pool,env=process.env,deps={}){
         const result=await pool.query(
           "INSERT INTO test_file_orders "+
           "(shop_id,customer_id,storage_key,file_type,file_size_bytes,file_sha256,"+
-          "copies,print_mode,tracking_token_hash,document_kind,payment_method) "+
-          "VALUES ($1,$2,$3,'pdf',$4,$5,$6,$7,$8,'customer_pdf',$9) "+
+          "copies,print_mode,tracking_token_hash,document_kind,payment_method,print_service) "+
+          "VALUES ($1,$2,$3,'pdf',$4,$5,$6,$7,$8,'customer_pdf',$9,'document') "+
           'RETURNING id,status,created_at AS "createdAt"',
           [shopId,req.session?.userId||null,key,bytes.length,hash,
             copies,body.printMode,tokenHash,body.paymentMethod]);
