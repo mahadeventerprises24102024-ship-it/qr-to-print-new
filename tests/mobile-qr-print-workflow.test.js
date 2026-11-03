@@ -19,7 +19,7 @@ test("customer QR displays six print choices and Print initiates paid, reviewed 
   assert.match(customer,/name="paymentMethod" value="cash"/);
   assert.match(customer,/name="paymentMethod" value="online"/);
   assert.match(customer,/UPI QR खुलेगा/);
-  assert.match(customer,/बैंक में UPI भुगतान Verify/);
+  assert.match(customer,/बैंक में पैसा आने की दुकानदार/);
   assert.match(customer,/id="legacy-test-upload" hidden/);
   assert.match(customer,/असली Aadhaar/);
 });
