@@ -45,7 +45,7 @@ test("only a logged-in shop owner may read payment-gated print permissions",asyn
 
 test("UPI quote locks SAMPLE print until owner confirms actual bank receipt",async()=>{
   for(const status of ["awaiting_payment","customer_claimed","rejected"]){
-    const h=install([{order_status:"accepted",upi_status:status}]),result=response();
+    const h=install([{order_status:"accepted",payment_method:"online",upi_status:status}]),result=response();
     await h.routes[endpoint].at(-1)(authed,result);
     assert.equal(result.code,200,status);
     assert.equal(result.data.canPrint,false,status);
@@ -57,7 +57,7 @@ test("UPI quote locks SAMPLE print until owner confirms actual bank receipt",asy
     assert.match(h.queries[0].sql,/o.file_deleted_at IS NULL/);
     assert.deepEqual(h.queries[0].args,[23,"19"]);
   }
-  const paid=install([{order_status:"accepted",upi_status:"paid_manual"}]),result=response();
+  const paid=install([{order_status:"accepted",payment_method:"online",upi_status:"paid_manual"}]),result=response();
   await paid.routes[endpoint].at(-1)(authed,result);
   assert.equal(result.data.canPrint,true);
   assert.equal(result.data.requiresManualBankConfirmation,false);
