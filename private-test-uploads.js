@@ -533,6 +533,21 @@ function installTestFileUploads(app, pool, env = process.env) {
              AND o.id = $2 AND o.status = 'accepted'
              AND o.created_at > NOW() - INTERVAL '24 hours'
              AND o.file_deleted_at IS NULL
+             AND (
+               o.payment_method IS NULL OR
+               (o.payment_method='online' AND EXISTS (
+                 SELECT 1 FROM shop_upi_test_payments online_payment
+                 WHERE online_payment.order_id=o.id AND online_payment.shop_id=o.shop_id
+                   AND online_payment.status='paid_manual'
+                   AND online_payment.confirmed_by_owner_id IS NOT NULL
+               )) OR
+               (o.payment_method='cash' AND EXISTS (
+                 SELECT 1 FROM shop_cash_print_payments cash_payment
+                 WHERE cash_payment.order_id=o.id AND cash_payment.shop_id=o.shop_id
+                   AND cash_payment.status='paid'
+                   AND cash_payment.confirmed_by_owner_id IS NOT NULL
+               ))
+             )
              AND NOT EXISTS (
                SELECT 1 FROM shop_upi_test_payments p
                WHERE p.order_id = o.id AND p.shop_id = o.shop_id
