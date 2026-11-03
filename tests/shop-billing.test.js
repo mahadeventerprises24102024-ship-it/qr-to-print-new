@@ -29,11 +29,13 @@ function shopReq(body={},id="5"){
   return {session:{shopOwnerId:42},params:{id},body};
 }
 
-test("the shop price list defaults to ₹3 B&W, ₹5 Aadhaar B&W and ₹10 colour",()=>{
-  assert.deepEqual(billing.DEFAULT_RATES_PAISE,{bw:300,aadhaar_bw:500,color:1000});
-  assert.deepEqual(billing.ratesFromRow({}),{bw:3,aadhaarBw:5,color:10});
+test("six public service rates use old shop prices until six editable rates are saved",()=>{
+  assert.deepEqual(billing.SERVICE_TYPES,["aadhaar_front","aadhaar_back","document","photo_4","photo_2","full_page"]);
+  assert.equal(billing.DEFAULT_RATES_PAISE.document,300);
+  assert.equal(billing.DEFAULT_RATES_PAISE.aadhaar_front,500);
+  assert.deepEqual(billing.ratesFromRow({}),{aadhaarFront:5,aadhaarBack:5,document:3,photo4:10,photo2:10,fullPage:10});
   assert.deepEqual(billing.ratesFromRow({bw_paise:600,aadhaar_bw_paise:700,color_paise:1200}),
-    {bw:6,aadhaarBw:7,color:12});
+    {aadhaarFront:7,aadhaarBack:7,document:6,photo4:12,photo2:12,fullPage:12});
   assert.equal(billing.validRupee(3),true);
   assert.equal(billing.validRupee(3.5),false);
   assert.equal(billing.validRupee(-1),false);
@@ -45,6 +47,10 @@ test("charge printed pages times copies; Aadhaar card rate is per copy",()=>{
   assert.deepEqual(billing.calculateBill("bw",5,2,300),{quantity:10,totalPaise:3000});
   assert.deepEqual(billing.calculateBill("color",2,3,1000),{quantity:6,totalPaise:6000});
   assert.deepEqual(billing.calculateBill("aadhaar_bw",1,4,500),{quantity:4,totalPaise:2000});
+  assert.deepEqual(billing.calculateBill("photo_4",1,3,1000),{quantity:3,totalPaise:3000});
+  assert.deepEqual(billing.calculateBill("photo_2",1,2,1000),{quantity:2,totalPaise:2000});
+  assert.deepEqual(billing.calculateBill("document",5,2,300),{quantity:10,totalPaise:3000});
+  assert.throws(()=>billing.calculateBill("photo_4",2,1,1000));
   assert.throws(()=>billing.calculateBill("bw",0,1,300));
   assert.throws(()=>billing.calculateBill("bw",201,1,300));
   assert.throws(()=>billing.calculateBill("color",1,11,1000));
@@ -57,15 +63,16 @@ test("create tables for per-shop rates and retained immutable-bill snapshots",as
   await billing.ensureShopBillingTables({
     async query(query){sql.push(query);return {rows:[]};}
   });
-  assert.equal(sql.length,3);
+  assert.equal(sql.length,11);
   assert.match(sql[0],/shop_print_rates/);
   assert.match(sql[0],/DEFAULT 300/);
   assert.match(sql[0],/DEFAULT 500/);
   assert.match(sql[0],/DEFAULT 1000/);
-  assert.match(sql[1],/shop_print_bills/);
-  assert.match(sql[1],/order_id BIGINT UNIQUE REFERENCES test_file_orders\(id\) ON DELETE SET NULL/);
-  assert.match(sql[1],/payment_status VARCHAR/);
-  assert.match(sql[1],/total_paise BIGINT/);
+  assert.match(sql[1],/ALTER TABLE shop_print_rates/);
+  assert.match(sql[7],/shop_print_bills/);
+  assert.match(sql[7],/order_id BIGINT UNIQUE REFERENCES test_file_orders\(id\) ON DELETE SET NULL/);
+  assert.match(sql[7],/payment_status VARCHAR/);
+  assert.match(sql[7],/total_paise BIGINT/);
 });
 
 test("public QR rate card reveals prices for the exact public shop code only",async()=>{
@@ -80,7 +87,7 @@ test("public QR rate card reveals prices for the exact public shop code only",as
     params:{code:"a".repeat(32)}
   },r);
   assert.equal(r.body.shopName,"Mahadev Enterprises");
-  assert.deepEqual(r.body.ratesRupees,{bw:3,aadhaarBw:5,color:10});
+  assert.deepEqual(r.body.ratesRupees,{aadhaarFront:5,aadhaarBack:5,document:3,photo4:10,photo2:10,fullPage:10});
   assert.deepEqual(args,["a".repeat(32)]);
   const invalid=reply();
   await routes["GET /api/public/shops/:code/pricing"][0]({
@@ -103,19 +110,19 @@ test("only signed-in shop owner can read and update rates",async()=>{
   handlers[0]({session:{}},denied,()=>{throw Error("Must not allow anonymous owner settings");});
   assert.equal(denied.statusCode,401);
   const invalid=reply();
-  await handlers[1](shopReq({ratesRupees:{bw:3.25,aadhaarBw:5,color:10}}),invalid);
+  await handlers[1](shopReq({ratesRupees:{aadhaarFront:5.25,aadhaarBack:5,document:3,photo4:10,photo2:10,fullPage:10}}),invalid);
   assert.equal(invalid.statusCode,400);
   assert.equal(savedParams,null);
   const good=reply();
-  await handlers[1](shopReq({ratesRupees:{bw:3,aadhaarBw:5,color:10}}),good);
+  await handlers[1](shopReq({ratesRupees:{aadhaarFront:5,aadhaarBack:5,document:3,photo4:10,photo2:10,fullPage:10}}),good);
   assert.equal(good.body.saved,true);
-  assert.deepEqual(savedParams,[42,300,500,1000]);
+  assert.deepEqual(savedParams,[42,500,500,300,1000,1000,1000]);
 });
 
 test("bill is created only after owner's Printed confirmation and uses server rate + copies",async()=>{
   let selectArgs,saveArgs;
   const routes=appWith({async query(sql,params){
-    if(sql.includes("SELECT o.id, o.copies")){
+    if(sql.includes("SELECT o.id,o.copies")){
       selectArgs=params;
       assert.match(sql,/owner\.id = \$1 AND o\.id = \$2/);
       return {rows:[{
@@ -136,18 +143,18 @@ test("bill is created only after owner's Printed confirmation and uses server ra
   handlers[0]({session:{}},owner,()=>{throw Error("Guest cannot create bill");});
   assert.equal(owner.statusCode,401);
   const created=reply();
-  await handlers[1](shopReq({category:"bw",pagesPerCopy:5,ratePaise:1,copies:99}),created);
+  await handlers[1](shopReq({category:"document",pagesPerCopy:5,ratePaise:1,copies:99}),created);
   assert.equal(created.statusCode,201);
   assert.equal(created.body.amountPaise,3000);
   assert.equal(created.body.paymentStatus,"unpaid");
   assert.deepEqual(selectArgs,[42,"5"]);
-  assert.deepEqual(saveArgs,[42,"5","Mahadev Enterprises","bw",5,2,10,300,3000]);
+  assert.deepEqual(saveArgs,[42,"5","Mahadev Enterprises","document",5,2,10,300,3000]);
 });
 
 test("never issue bills for unprinted orders or mismatched colour",async()=>{
   let orderStatus="test_only",orderMode="bw",inserts=0;
   const routes=appWith({async query(sql){
-    if(sql.includes("SELECT o.id, o.copies"))return {rows:[{
+    if(sql.includes("SELECT o.id,o.copies"))return {rows:[{
       copies:1,print_mode:orderMode,status:orderStatus,shop_name:"Mahadev Enterprises"
     }]};
     inserts++;
@@ -155,14 +162,14 @@ test("never issue bills for unprinted orders or mismatched colour",async()=>{
   }});
   const handler=routes["POST /api/shop/test-file-orders/:id/bill"][1];
   const notPrinted=reply();
-  await handler(shopReq({category:"bw",pagesPerCopy:1}),notPrinted);
+  await handler(shopReq({category:"document",pagesPerCopy:1}),notPrinted);
   assert.equal(notPrinted.statusCode,409);
   orderStatus="printed";
   const mismatched=reply();
   await handler(shopReq({category:"color",pagesPerCopy:1}),mismatched);
   assert.equal(mismatched.statusCode,400);
   const invalidAadhaar=reply();
-  await handler(shopReq({category:"aadhaar_bw",pagesPerCopy:2}),invalidAadhaar);
+  await handler(shopReq({category:"aadhaar_front",pagesPerCopy:2}),invalidAadhaar);
   assert.equal(invalidAadhaar.statusCode,400);
   assert.equal(inserts,0);
 });
