@@ -56,7 +56,7 @@
       <p class="small" id="bill-formula"></p>
       <div class="total"><span>Total</span><span id="bill-total"></span></div>
       <div class="status" id="bill-payment"></div>
-      <p class="small">This basic bill is generated for a TEST print order. Rates are saved at issue time. No GST/tax calculation, payment gateway or online payment verification is provided. Cash/UPI status is recorded only after the shop owner manually confirms receipt.</p>
+      <p class="small">इस बिल में Print Service, संख्या, Rate और कुल रकम शामिल है। यह GST Tax Invoice नहीं है। दुकान वाले को Cash/UPI की वास्तविक रकम प्राप्त होने के बाद ही Payment Received दर्ज करना होगा।</p>
     </div>
   </div>
   <div class="actions no-print" id="bill-actions" hidden>
@@ -77,7 +77,7 @@
   let current = null;
   const money = paise => "₹" + (Number(paise) / 100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
   const set = (id,value) => { document.getElementById(id).textContent = value; };
-  const typeNames = {bw:"Black & White",aadhaar_bw:"Aadhaar B&W (card price)",color:"Colour"};
+  const typeNames={aadhaar_front:"Aadhaar Front",aadhaar_back:"Aadhaar Back",document:"JPG / PNG / PDF",photo_4:"1 A4 पर 4 फोटो",photo_2:"1 A4 पर 2 फोटो",full_page:"Single Full Page Photo",bw:"Black & White (old bill)",aadhaar_bw:"Aadhaar B&W (old bill)",color:"Colour (old bill)"};
   function showBill(bill) {
     current = bill;
     set("bill-shop",bill.shopName);
@@ -90,7 +90,7 @@
     set("bill-rate",money(bill.ratePaise));
     set("bill-line-total",money(bill.totalPaise));
     set("bill-total",money(bill.totalPaise));
-    set("bill-formula",bill.category==="aadhaar_bw"
+    set("bill-formula",["aadhaar_front","aadhaar_back","photo_4","photo_2","full_page","aadhaar_bw"].includes(bill.category)
       ? String(bill.copies)+" card copy/copies × "+money(bill.ratePaise)
       : String(bill.pagesPerCopy)+" page(s) × "+String(bill.copies)+" copies × "+money(bill.ratePaise));
     set("bill-payment",bill.paymentStatus==="paid"
