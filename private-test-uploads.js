@@ -123,6 +123,8 @@ async function ensureTestUploadTables(pool) {
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS tracking_token_hash VARCHAR(64)");
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS file_deleted_at TIMESTAMPTZ");
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS photo_layout SMALLINT NOT NULL DEFAULT 1 CHECK (photo_layout IN (1,2,4))");
+  // NULL means an old historical order. New customer orders MUST select cash or online.
+  await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(10) CHECK (payment_method IN (\'cash\',\'online\'))");
   // DUMMY front/back photos become one composite PNG. Real IDs remain unsupported.
   await pool.query("ALTER TABLE test_file_orders ADD COLUMN IF NOT EXISTS document_kind VARCHAR(30) NOT NULL DEFAULT 'regular_test'");
   await pool.query("ALTER TABLE test_file_orders DROP CONSTRAINT IF EXISTS test_file_orders_document_kind_check");
@@ -490,7 +492,7 @@ function installTestFileUploads(app, pool, env = process.env) {
   app.get("/api/shop/test-file-orders", requireShopOwner, async (req, res) => {
     try {
       const result = await pool.query(
-        `SELECT o.id, o.document_kind AS "documentKind", o.photo_layout AS "photoLayout", o.file_type AS "fileType",
+        `SELECT o.id, o.document_kind AS "documentKind", o.photo_layout AS "photoLayout", o.payment_method AS "paymentMethod", o.file_type AS "fileType",
                 o.file_size_bytes AS "fileSizeBytes", o.copies,
                 o.print_mode AS "printMode", o.status,
                 o.file_deleted_at AS "fileDeletedAt",
