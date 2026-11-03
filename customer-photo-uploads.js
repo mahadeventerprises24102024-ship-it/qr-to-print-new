@@ -58,7 +58,7 @@ function installCustomerPhotoUploads(app,pool,env=process.env,dependencies={}){
   // Scanner/renderer for arbitrary PDFs is deliberately not used here.
   // No extra production flag turns on sensitive identity document intake.
   const uploader=multer({storage:multer.memoryStorage(),limits:{
-    fileSize:MAX_BYTES,files:1,fields:4,parts:5,fieldSize:64
+    fileSize:MAX_BYTES,files:1,fields:5,parts:6,fieldSize:64
   }});
   const limiter=rateLimit({windowMs:60*60*1000,limit:4,
     standardHeaders:"draft-7",legacyHeaders:false,
