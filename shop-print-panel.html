@@ -203,6 +203,7 @@
         const mode=order.printMode==="color"?"Colour":"Black & White";
         const copies=Number(order.copies);
         const details=(Number.isInteger(copies)?copies:"?")+" copies · "+mode+
+          (Number(order.photoLayout)>1?" · "+Number(order.photoLayout)+" photos / A4":" · Full page")+
           " · "+Math.round(Number(order.fileSizeBytes)/1024)+" KB · "+formatWhen(order.createdAt);
         info.append(makeText("div",details,"meta"));
         info.append(makeText("span",labels[order.status]||"Status unknown",
