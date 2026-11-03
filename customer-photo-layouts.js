@@ -110,11 +110,11 @@ function installCustomerPhotoLayoutOrders(app,pool,env=process.env,deps={}){
         const result=await pool.query(
           "INSERT INTO test_file_orders "+
           "(shop_id,customer_id,storage_key,file_type,file_size_bytes,file_sha256,"+
-          "copies,print_mode,tracking_token_hash,document_kind,photo_layout,payment_method) "+
-          "VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo',$9,$10) "+
+          "copies,print_mode,tracking_token_hash,document_kind,photo_layout,payment_method,print_service) "+
+          "VALUES ($1,$2,$3,'jpeg',$4,$5,$6,$7,$8,'customer_photo',$9,$10,$11) "+
           'RETURNING id,status,created_at AS "createdAt"',
           [shopId,req.session?.userId||null,key,bytes.length,hash,
-            copies,printMode,trackingHash,layout,req.body.paymentMethod]);
+            copies,printMode,trackingHash,layout,req.body.paymentMethod,layout===4?"photo_4":"photo_2"]);
           let customerUpiQuote=null;
           if(req.body.paymentMethod==="online"){
             try{
