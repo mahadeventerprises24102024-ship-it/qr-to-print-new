@@ -29,12 +29,12 @@ test("Quick Print Panel is served only through active owner page gate and never 
 test("Customer's TEST file order appears in shop-only inbox with poll, manual Refresh and Print action",()=>{
   assert.match(panel,/fetch\("\/api\/shop\/test-file-orders"/);
   assert.match(panel,/credentials:"same-origin"/);
-  assert.match(panel,/setInterval\(refreshOrders,10000\)/);
+  assert.match(panel,/setInterval\(refreshOrders,4000\)/);
   assert.match(panel,/visibilitychange/);
   assert.match(panel,/id="refresh-orders"/);
   assert.match(panel,/id="queue-count"/);
-  assert.match(panel,/Review & Accept to Print/);
-  assert.match(panel,/Print Now · Manual/);
+  assert.match(panel,/id="cash-order-popup"/);
+  assert.match(panel,/cashPopupPrint\.addEventListener\("click"/);
   assert.match(panel,/\/shop-print-preview\.html\?order=/);
   assert.match(panel,/\["customer_photo","customer_pdf"\]\.includes\(o\.documentKind\)/);
   assert.match(upload,/app\.get\("\/api\/shop\/test-file-orders", requireShopOwner/);
@@ -69,7 +69,8 @@ test("Shop-owner local file selection immediately unlocks manual Print without u
   assert.match(panel,/pdf\.target="_blank"/);
   assert.match(panel,/pdf\.rel="noopener noreferrer"/);
   assert.doesNotMatch(panel,/new FormData/);
-  assert.doesNotMatch(panel,/method:"POST"/);
+  assert.match(panel,/method:"POST"/);
+  assert.match(panel,/confirmedImmediatePrint:true/);
   assert.doesNotMatch(panel,/navigator\.usb|navigator\.serial|print\(\)\.then/);
 });
 test("Quick Print Panel strictly parses JavaScript and renders untrusted order metadata as text, not HTML",()=>{
