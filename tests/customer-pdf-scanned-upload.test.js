@@ -45,7 +45,7 @@ function payload(){
  const fd=new FormData();
  fd.set("file",new Blob([pdf],{type:"application/pdf"}),"regular.pdf");
  fd.set("copies","2");fd.set("printMode","bw");
- fd.set("confirmedNonSensitive","yes");
+ fd.set("confirmedNonSensitive","yes");fd.set("paymentMethod","cash");
  return fd;
 }
 test("no configured PDF malware scanner means upload is off and nothing is stored",async()=>{
