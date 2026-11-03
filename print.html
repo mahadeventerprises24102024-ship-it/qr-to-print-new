@@ -335,6 +335,7 @@
         try{
           const data=new FormData(realPhotoForm);
           data.set("confirmedNonSensitive","yes");
+          if(!isMulti)data.set("printService",selectedPrintLayout==="full"?"full_page":"document");
           if(isMulti)data.set("layout",String(needed));
           const endpoint=isMulti?"/customer-photo-layout-orders":
             isPdf?"/customer-pdf-orders":"/customer-photo-orders";
