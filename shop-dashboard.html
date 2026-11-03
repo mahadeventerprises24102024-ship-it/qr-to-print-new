@@ -172,18 +172,27 @@
       <div class="content-icon">₹</div><h2>Pricing &amp; Bills</h2>
       <p id="shop-plan-usage" class="description" role="status">Checking subscription plan...</p>
       <p><a href="/subscription-payment.html" target="_blank" rel="noopener noreferrer">Pay / Renew subscription by UPI QR</a></p>
-      <p>Save your shop's per-page rates. B&amp;W and Colour are charged per printed page; Aadhaar B&amp;W is a flat rate per card/copy. Only owner-confirmed printed customer orders can generate simple bills. Bills are not official GST invoices.</p>
-      <form id="rates-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end;margin-top:22px">
-        <label style="font-size:12px;font-weight:700">B&amp;W ₹ / page
-          <input id="rate-bw" type="number" min="1" max="1000" step="1" value="3" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+      <p>अपनी दुकान के लिए इन <strong>6 Print Services</strong> की अलग दरें Save करें। Aadhaar Front/Back, 2/4 Photo और Full Page की दर प्रति A4 शीट/कॉपी है; JPG/PNG/PDF की दर प्रति प्रिंटेड पेज है। असली Aadhaar Upload फिलहाल सुरक्षा के कारण बंद है। बिल GST Invoice नहीं है।</p>
+      <form id="rates-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;align-items:end;margin-top:22px">
+        <label style="font-size:12px;font-weight:700">1. Aadhaar Front ₹ / copy
+          <input id="rate-aadhaar-front" type="number" min="1" max="1000" step="1" value="5" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
         </label>
-        <label style="font-size:12px;font-weight:700">Aadhaar B&amp;W ₹ / copy
-          <input id="rate-aadhaar" type="number" min="1" max="1000" step="1" value="5" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        <label style="font-size:12px;font-weight:700">2. Aadhaar Back ₹ / copy
+          <input id="rate-aadhaar-back" type="number" min="1" max="1000" step="1" value="5" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
         </label>
-        <label style="font-size:12px;font-weight:700">Colour ₹ / page
-          <input id="rate-color" type="number" min="1" max="1000" step="1" value="10" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        <label style="font-size:12px;font-weight:700">3. JPG / PNG / PDF ₹ / page
+          <input id="rate-document" type="number" min="1" max="1000" step="1" value="3" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
         </label>
-        <button class="btn teal" id="save-rates" type="submit">Save print rates</button>
+        <label style="font-size:12px;font-weight:700">4. एक A4 पर 4 फोटो ₹ / sheet
+          <input id="rate-photo-4" type="number" min="1" max="1000" step="1" value="10" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        </label>
+        <label style="font-size:12px;font-weight:700">5. एक A4 पर 2 फोटो ₹ / sheet
+          <input id="rate-photo-2" type="number" min="1" max="1000" step="1" value="10" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        </label>
+        <label style="font-size:12px;font-weight:700">6. Single Full Page Photo ₹ / sheet
+          <input id="rate-full-page" type="number" min="1" max="1000" step="1" value="10" required style="display:block;width:100%;margin-top:7px;border:1px solid #d3dfd9;border-radius:8px;padding:12px">
+        </label>
+        <button class="btn teal" id="save-rates" type="submit">Save 6 Print Rates</button>
       </form>
       <p id="rates-state" class="description" role="status" aria-live="polite">Loading rates...</p>
       <div style="border-top:1px solid var(--line);margin:26px 0"></div>
@@ -385,7 +394,18 @@
     }catch(error){label.textContent=error.message;}
   }
 
-  let currentShopRates = { bw: 3, aadhaarBw: 5, color: 10 };
+  let currentShopRates={aadhaarFront:5,aadhaarBack:5,document:3,photo4:10,photo2:10,fullPage:10};
+  const serviceRateFields={
+    aadhaarFront:"rate-aadhaar-front",aadhaarBack:"rate-aadhaar-back",
+    document:"rate-document",photo4:"rate-photo-4",photo2:"rate-photo-2",fullPage:"rate-full-page"
+  };
+  const serviceNames={
+    aadhaar_front:"Aadhaar Front",aadhaar_back:"Aadhaar Back",
+    document:"JPG / PNG / PDF",photo_4:"1 A4 पर 4 फोटो",
+    photo_2:"1 A4 पर 2 फोटो",full_page:"Single Full Page Photo",
+    bw:"Black & White (old bill)",aadhaar_bw:"Aadhaar B&W (old bill)",
+    color:"Colour (old bill)"
+  };
   const rupees = value => "₹" + Number(value).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
   async function loadShopPrices() {
@@ -395,9 +415,8 @@
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Could not read rates");
       currentShopRates=data.ratesRupees;
-      document.getElementById("rate-bw").value=currentShopRates.bw;
-      document.getElementById("rate-aadhaar").value=currentShopRates.aadhaarBw;
-      document.getElementById("rate-color").value=currentShopRates.color;
+      for(const [key,id] of Object.entries(serviceRateFields))
+        document.getElementById(id).value=currentShopRates[key];
       state.textContent="Current shop rates loaded. Save changes to publish them on your QR page.";
       return currentShopRates;
     }catch(error){state.textContent=error.message;throw error;}
@@ -407,11 +426,8 @@
     event.preventDefault();
     const save=document.getElementById("save-rates");
     const state=document.getElementById("rates-state");
-    const rates={
-      bw:Number(document.getElementById("rate-bw").value),
-      aadhaarBw:Number(document.getElementById("rate-aadhaar").value),
-      color:Number(document.getElementById("rate-color").value)
-    };
+    const rates=Object.fromEntries(Object.entries(serviceRateFields)
+      .map(([key,id])=>[key,Number(document.getElementById(id).value)]));
     if(!Object.values(rates).every(v=>Number.isInteger(v)&&v>=1&&v<=1000)){
       state.textContent="Rates must be whole rupees from ₹1 to ₹1000.";
       return;
@@ -425,9 +441,7 @@
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Could not save rates");
       currentShopRates=data.ratesRupees;
-      state.textContent="Rates saved successfully — B&W "+rupees(currentShopRates.bw)+
-        ", Aadhaar B&W "+rupees(currentShopRates.aadhaarBw)+
-        ", Colour "+rupees(currentShopRates.color)+".";
+      state.textContent="छह Print Service Rates Save हो गए। Customer QR पर ये दरें अपडेट हो गई हैं।";
     }catch(error){state.textContent=error.message;}
     finally{save.disabled=false;}
   });
@@ -445,14 +459,14 @@
     try{
       const bills=await fetchShopBills();
       list.replaceChildren();
-      if(!bills.length){list.textContent="No bills yet. Confirm a TEST print, then create a bill in Print orders.";return;}
+      if(!bills.length){list.textContent="अभी कोई बिल नहीं है। प्रिंट होने की पुष्टि के बाद Print Orders से बिल बनाएँ।";return;}
       bills.forEach(b=>{
         const item=document.createElement("div");item.className="demo-order";
         const info=document.createElement("div");
         const heading=document.createElement("strong");
-        heading.textContent="BILL #"+b.id+" • TEST Order #"+b.orderId+" • "+rupees(Number(b.totalPaise)/100);
+        heading.textContent="BILL #"+b.id+" • Order #"+b.orderId+" • "+rupees(Number(b.totalPaise)/100);
         const desc=document.createElement("span");
-        desc.textContent=b.category.replace("_"," ").toUpperCase()+
+        desc.textContent=(serviceNames[b.category]||b.category)+
           " • "+(b.paymentStatus==="paid"?"Payment manually received":"Payment pending")+
           " • "+new Date(b.issuedAt).toLocaleString("en-IN");
         desc.style.display="block";info.append(heading,desc);
@@ -474,13 +488,27 @@
     const categoryLabel=document.createElement("label");categoryLabel.textContent="Print type ";
     const category=document.createElement("select");
     category.style.cssText="margin-left:6px;padding:8px;border:1px solid #cbded5;border-radius:6px";
-    const types=order.printMode==="color"?
-      [["color","Colour ₹"+currentShopRates.color+"/page"]]:
-      [["bw","B&W ₹"+currentShopRates.bw+"/page"],["aadhaar_bw","Aadhaar B&W ₹"+currentShopRates.aadhaarBw+"/copy"]];
-    types.forEach(([value,label])=>{
-      const option=document.createElement("option");option.value=value;option.textContent=label;
+    const types=[
+      ["aadhaar_front","Aadhaar Front",currentShopRates.aadhaarFront],
+      ["aadhaar_back","Aadhaar Back",currentShopRates.aadhaarBack],
+      ["document","JPG / PNG / PDF",currentShopRates.document],
+      ["photo_4","1 A4 पर 4 फोटो",currentShopRates.photo4],
+      ["photo_2","1 A4 पर 2 फोटो",currentShopRates.photo2],
+      ["full_page","Single Full Page Photo",currentShopRates.fullPage]
+    ];
+    const expected=order.printService||
+      (order.documentKind==="customer_pdf"?"document":
+       order.documentKind==="customer_photo"?
+         (Number(order.photoLayout)===4?"photo_4":
+          Number(order.photoLayout)===2?"photo_2":"full_page"):
+         order.documentKind==="dummy_card_front_back"?"aadhaar_front":"document");
+    types.forEach(([value,label,rate])=>{
+      const option=document.createElement("option");option.value=value;
+      option.textContent=label+" — "+rupees(rate)+(value==="document"?"/page":"/copy");
+      option.disabled=value!==expected;
       category.append(option);
     });
+    category.value=expected;
     categoryLabel.append(category);
     const pageLabel=document.createElement("label");pageLabel.textContent="Pages per copy ";
     const pages=document.createElement("input");pages.type="number";pages.min="1";pages.max="200";pages.step="1";
@@ -488,13 +516,12 @@
     pageLabel.append(pages);
     const estimate=document.createElement("strong");
     const update=()=>{
-      const count=Number(pages.value);
-      if(category.value==="aadhaar_bw"){pages.value="1";pages.disabled=true;}else{pages.disabled=false;}
+      const single=category.value!=="document";
+      if(single){pages.value="1";pages.disabled=true;}else{pages.disabled=false;}
       const actualPages=Number(pages.value);
-      const rate=category.value==="aadhaar_bw"?currentShopRates.aadhaarBw:
-        (category.value==="color"?currentShopRates.color:currentShopRates.bw);
+      const selectedRate=types.find(([code])=>code===category.value)?.[2];
       estimate.textContent=Number.isInteger(actualPages)&&actualPages>=1&&actualPages<=200?
-        "Total: "+rupees((category.value==="aadhaar_bw"?1:actualPages)*Number(order.copies)*rate):
+        "Total: "+rupees((single?1:actualPages)*Number(order.copies)*selectedRate):
         "Enter 1–200 pages";
     };
     category.addEventListener("change",update);
@@ -503,7 +530,7 @@
     const submit=document.createElement("button");submit.className="btn teal";submit.type="submit";
     submit.textContent="Create simple bill";
     const note=document.createElement("span");note.style.fontSize="12px";
-    note.textContent="Check PDF pages before billing. Aadhaar is a rate label only — no real ID uploads.";
+    note.textContent="छह Print Services में वही प्रकार चुनें जो ऑर्डर में था। Aadhaar Upload अभी बंद है; सिर्फ दर सेव की जा सकती है।";
     editor.append(categoryLabel,pageLabel,estimate,submit,note);
     editor.addEventListener("submit",async(event)=>{
       event.preventDefault();
