@@ -39,6 +39,14 @@
     .steps{display:grid;gap:15px;margin-top:25px}
     .step{display:flex;align-items:center;gap:12px;color:#657e70;font-size:13px}
     .step b{display:grid;place-items:center;width:31px;height:31px;flex-shrink:0;border-radius:9px;background:#e1ecdf;color:#19664f}
+    .print-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:17px 0}
+    .print-option{border:1.5px solid #bdd8c8;border-radius:12px;padding:13px 10px;background:#fff;color:#164f3b;text-align:left;font:inherit;font-size:12px;cursor:pointer;min-height:80px}
+    .print-option strong{display:block;font-size:13px;margin-bottom:5px}
+    .print-option span{display:block;color:#648678;line-height:1.4}
+    .print-option[aria-pressed="true"]{border-color:#087d68;background:#e7f8ec;box-shadow:0 0 0 2px #d2ebdb inset}
+    .print-option:disabled{opacity:.55;cursor:not-allowed;background:#edf0ee}
+    .print-option:focus-visible{outline:3px solid #6bb9a1;outline-offset:2px}
+    #customer-photo-files[hidden],#customer-photo-file[hidden]{display:none}
     .footer{margin-top:45px;font-size:12px;color:#83958a}
     @media(max-width:800px){.wrapper{grid-template-columns:1fr;gap:30px;padding:40px 20px 70px}.card{max-width:600px}.intro h1{letter-spacing:-1.4px}.shop{max-width:none}}
     @media(max-width:450px){.card{padding:22px}.header{padding:15px 18px}}
@@ -73,12 +81,22 @@
 
       <section id="customer-photo-pilot" style="padding:20px;border:2px solid #9ccab2;background:#f2fff5;border-radius:15px;margin:0 0 26px">
         <small class="eyebrow">CUSTOMER ORDER • DIRECT UPLOAD</small>
-        <h2>JPG, PNG या PDF सीधे Upload करें</h2>
-        <p class="subtitle">एक फाइल चुनें (अधिकतम 2 MB), Copies और B&amp;W / Colour चुनकर Upload करें। JPG/PNG फोटो सुरक्षित JPEG में बदले जाते हैं। PDF के लिए अतिरिक्त Malware Scanner आवश्यक है; उपलब्ध न होने पर PDF Upload रुकेगा। फाइल 24 घंटे में हटती है।</p>
+        <h2>प्रिंट का प्रकार चुनें</h2>
+        <div id="customer-print-options" class="print-options" role="group" aria-label="Print type">
+          <button type="button" class="print-option" data-print-layout="aadhaar-front" disabled title="Identity-document printing requires additional safeguards"><strong>1. Aadhaar Front</strong><span>सुरक्षा सेटअप बाकी है</span></button>
+          <button type="button" class="print-option" data-print-layout="aadhaar-back" disabled title="Identity-document printing requires additional safeguards"><strong>2. Aadhaar Back</strong><span>सुरक्षा सेटअप बाकी है</span></button>
+          <button type="button" class="print-option" data-print-layout="document" aria-pressed="true"><strong>3. JPG / PNG / PDF</strong><span>सामान्य डॉक्यूमेंट</span></button>
+          <button type="button" class="print-option" data-print-layout="four" aria-pressed="false"><strong>4. 1 Page पर 4 Photos</strong><span>चार फोटो, एक A4 पेज</span></button>
+          <button type="button" class="print-option" data-print-layout="two" aria-pressed="false"><strong>5. 1 Page पर 2 Photos</strong><span>दो फोटो, एक A4 पेज</span></button>
+          <button type="button" class="print-option" data-print-layout="full" aria-pressed="false"><strong>6. Single Full Page Photo</strong><span>एक फोटो, पूरा A4 पेज</span></button>
+        </div>
+        <p id="layout-message" class="subtitle" role="status">सामान्य फाइल चुनें। 2/4 Photo लेआउट में उतनी अलग JPG/PNG फोटो चुननी होंगी।</p>
+        <p class="subtitle">फोटो चुनें और <strong>Print</strong> दबाएँ। एक फाइल अधिकतम 2 MB की हो। Photo 1 / 2 / 4 लेआउट A4 पर बनाया जाएगा। PDF केवल Malware Scanner चालू होने पर स्वीकार होगा। ऑर्डर सुरक्षित रखा जाएगा और 24 घंटे बाद फाइल हटेगी।</p>
         <p class="info"><strong>असली Aadhaar, PAN, अन्य पहचान-पत्र, बैंक विवरण या संवेदनशील फाइलें न भेजें।</strong> ग्राहक की सहमति और दुकानदार की बैंक-पुष्टि जरूरी है। PDF हमेशा मैन्युअल Review/Print होगा; Auto Print केवल सामान्य फोटो के लिए।</p>
         <form id="customer-photo-form">
-          <label for="customer-photo-file">JPG / PNG / PDF फाइल चुनें</label>
+          <label id="customer-file-label" for="customer-photo-file">JPG / PNG / PDF फाइल चुनें</label>
           <input id="customer-photo-file" type="file" name="file" accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" required>
+          <input id="customer-photo-files" name="photos" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple hidden disabled aria-label="Choose 2 or 4 photos">
           <label for="customer-photo-copies">कितनी Copies?</label>
           <select id="customer-photo-copies" name="copies"><option value="1">1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option></select>
           <label for="customer-photo-mode">Printing</label>
@@ -87,7 +105,8 @@
             <input id="customer-photo-consent" type="checkbox" style="width:auto;min-width:18px;margin-top:2px" required>
             मैं पुष्टि करता/करती हूँ कि यह मेरी गैर-संवेदनशील फाइल है, इसमें Aadhaar/PAN/निजी पहचान या बैंक विवरण नहीं है। मैं इसे दुकान को प्रिंट के लिए भेजने तथा 24 घंटे तक सुरक्षित रखने की सहमति देता/देती हूँ।
           </label>
-          <button id="customer-photo-submit" class="btn" type="submit" disabled>Upload Document →</button>
+          <button id="customer-photo-submit" class="btn" type="submit" disabled>🖨 Print →</button>
+          <p class="subtitle" style="margin:10px 0 0"><strong>ध्यान दें:</strong> Print दबाने पर पहले Order भेजा जाएगा। दुकानदार द्वारा Order स्वीकारने और बैंक में UPI भुगतान Verify करने के बाद ही Windows Agent से Photo Auto Print होगा। Shop PC, Printer, Agent और Auto Print ON होना जरूरी है। PDF की Printing मैन्युअल है।</p>
           <p id="customer-photo-message" class="response" role="status" aria-live="polite">Checking secure document upload…</p>
         </form>
       </section>
@@ -227,7 +246,32 @@
       let verifiedCode=null;
 
       const realPhotoForm=document.getElementById("customer-photo-form");
+      const printCards=Array.from(document.querySelectorAll(".print-option:not(:disabled)"));
+      const singleInput=document.getElementById("customer-photo-file");
+      const multiInput=document.getElementById("customer-photo-files");
+      const fileLabel=document.getElementById("customer-file-label");
+      const layoutInfo=document.getElementById("layout-message");
+      let selectedPrintLayout="document";
       let customerPdfEnabled=false;
+      function updatePhotoLayout(mode){
+        if(!["document","full","two","four"].includes(mode))return;
+        selectedPrintLayout=mode;
+        for(const card of printCards)card.setAttribute("aria-pressed",String(card.dataset.printLayout===mode));
+        const isMulti=mode==="two"||mode==="four";
+        singleInput.hidden=isMulti;singleInput.disabled=isMulti;singleInput.required=!isMulti;
+        multiInput.hidden=!isMulti;multiInput.disabled=!isMulti;multiInput.required=isMulti;
+        if(mode==="full")singleInput.accept="image/jpeg,image/png,.jpg,.jpeg,.png";
+        else singleInput.accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf";
+        fileLabel.htmlFor=isMulti?"customer-photo-files":"customer-photo-file";
+        fileLabel.textContent=isMulti?(mode==="two"?"2 JPG/PNG फोटो चुनें":"4 JPG/PNG फोटो चुनें"):
+          mode==="full"?"Single Full Page JPG / PNG फोटो चुनें":"JPG / PNG / PDF फाइल चुनें";
+        layoutInfo.textContent=isMulti?
+          (mode==="two"?"ठीक 2":"ठीक 4")+" अलग JPG/PNG फोटो चुनें; सर्वर एक A4 पेज बनाएगा।":
+          mode==="full"?"एक सामान्य JPG/PNG फोटो A4 पेज पर प्रिंट होगी।":
+          "JPG/PNG फाइल सीधे चुनें। PDF Scanner उपलब्ध होने पर PDF भी भेज सकते हैं।";
+        singleInput.value="";multiInput.value="";
+      }
+      printCards.forEach(card=>card.addEventListener("click",()=>updatePhotoLayout(card.dataset.printLayout)));
       const realPhotoButton=document.getElementById("customer-photo-submit");
       const realPhotoMessage=document.getElementById("customer-photo-message");
       async function prepareRealPhotoUpload(){
@@ -249,12 +293,20 @@
       realPhotoForm.addEventListener("submit",async event=>{
         event.preventDefault();
         if(!verifiedCode||realPhotoButton.disabled)return;
-        const photo=document.getElementById("customer-photo-file").files[0];
-        const isPdf=photo?.type==="application/pdf"&&/\.pdf$/i.test(photo.name);
-        if(!photo||photo.size>2097152||photo.size<8||
-          !["image/jpeg","image/png","application/pdf"].includes(photo.type)||
+        const isMulti=selectedPrintLayout==="two"||selectedPrintLayout==="four";
+        const needed=selectedPrintLayout==="two"?2:4;
+        const files=isMulti?Array.from(multiInput.files):[singleInput.files[0]];
+        const photo=files[0];
+        const isPdf=!isMulti&&selectedPrintLayout==="document"&&
+          photo?.type==="application/pdf"&&/\.pdf$/i.test(photo.name);
+        if((isMulti&&files.length!==needed)||
+          files.some(f=>!f||f.size>2097152||f.size<8||
+            !(isMulti||selectedPrintLayout==="full"?
+              ["image/jpeg","image/png"]:["image/jpeg","image/png","application/pdf"]).includes(f.type))||
           !document.getElementById("customer-photo-consent").checked){
-          realPhotoMessage.textContent="JPG, PNG या PDF (2 MB तक) और सहमति आवश्यक हैं।";
+          realPhotoMessage.textContent=isMulti?
+            ("ठीक "+needed+" JPG/PNG फोटो, प्रत्येक 2 MB तक चुनें और सहमति दें।"):
+            "सही JPG / PNG / PDF (2 MB तक) और सहमति आवश्यक हैं।";
           return;
         }
         if(isPdf&&!customerPdfEnabled){
@@ -266,7 +318,10 @@
         try{
           const data=new FormData(realPhotoForm);
           data.set("confirmedNonSensitive","yes");
-          const response=await fetch("/api/public/shops/"+verifiedCode+(isPdf?"/customer-pdf-orders":"/customer-photo-orders"),{
+          if(isMulti)data.set("layout",String(needed));
+          const endpoint=isMulti?"/customer-photo-layout-orders":
+            isPdf?"/customer-pdf-orders":"/customer-photo-orders";
+          const response=await fetch("/api/public/shops/"+verifiedCode+endpoint,{
             method:"POST",credentials:"same-origin",body:data
           });
           const result=await response.json().catch(()=>({}));
@@ -279,7 +334,7 @@
           copyTrackingStatus.textContent="Private Tracking Code सुरक्षित रखें और Shopkeeper से Payment/Print Status चेक करें।";
           successPanel.hidden=false;
           successPanel.scrollIntoView({behavior:"smooth",block:"start"});
-          realPhotoMessage.textContent="Order #"+result.order.id+" सफलतापूर्वक भेज दिया गया।";
+          realPhotoMessage.textContent="Print Request #"+result.order.id+" भेज दी गई है। Payment और दुकानदार की पुष्टि के बाद Photo Auto Print होगा; PDF मैन्युअल रहेगा।";
           realPhotoForm.reset();
         }catch(error){realPhotoMessage.textContent=error.message;}
         finally{realPhotoButton.disabled=false;}
