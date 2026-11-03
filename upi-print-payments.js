@@ -104,12 +104,13 @@ function installUpiPrintPayments(app,pool){
     if(!idPattern.test(id||"")||!Number.isInteger(pages)||pages<1||pages>20)return res.status(400).json({error:"Enter actual pages per copy (1–20)"});
     try{
       const q=await pool.query([
-        "SELECT o.id,o.shop_id,o.copies,o.print_mode,o.document_kind,",
+        "SELECT o.id,o.shop_id,o.copies,o.print_mode,o.document_kind,o.payment_method,",
         "COALESCE(r.bw_paise,300) AS bw_paise,COALESCE(r.color_paise,1000) AS color_paise,",
         "COALESCE(r.aadhaar_bw_paise,500) AS aadhaar_bw_paise,",
         "a.vpa,a.payee_name FROM test_file_orders o",
         "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
         "JOIN shop_upi_payment_accounts a ON a.shop_id=o.shop_id AND a.enabled=TRUE",
+        "AND (o.payment_method IS NULL OR o.payment_method='online')",
         "LEFT JOIN shop_print_rates r ON r.shop_id=o.shop_id",
         "WHERE owner.id=$1 AND o.id=$2 AND o.status='accepted'",
         "AND o.file_deleted_at IS NULL",
@@ -214,10 +215,12 @@ function installUpiPrintPayments(app,pool){
       return res.status(400).json({error:"Invalid SAMPLE order"});
     try{
       const q=await pool.query([
-        "SELECT o.status AS order_status,p.status AS upi_status",
+        "SELECT o.status AS order_status,o.payment_method AS payment_method,",
+        "p.status AS upi_status,c.status AS cash_status",
         "FROM test_file_orders o",
         "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
         "LEFT JOIN shop_upi_test_payments p ON p.order_id=o.id AND p.shop_id=o.shop_id",
+        "LEFT JOIN shop_cash_print_payments c ON c.order_id=o.id AND c.shop_id=o.shop_id",
         "WHERE owner.id=$1 AND o.id=$2",
         "AND o.created_at > NOW()-INTERVAL '24 hours' AND o.file_deleted_at IS NULL"
       ].join(" "),[req.session.shopOwnerId,req.params.id]);
@@ -225,13 +228,20 @@ function installUpiPrintPayments(app,pool){
       if(!q.rows.length)return res.status(404).json({error:"Sample order missing, expired or not your shop"});
       const row=q.rows[0];
       const hasUpiQuote=row.upi_status!==null&&row.upi_status!==undefined;
-      const allowed=row.order_status==="accepted"&&
-        (!hasUpiQuote||row.upi_status==="paid_manual");
+      const cashStatus=row.cash_status||null;
+      const paymentMethod=row.payment_method||null;
+      const paymentComplete=paymentMethod==="cash"?
+        cashStatus==="paid":paymentMethod==="online"?
+          (hasUpiQuote&&row.upi_status==="paid_manual"):
+          (!hasUpiQuote||row.upi_status==="paid_manual");
+      const allowed=row.order_status==="accepted"&&paymentComplete;
       return res.json({
         canPrint:allowed,accepted:row.order_status==="accepted",
         upiQuoteExists:hasUpiQuote,upiStatus:hasUpiQuote?row.upi_status:null,
-        requiresManualBankConfirmation:hasUpiQuote&&row.upi_status!=="paid_manual",
-        paymentMode:hasUpiQuote?"upi_quote":"manual_test",
+        requiresManualBankConfirmation:paymentMethod==="online"&&row.upi_status!=="paid_manual",
+        requiresCashConfirmation:paymentMethod==="cash"&&cashStatus!=="paid",
+        paymentMethod,cashStatus,
+        paymentMode:paymentMethod==="cash"?"cash":hasUpiQuote?"upi_quote":"manual_test",
         sampleOnly:true,automaticPrinting:false
       });
     }catch(error){
@@ -251,7 +261,8 @@ function installUpiPrintPayments(app,pool){
         "JOIN shop_upi_test_payments p ON p.order_id=o.id AND p.shop_id=o.shop_id",
         "JOIN shop_owners owner ON owner.shop_id=o.shop_id",
         "WHERE owner.id=$1 AND o.id=$2 AND o.status='accepted'",
-        "AND p.status='paid_manual' AND o.created_at > NOW()-INTERVAL '24 hours'",
+        "AND p.status='paid_manual' AND (o.payment_method IS NULL OR o.payment_method='online')",
+        "AND o.created_at > NOW()-INTERVAL '24 hours'",
         "AND o.file_deleted_at IS NULL"
       ].join(" "),[req.session.shopOwnerId,req.params.id]);
       res.set("Cache-Control","private, no-store");
