@@ -14,6 +14,8 @@
     .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin:0 0 20px}.stat{border:1px solid var(--line);background:white;padding:21px 20px;border-radius:13px;box-shadow:var(--shadow)}.stat .small{font-size:11px;color:var(--muted)}.stat .num{font-size:31px;line-height:1.2;font-weight:820;letter-spacing:-1px;margin:9px 0 5px}.stat .more{font-size:11px;color:#7f919c}.dashboard-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}.card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:22px;box-shadow:var(--shadow)}.card h2{font-size:17px;letter-spacing:-.3px;margin:0 0 7px}.card .description{font-size:12px;color:var(--muted);line-height:1.65;margin:0}.qr-card{background:linear-gradient(135deg,#fff,#f0f9f5 96%);display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:center;gap:14px}.qr-badge{display:inline-block;background:#d4f1e3;color:#12765d;font-size:10px;padding:6px 9px;border-radius:6px;font-weight:850;margin-bottom:14px;letter-spacing:.5px}.qr-card h2{font-size:24px;margin-bottom:9px}.qr-card .description{max-width:350px}.qr-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px}.qr-art{width:145px;height:145px;background:white;border:8px solid white;border-radius:12px;box-shadow:0 12px 28px #154f2e16;display:block}.quick-list{margin-top:10px}.quick-row{display:flex;width:100%;align-items:center;gap:13px;text-align:left;background:white;border:0;border-bottom:1px solid var(--line);padding:14px 0}.quick-row:last-child{border-bottom:0}.quick-symbol{border-radius:9px;background:#edf2f4;width:38px;height:38px;display:grid;place-items:center;color:#3b5b62;font-size:17px}.quick-txt{flex:1;min-width:0}.quick-txt strong{display:block;font-size:12px}.quick-txt span{display:block;color:var(--muted);font-size:11px;margin-top:3px}.arrow{font-size:20px;color:#9aa8af}.bottom-grid{margin-top:16px;display:grid;grid-template-columns:1.6fr 1fr;gap:16px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.section-head h2{margin:0}.pill{font-size:10px;font-weight:800;color:#7a8995;background:#eef2f4;padding:7px 10px;border-radius:100px}.empty{min-height:123px;display:flex;align-items:center;gap:13px;color:#7e8d97;font-size:12px}.empty-icon{font-size:23px;background:#f1f5f6;border-radius:11px;width:50px;height:50px;display:grid;place-items:center}.progress{height:8px;background:#e8eeeb;border-radius:100px;overflow:hidden;margin-top:22px}.progress span{display:block;height:100%;width:0%;background:var(--teal)}.footer-tip{font-size:11px;color:#8a9aa4;margin-top:17px}.panel{display:none}.panel.active{display:block}.content-panel{min-height:385px}.content-panel .content-icon{font-size:32px;margin:20px 0 15px}.content-panel h2{font-size:25px;margin:0 0 10px;letter-spacing:-.6px}.content-panel p{font-size:13px;line-height:1.7;color:#71818c;max-width:560px}.info-list{margin-top:23px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.info-item{border:1px solid var(--line);border-radius:12px;padding:16px}.info-item strong{display:block;font-size:12px}.info-item span{display:block;margin-top:5px;color:#84939d;font-size:11px}.demo-order-list{display:grid;gap:10px;margin-top:15px}
     .demo-order{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;background:#f7faf8;padding:14px 16px}
     .demo-order strong{font-size:13px}.demo-order span{font-size:11px;color:var(--muted)}
+    .profile-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;margin-top:23px;max-width:850px}.profile-form label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:750}.profile-form input,.profile-form textarea{width:100%;min-width:0;border:1px solid #d6e3e4;background:#fff;border-radius:10px;padding:12px 13px;color:var(--ink);font:inherit;font-size:14px}.profile-form input:focus,.profile-form textarea:focus{outline:2px solid #79cfc1;outline-offset:1px}.profile-form .wide{grid-column:1/-1}.profile-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}#profile-save-message{font-size:12px;color:var(--teal)}
+    @media(max-width:700px){.profile-form{grid-template-columns:1fr}}
     .toast{position:fixed;bottom:23px;right:23px;background:#142630;color:white;padding:14px 19px;border-radius:12px;box-shadow:0 15px 50px #09202b30;font-size:12px;max-width:340px;z-index:10}.toast[hidden]{display:none}
     @media(max-width:1100px){.layout{grid-template-columns:205px minmax(0,1fr)}.dashboard-grid,.bottom-grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:700px){.layout{display:block}.sidebar{min-height:0;height:auto;position:static;padding:12px}.brand{padding:5px 6px 10px}.side-label,.sidebar-bottom{display:none}.nav{display:flex;overflow:auto;gap:6px;padding-bottom:4px}.nav button{width:auto;white-space:nowrap;padding:7px 9px}.nav .ni{width:25px;height:25px}.main{padding:22px 15px}.topbar{align-items:flex-start}.top-actions{flex-wrap:wrap;justify-content:flex-end}.preview-tag{display:none}.status-strip{grid-template-columns:1fr}.status-part+.status-part{border-left:0;border-top:1px solid var(--line)}.stats{gap:10px}.stat{padding:16px}.qr-card{grid-template-columns:1fr}.qr-art{justify-self:start}.notice{flex-wrap:wrap}.notice .btn{margin-left:0}.info-list{grid-template-columns:1fr}}
@@ -234,7 +236,21 @@
       <p class="description">Create a bill from Print orders → a Printed order → Create bill. Enter the actual page count after checking the PDF. No Aadhaar number or ID data is stored in the bill. Bills are not GST invoices; Cash/UPI payment can only be marked after manual receipt.</p>
     </div></section>
     <section class="panel" id="panel-reports"><div class="card content-panel"><div class="eyebrow">ANALYTICS</div><div class="content-icon">◫</div><h2>Reports</h2><p>Daily printing totals, file types, completed pages and revenue reports will appear here after order and payment integrations are built.</p><div class="info-list"><div class="info-item"><strong>Print report</strong><span>Awaiting real data</span></div><div class="info-item"><strong>Sales report</strong><span>Awaiting payment data</span></div></div></div></section>
-    <section class="panel" id="panel-profile"><div class="card content-panel"><div class="eyebrow">IDENTITY</div><div class="content-icon">◉</div><h2>Shop profile</h2><p>Shop name, contact details, hours and physical address will be editable here once shop-owner accounts are implemented. Your shop-owner account is separate from customer login. Shop profile editing will be added later.</p></div></section>
+    <section class="panel" id="panel-profile"><div class="card content-panel">
+      <div class="eyebrow">SHOP IDENTITY · YOUR BUSINESS</div><div class="content-icon">🏪</div>
+      <h2>Shop Profile / दुकान की जानकारी</h2>
+      <p>अपनी दुकान की जानकारी भरें और Save करें। हर दुकानदार की जानकारी उसके अपने अकाउंट में सुरक्षित रहेगी।</p>
+      <form id="shop-profile-form" class="profile-form">
+        <label>Shop name / दुकान का नाम <input id="profile-shop-name" name="shopName" maxlength="120" minlength="2" required placeholder="Your Print Shop"></label>
+        <label>Owner name / मालिक का नाम <input id="profile-owner-name" name="ownerName" maxlength="100" minlength="2" required placeholder="Owner name"></label>
+        <label>Mobile number / मोबाइल नंबर <input id="profile-phone" name="phone" type="tel" maxlength="20" placeholder="10-digit mobile number"></label>
+        <label>Shop opening hours / दुकान का समय <input id="profile-hours" name="openingHours" maxlength="120" placeholder="9:00 AM – 8:00 PM"></label>
+        <label class="wide">Shop address / दुकान का पूरा पता <textarea id="profile-address" name="address" maxlength="500" rows="3" placeholder="Market, street, city, district, PIN code"></textarea></label>
+        <label class="wide">UPI ID / भुगतान की UPI ID <input id="profile-upi" name="upiId" maxlength="100" placeholder="shopname@upi" autocomplete="off"></label>
+        <div class="wide profile-actions"><button class="btn teal" id="save-shop-profile" type="submit">Save Shop Details</button><span id="profile-save-message" role="status" aria-live="polite"></span></div>
+      </form>
+      <p class="footer-tip">Payment UPI ID is for shop information only; saving it does not verify or collect payments. Shop login email cannot be edited here.</p>
+    </div></section>
     <section class="panel" id="panel-settings"><div class="card content-panel"><div class="eyebrow">PREFERENCES</div><div class="content-icon">⚙</div><h2>Settings</h2><p>Future controls include printer defaults, paper formats, pricing, notifications and team permissions. This page does not save changes yet.</p><div class="info-list"><div class="info-item"><strong>Printing preferences</strong><span>Not configured</span></div><div class="info-item"><strong>Shop security</strong><span>Separate shop-role authentication required</span></div></div></div></section>
     <p class="footer-tip">QR-To-Print © 2026 · Customer uploads and manual bank-verified UPI printing. Bills are not GST invoices.</p>
   </main>
@@ -1096,6 +1112,38 @@
   });
   loadAgentStatus();
 
+  const profileForm = document.getElementById("shop-profile-form");
+  const profileFields = {shopName:"profile-shop-name",ownerName:"profile-owner-name",phone:"profile-phone",address:"profile-address",upiId:"profile-upi",openingHours:"profile-hours"};
+  function fillProfile(data) {
+    const values = {shopName:data.shop.name, ownerName:data.owner.name,
+      phone:data.shop.phone || "", address:data.shop.address || "",
+      upiId:data.shop.upiId || "", openingHours:data.shop.openingHours || ""};
+    for (const [key,id] of Object.entries(profileFields)) document.getElementById(id).value = values[key];
+  }
+  profileForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const btn = document.getElementById("save-shop-profile");
+    const status = document.getElementById("profile-save-message");
+    const payload = {};
+    for (const [key,id] of Object.entries(profileFields)) payload[key] = document.getElementById(id).value.trim();
+    btn.disabled = true;
+    status.textContent = "Saving...";
+    try {
+      const response = await fetch("/api/shop/profile", {
+        method:"PUT", credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+      });
+      const data = await response.json().catch(()=>({}));
+      if (!response.ok) throw new Error(data.error || "Could not save profile");
+      document.getElementById("shop-name").textContent = payload.shopName;
+      document.getElementById("shop-owner").textContent = "Owner: " + payload.ownerName;
+      status.textContent = "✓ Shop details saved successfully";
+      showToast("Shop profile saved.");
+    } catch (error) {status.textContent = error.message;}
+    finally {btn.disabled = false;}
+  });
+
   // Profile is verified server-side and only the logged-in shop is returned.
   fetch("/api/shop/me", {credentials:"same-origin"})
     .then(async response => {
@@ -1109,6 +1157,7 @@
       if (!data) return;
       document.getElementById("shop-name").textContent = data.shop.name;
       document.getElementById("shop-owner").textContent = "Owner: " + data.owner.name;
+      fillProfile(data);
       const publicCode = data.shop.publicCode;
       if (!/^[a-f0-9]{32}$/.test(publicCode || "")) {
         showToast("Your shop QR code is unavailable. Please refresh.");
