@@ -10,6 +10,7 @@ const sharp=require("sharp");
 const {S3Client,PutObjectCommand,DeleteObjectCommand}=require("@aws-sdk/client-s3");
 const {storageSettings}=require("./private-test-uploads");
 const {sanitizeCustomerPhoto}=require("./customer-photo-uploads");
+const {createOnlinePhotoQuote}=require("./upi-print-payments");
 const MAX_BYTES=2*1024*1024;
 const WIDTH=1240, HEIGHT=1754, MARGIN=58, GAP=22;
 const validShopCode=x=>/^[a-f0-9]{32}$/.test(x||"");
@@ -114,10 +115,19 @@ function installCustomerPhotoLayoutOrders(app,pool,env=process.env,deps={}){
           'RETURNING id,status,created_at AS "createdAt"',
           [shopId,req.session?.userId||null,key,bytes.length,hash,
             copies,printMode,trackingHash,layout,req.body.paymentMethod]);
+          let customerUpiQuote=null;
+          if(req.body.paymentMethod==="online"){
+            try{
+              customerUpiQuote=await (deps.createUpiQuote||createOnlinePhotoQuote)(
+                pool,shopId,result.rows[0].id);
+            }catch(e){
+              console.warn("UPI QR not available immediately for customer order",e?.name);
+            }
+          }
         res.set("Cache-Control","private, no-store");
         return res.status(201).json({
           photoPilot:true,order:result.rows[0],trackingToken,
-          photoLayout:layout,paymentMethod:req.body.paymentMethod,automaticPrinting:false,
+          photoLayout:layout,paymentMethod:req.body.paymentMethod,automaticPrinting:false,upiQrPrepared:!!customerUpiQuote,
           message:"A4 photo print request created. Shop acceptance, verified UPI bank receipt, and enabled Windows Agent are required."
         });
       }catch(e){
